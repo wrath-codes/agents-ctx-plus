@@ -19,17 +19,17 @@ use agentfs::AgentFS;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize AgentFS
     let afs = AgentFS::new("/path/to/project").await?;
-    
+
     // Create workspace
     let workspace = afs.workspace().create("my-workspace").await?;
-    
+
     // Run command
     let result = workspace.run("echo Hello from AgentFS").await?;
     println!("{}", result.stdout);
-    
+
     // Commit changes
     workspace.commit("Initial setup").await?;
-    
+
     Ok(())
 }
 ```
@@ -263,9 +263,9 @@ let logs = workspace.audit()
 
 // Process logs
 for entry in logs {
-    println!("{}: {:?} {}", 
-        entry.timestamp(), 
-        entry.operation(), 
+    println!("{}: {:?} {}",
+        entry.timestamp(),
+        entry.operation(),
         entry.path()
     );
     if let Some(details) = entry.details() {
@@ -443,7 +443,7 @@ mod tests {
     async fn test_file_operations() {
         let (_tmp, afs) = setup().await;
         let workspace = afs.workspace().create("test").await.unwrap();
-        
+
         workspace.write_file("/test.txt", b"Hello").await.unwrap();
         let content = workspace.read_file("/test.txt").await.unwrap();
         assert_eq!(content, b"Hello");
@@ -453,7 +453,7 @@ mod tests {
     async fn test_command_execution() {
         let (_tmp, afs) = setup().await;
         let workspace = afs.workspace().create("test").await.unwrap();
-        
+
         let result = workspace.run("echo test").await.unwrap();
         assert!(result.status.success());
         assert_eq!(result.stdout.trim(), "test");
@@ -464,7 +464,7 @@ mod tests {
     async fn test_with_temp_workspace() {
         let tmp_workspace = TempWorkspace::new().await.unwrap();
         let workspace = tmp_workspace.workspace();
-        
+
         workspace.write_file("/data.txt", b"data").await.unwrap();
         assert!(workspace.exists("/data.txt").await.unwrap());
         // Workspace automatically cleaned up
@@ -486,7 +486,7 @@ async fn process_workspace(workspace: &Workspace) -> Vec<String> {
 }
 
 async fn create_snapshot(
-    workspace: &Workspace, 
+    workspace: &Workspace,
     name: &str
 ) -> Option<Snapshot> {
     let status = workspace.status().await.unwrap();
@@ -516,3 +516,4 @@ See [API documentation](https://docs.agentfs.dev/rust) for complete reference.
 - [Python SDK](./python-sdk.md)
 - [TypeScript SDK](./typescript-sdk.md)
 - [MCP Integration](../07-mcp-integration.md)
+
