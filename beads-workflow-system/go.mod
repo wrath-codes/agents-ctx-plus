@@ -5,7 +5,9 @@ go 1.25.7
 require (
 	github.com/davidroman0O/tempolite v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/revrost/go-openrouter v1.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/steveyegge/beads v0.0.0-00010101000000-000000000000

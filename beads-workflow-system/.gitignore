@@ -6,3 +6,4 @@
 /data/
 /.beads/
 coverage.out
+.env

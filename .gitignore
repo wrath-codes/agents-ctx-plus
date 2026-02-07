@@ -36,3 +36,4 @@ tempolite/
 .env.development
 .env.test
 .env.local
+*/.env

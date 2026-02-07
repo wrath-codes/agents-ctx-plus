@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/your-org/beads-workflow-system/cmd/bd-workflow/workflow"
 	"github.com/your-org/beads-workflow-system/cmd/bd-workflow/agent"
 	"github.com/your-org/beads-workflow-system/cmd/bd-workflow/analytics"
+	"github.com/your-org/beads-workflow-system/cmd/bd-workflow/workflow"
 )
 
 var (
@@ -63,6 +64,9 @@ func initConfig() {
 }
 
 func main() {
+	// Load .env file (best-effort; missing file is fine).
+	_ = godotenv.Load()
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -77,7 +81,7 @@ func newSetupCommand() *cobra.Command {
 		Long:  "Creates necessary directories, databases, and initial configuration.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Setting up beads-workflow-system...")
-			
+
 			// Create data directories
 			dbPath := viper.GetString("db-path")
 			if err := os.MkdirAll(dbPath, 0755); err != nil {
@@ -89,7 +93,7 @@ func newSetupCommand() *cobra.Command {
 
 			fmt.Println("✓ Data directories created")
 			fmt.Println("✓ Run 'bd-workflow migrate' to initialize databases")
-			
+
 			return nil
 		},
 	}
@@ -103,10 +107,10 @@ func newMigrateCommand() *cobra.Command {
 		Long:  "Applies pending database migrations to bring the database up to date.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running database migrations...")
-			
+
 			// Migration logic will be implemented here
 			// For now, just a placeholder
-			
+
 			fmt.Println("✓ Migrations completed successfully")
 			return nil
 		},
@@ -127,7 +131,7 @@ func newStatusCommand() *cobra.Command {
 			fmt.Println("Database: Not connected (run 'bd-workflow migrate' first)")
 			fmt.Println()
 			fmt.Println("Run 'bd-workflow migrate' to initialize the system")
-			
+
 			return nil
 		},
 	}

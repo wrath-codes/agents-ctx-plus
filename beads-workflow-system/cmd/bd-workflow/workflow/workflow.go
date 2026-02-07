@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/your-org/beads-workflow-system/internal/beads"
 	"github.com/your-org/beads-workflow-system/internal/bridge"
 	"github.com/your-org/beads-workflow-system/internal/database"
+	"github.com/your-org/beads-workflow-system/internal/llm"
 	"github.com/your-org/beads-workflow-system/internal/monitoring"
 	"github.com/your-org/beads-workflow-system/internal/tempolite"
 	"github.com/your-org/beads-workflow-system/pkg/models"
@@ -188,10 +190,21 @@ func newExecuteCommand() *cobra.Command {
 
 			fmt.Printf("Workflow %s started, executing...\n\n", workflow.ID)
 
-			// Get agent from registry
-			agent, err := agents.DefaultRegistry.Get(workflowType, workflow.AgentID)
-			if err != nil {
-				return fmt.Errorf("failed to get agent: %w", err)
+			// Get agent -- use LLM-backed version if API key is available.
+			var agent agents.Agent
+			if workflowType == "research" {
+				if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
+					provider := llm.NewOpenRouterProvider(apiKey)
+					agent = agents.NewResearchAgentWithLLM(workflow.AgentID, provider)
+					fmt.Printf("Using LLM: %s via %s\n", llm.DefaultModel, provider.Name())
+				}
+			}
+			if agent == nil {
+				var agentErr error
+				agent, agentErr = agents.DefaultRegistry.Get(workflowType, workflow.AgentID)
+				if agentErr != nil {
+					return fmt.Errorf("failed to get agent: %w", agentErr)
+				}
 			}
 
 			// Print steps
