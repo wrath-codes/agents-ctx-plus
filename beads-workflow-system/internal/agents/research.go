@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -256,88 +257,116 @@ func (ra *ResearchAgent) analyzeDocumentation(ctx context.Context, input map[str
 	focus, _ := results["focus"].(string)
 
 	if ra.llm == nil {
-		// Fallback: return basic analysis without LLM.
 		return ra.analyzeDocumentationFallback(findings)
 	}
 
-	docAnalysis := make(map[string]interface{})
+	// Fetch READMEs for the top 3 libraries (by downloads) to give the LLM more context.
+	type readmeEntry struct {
+		name    string
+		content string
+	}
+	var readmes []readmeEntry
 
-	for _, lib := range findings {
-		// Fetch README if available.
-		var readme string
-		if lib.ReadmeURL != "" {
-			content, err := ra.registry.FetchReadme(ctx, lib.ReadmeURL)
-			if err == nil {
-				readme = content
+	// Sort by downloads descending to pick the top ones.
+	sorted := make([]LibraryFinding, len(findings))
+	copy(sorted, findings)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j].Downloads > sorted[i].Downloads {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
 			}
 		}
+	}
+	for _, lib := range sorted {
+		if len(readmes) >= 3 {
+			break
+		}
+		if lib.ReadmeURL == "" {
+			continue
+		}
+		content, err := ra.registry.FetchReadme(ctx, lib.ReadmeURL)
+		if err != nil || content == "" {
+			continue
+		}
+		// Truncate to 3KB per README so we don't blow the context window.
+		if len(content) > 3072 {
+			content = content[:3072] + "\n...(truncated)"
+		}
+		readmes = append(readmes, readmeEntry{name: lib.Name, content: content})
+	}
 
-		// Ask LLM to analyze this library.
-		prompt := fmt.Sprintf(`You are a senior software engineer evaluating libraries.
+	// Build a single batched prompt for ALL libraries (1 API call total).
+	var libSummaries strings.Builder
+	for i, lib := range findings {
+		fmt.Fprintf(&libSummaries, "\n--- Library %d ---\n", i+1)
+		fmt.Fprintf(&libSummaries, "Name: %s v%s\n", lib.Name, lib.Version)
+		fmt.Fprintf(&libSummaries, "Registry: %s\n", lib.Registry)
+		fmt.Fprintf(&libSummaries, "Description: %s\n", lib.Description)
+		fmt.Fprintf(&libSummaries, "Downloads: %d\n", lib.Downloads)
+		if lib.License != "" {
+			fmt.Fprintf(&libSummaries, "License: %s\n", lib.License)
+		}
+		if lib.DocumentationURL != "" {
+			fmt.Fprintf(&libSummaries, "Docs: %s\n", lib.DocumentationURL)
+		}
+	}
 
-Analyze the following library for the research query: "%s" (focus: %s)
+	// Append README excerpts.
+	if len(readmes) > 0 {
+		fmt.Fprintf(&libSummaries, "\n\n=== README Excerpts ===\n")
+		for _, r := range readmes {
+			fmt.Fprintf(&libSummaries, "\n--- %s README ---\n%s\n", r.name, r.content)
+		}
+	}
 
-Library: %s v%s
-Registry: %s
-Description: %s
-Downloads: %d
-License: %s
-Docs: %s
+	prompt := fmt.Sprintf(`You are a senior software engineer evaluating libraries.
 
+Research query: "%s" (focus: %s)
+
+Here are %d libraries found across package registries:
 %s
 
-Respond in JSON with exactly these fields:
+For each library, provide a JSON analysis. Respond with a single JSON object where keys are library names and values have these fields:
 {
-  "relevance_score": 0.0-1.0 (how relevant to the query),
-  "quality_score": 0.0-1.0 (overall quality assessment),
-  "pros": ["list", "of", "strengths"],
-  "cons": ["list", "of", "weaknesses"],
-  "api_coverage": "comprehensive|good|basic|poor",
-  "documentation_quality": "excellent|good|fair|poor",
-  "maturity": "mature|growing|new|abandoned",
-  "summary": "1-2 sentence summary of the library's value for this use case"
+  "<library_name>": {
+    "relevance_score": 0.0-1.0,
+    "quality_score": 0.0-1.0,
+    "pros": ["strength1", "strength2"],
+    "cons": ["weakness1", "weakness2"],
+    "maturity": "mature|growing|new|abandoned",
+    "summary": "1-2 sentence summary"
+  }
 }
 
 Only respond with valid JSON, no markdown fences.`,
-			query, focus,
-			lib.Name, lib.Version,
-			lib.Registry,
-			lib.Description,
-			lib.Downloads,
-			lib.License,
-			lib.DocumentationURL,
-			readmeSection(readme),
-		)
+		query, focus, len(findings), libSummaries.String())
 
-		resp, err := ra.llm.Complete(ctx, llm.CompletionRequest{
-			Messages: []llm.Message{
-				llm.UserMessage(prompt),
-			},
-			Temperature: 0.3,
-			MaxTokens:   1024,
-		})
-		if err != nil {
-			// Best-effort: log and continue.
+	resp, err := ra.llm.Complete(ctx, llm.CompletionRequest{
+		Messages: []llm.Message{
+			llm.UserMessage(prompt),
+		},
+		Temperature: 0.3,
+		MaxTokens:   2048,
+	})
+
+	docAnalysis := make(map[string]interface{})
+
+	if err != nil {
+		// LLM failed -- return basic analysis.
+		for _, lib := range findings {
 			docAnalysis[lib.Name] = map[string]interface{}{
-				"error": err.Error(),
+				"error": fmt.Sprintf("LLM call failed: %v", err),
 			}
-			continue
 		}
-
-		// Parse the LLM response.
-		var analysis map[string]interface{}
-		if err := json.Unmarshal([]byte(resp.Content), &analysis); err != nil {
-			// Try to extract JSON from response if it has markdown fences.
+	} else {
+		// Parse the batched response.
+		if err := json.Unmarshal([]byte(resp.Content), &docAnalysis); err != nil {
 			cleaned := extractJSON(resp.Content)
-			if err2 := json.Unmarshal([]byte(cleaned), &analysis); err2 != nil {
-				docAnalysis[lib.Name] = map[string]interface{}{
-					"raw_response": resp.Content,
-					"parse_error":  err.Error(),
-				}
-				continue
+			if err2 := json.Unmarshal([]byte(cleaned), &docAnalysis); err2 != nil {
+				docAnalysis["_parse_error"] = err.Error()
+				docAnalysis["_raw_response"] = resp.Content
 			}
 		}
-		docAnalysis[lib.Name] = analysis
 	}
 
 	return map[string]interface{}{
@@ -368,47 +397,62 @@ func (ra *ResearchAgent) performStaticAnalysis(ctx context.Context, input map[st
 	variables, _ := input["variables"].(map[string]interface{})
 	projectPath, _ := variables["project_path"].(string)
 
-	analysis := make(map[string]interface{})
-
-	// Try to detect project type and run relevant commands.
-	if projectPath != "" {
-		analysis["project_path"] = projectPath
-
-		// Detect Go project.
-		if out, err := runCmd(ctx, projectPath, "go", "list", "-m", "-json"); err == nil {
-			analysis["go_module"] = string(out)
-		}
-
-		// Detect Rust project.
-		if out, err := runCmd(ctx, projectPath, "cargo", "metadata", "--format-version=1", "--no-deps"); err == nil {
-			// Just grab the package names.
-			var meta struct {
-				Packages []struct {
-					Name    string `json:"name"`
-					Version string `json:"version"`
-				} `json:"packages"`
-			}
-			if json.Unmarshal(out, &meta) == nil {
-				analysis["cargo_packages"] = meta.Packages
-			}
-		}
-
-		// Detect Node project.
-		if out, err := runCmd(ctx, projectPath, "node", "-e", "console.log(JSON.stringify(require('./package.json')))"); err == nil {
-			var pkg map[string]interface{}
-			if json.Unmarshal(out, &pkg) == nil {
-				analysis["npm_package"] = map[string]interface{}{
-					"name":         pkg["name"],
-					"version":      pkg["version"],
-					"dependencies": pkg["dependencies"],
-				}
-			}
+	// Default to current working directory.
+	if projectPath == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			projectPath = cwd
 		}
 	}
 
-	// If no project path, just report that static analysis was skipped.
-	if len(analysis) == 0 {
-		analysis["note"] = "No project_path provided; static analysis skipped. Set variables.project_path to enable."
+	analysis := make(map[string]interface{})
+	analysis["project_path"] = projectPath
+
+	detected := false
+
+	// Detect Go project.
+	if out, err := runCmd(ctx, projectPath, "go", "list", "-m", "-json"); err == nil {
+		var mod struct {
+			Path string `json:"Path"`
+			Dir  string `json:"Dir"`
+		}
+		if json.Unmarshal(out, &mod) == nil {
+			analysis["go_module"] = mod.Path
+			analysis["project_type"] = "go"
+			detected = true
+		}
+	}
+
+	// Detect Rust project.
+	if out, err := runCmd(ctx, projectPath, "cargo", "metadata", "--format-version=1", "--no-deps"); err == nil {
+		var meta struct {
+			Packages []struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"packages"`
+		}
+		if json.Unmarshal(out, &meta) == nil && len(meta.Packages) > 0 {
+			analysis["cargo_packages"] = meta.Packages
+			analysis["project_type"] = "rust"
+			detected = true
+		}
+	}
+
+	// Detect Node project.
+	if out, err := runCmd(ctx, projectPath, "node", "-e", "console.log(JSON.stringify(require('./package.json')))"); err == nil {
+		var pkg map[string]interface{}
+		if json.Unmarshal(out, &pkg) == nil {
+			analysis["npm_package"] = map[string]interface{}{
+				"name":         pkg["name"],
+				"version":      pkg["version"],
+				"dependencies": pkg["dependencies"],
+			}
+			analysis["project_type"] = "node"
+			detected = true
+		}
+	}
+
+	if !detected {
+		analysis["note"] = "No Go/Rust/Node project detected at " + projectPath
 	}
 
 	return map[string]interface{}{

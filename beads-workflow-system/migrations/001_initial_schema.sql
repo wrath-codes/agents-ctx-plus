@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 -- Workflow mappings: Bridge between beads issues and tempolite workflows
 CREATE TABLE IF NOT EXISTS workflow_mappings (
-    beads_issue_id TEXT PRIMARY KEY,
-    tempolite_workflow_id TEXT NOT NULL UNIQUE,
+    tempolite_workflow_id TEXT PRIMARY KEY,
+    beads_issue_id TEXT,
     workflow_type TEXT NOT NULL CHECK (workflow_type IN ('research', 'poc', 'documentation', 'validation')),
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed', 'paused', 'cancelled')),
     priority INTEGER DEFAULT 2 CHECK (priority BETWEEN 0 AND 3),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS workflow_mappings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
     
-    FOREIGN KEY (parent_workflow_id) REFERENCES workflow_mappings(beads_issue_id)
+    FOREIGN KEY (parent_workflow_id) REFERENCES workflow_mappings(tempolite_workflow_id)
 );
 
 -- Indexes for workflow_mappings

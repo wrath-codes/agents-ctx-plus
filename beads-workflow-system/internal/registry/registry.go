@@ -154,7 +154,7 @@ func (c *Client) SearchNPM(ctx context.Context, query string, limit int) (*Searc
 	}
 	for _, obj := range resp.Objects {
 		p := obj.Package
-		result.Packages = append(result.Packages, Package{
+		pkg := Package{
 			Name:         p.Name,
 			Version:      p.Version,
 			Description:  p.Description,
@@ -164,9 +164,30 @@ func (c *Client) SearchNPM(ctx context.Context, query string, limit int) (*Searc
 			Keywords:     p.Keywords,
 			LastUpdated:  p.Date,
 			DocumentsURL: p.Links.Npm,
-		})
+		}
+		// Fetch download count (best-effort, don't fail the search).
+		if dl, err := c.getNPMDownloads(ctx, p.Name); err == nil {
+			pkg.Downloads = dl
+		}
+		result.Packages = append(result.Packages, pkg)
 	}
 	return result, nil
+}
+
+// getNPMDownloads fetches last-month download count for an npm package.
+func (c *Client) getNPMDownloads(ctx context.Context, name string) (int64, error) {
+	u := fmt.Sprintf("https://api.npmjs.org/downloads/point/last-month/%s", url.PathEscape(name))
+	body, err := c.get(ctx, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		Downloads int64 `json:"downloads"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Downloads, nil
 }
 
 // SearchPyPI searches PyPI for Python packages.

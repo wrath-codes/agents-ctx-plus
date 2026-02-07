@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 // DatabaseManager manages all database connections
@@ -79,9 +80,10 @@ func NewDatabaseManager(config *Config) (*DatabaseManager, error) {
 	}, nil
 }
 
-// openDB opens a SQLite database with optimized settings
+// openDB opens a SQLite database with optimized settings.
+// Uses ncruces/go-sqlite3 which requires file: URI or plain path (no query params in filename).
 func openDB(path string, config *Config) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=10000&_temp_store=MEMORY")
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +98,19 @@ func openDB(path string, config *Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	// Enable foreign keys (must be done per-connection for SQLite)
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	// Apply pragmas via SQL (ncruces driver doesn't support URI query params).
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA cache_size = 10000",
+		"PRAGMA temp_store = MEMORY",
+		"PRAGMA foreign_keys = ON",
+	}
+	for _, pragma := range pragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to set %s: %w", pragma, err)
+		}
 	}
 
 	return db, nil

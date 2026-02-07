@@ -6,7 +6,7 @@ require (
 	github.com/davidroman0O/tempolite v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/ncruces/go-sqlite3 v0.30.5
 	github.com/revrost/go-openrouter v1.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -21,7 +21,6 @@ require (
 	github.com/k0kubun/pp/v3 v3.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/ncruces/go-sqlite3 v0.30.5 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7 // indirect

@@ -218,14 +218,17 @@ type Checkpoint struct {
 	CreatedAt  time.Time              `json:"created_at"`
 }
 
-// StartWorkflowRequest represents a request to start a workflow
+// StartWorkflowRequest represents a request to start a workflow.
+// By default, workflows are tracked only in the coordination DB.
+// Set CreateBeadsIssue=true to also create a linked beads issue.
 type StartWorkflowRequest struct {
-	IssueTitle   string                 `json:"issue_title"`
-	WorkflowType string                 `json:"workflow_type"`
-	AgentType    string                 `json:"agent_type"`
-	Priority     int                    `json:"priority"`
-	Variables    map[string]interface{} `json:"variables,omitempty"`
-	TemplateID   string                 `json:"template_id,omitempty"`
+	IssueTitle       string                 `json:"issue_title"`
+	WorkflowType     string                 `json:"workflow_type"`
+	AgentType        string                 `json:"agent_type"`
+	Priority         int                    `json:"priority"`
+	Variables        map[string]interface{} `json:"variables,omitempty"`
+	TemplateID       string                 `json:"template_id,omitempty"`
+	CreateBeadsIssue bool                   `json:"create_beads_issue,omitempty"`
 }
 
 // CreateIssueRequest represents a request to create a beads issue

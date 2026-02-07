@@ -545,17 +545,72 @@ func newResultsCommand() *cobra.Command {
 				return nil
 			}
 
-			fmt.Printf("Results for workflow %s:\n", workflowID)
-			fmt.Println(strings.Repeat("=", 60))
+			fmt.Printf("Results for workflow %s\n", workflowID)
+			fmt.Println(strings.Repeat("=", 70))
 
-			for i, result := range results {
-				fmt.Printf("\nResult #%d:\n", i+1)
-				fmt.Printf("  Type:           %s\n", result.ResultType)
-				fmt.Printf("  Agent:          %s\n", result.AgentType)
-				fmt.Printf("  Confidence:     %.2f\n", result.ConfidenceScore)
-				fmt.Printf("  Quality Score:  %.2f\n", result.QualityScore)
-				fmt.Printf("  Execution Time: %dms\n", result.ExecutionTimeMs)
-				fmt.Printf("  Created:        %s\n", result.CreatedAt.Format(time.RFC3339))
+			for _, result := range results {
+				fmt.Printf("Agent: %s | Type: %s | Confidence: %.0f%% | Quality: %.1f/10\n",
+					result.AgentType, result.ResultType, result.ConfidenceScore*100, result.QualityScore)
+				fmt.Printf("Execution: %dms | Created: %s\n",
+					result.ExecutionTimeMs, result.CreatedAt.Format("2006-01-02 15:04:05"))
+				fmt.Println(strings.Repeat("-", 70))
+
+				data := result.Data
+
+				// Show libraries found
+				if libs, ok := data["libraries"].([]interface{}); ok {
+					fmt.Printf("\nLibraries Found: %d\n\n", len(libs))
+					fmt.Printf("  %-25s %-10s %-10s %s\n", "NAME", "VERSION", "REGISTRY", "DESCRIPTION")
+					fmt.Printf("  %-25s %-10s %-10s %s\n", "----", "-------", "--------", "-----------")
+					for _, l := range libs {
+						lib, ok := l.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						name, _ := lib["name"].(string)
+						version, _ := lib["version"].(string)
+						registry, _ := lib["registry"].(string)
+						desc, _ := lib["description"].(string)
+						if len(desc) > 50 {
+							desc = desc[:47] + "..."
+						}
+						if len(name) > 25 {
+							name = name[:22] + "..."
+						}
+						fmt.Printf("  %-25s %-10s %-10s %s\n", name, version, registry, desc)
+					}
+				}
+
+				// Show synthesis / summary
+				if summary, ok := data["summary"].(map[string]interface{}); ok {
+					if rec, ok := summary["primary_recommendation"].(string); ok && rec != "" {
+						fmt.Printf("\nRecommendation: %s\n", rec)
+					}
+					if reasoning, ok := summary["reasoning"].(string); ok && reasoning != "" {
+						fmt.Printf("Reasoning: %s\n", reasoning)
+					}
+					if exec, ok := summary["executive_summary"].(string); ok && exec != "" {
+						fmt.Printf("\nSummary: %s\n", exec)
+					}
+					if risk, ok := summary["risk_assessment"].(string); ok && risk != "" {
+						fmt.Printf("Risk: %s\n", risk)
+					}
+				}
+
+				// Show sources
+				if analysis, ok := data["analysis_summary"].(map[string]interface{}); ok {
+					if sources, ok := analysis["sources"].([]interface{}); ok {
+						var srcList []string
+						for _, s := range sources {
+							if str, ok := s.(string); ok {
+								srcList = append(srcList, str)
+							}
+						}
+						fmt.Printf("\nSources: %s\n", strings.Join(srcList, ", "))
+					}
+				}
+
+				fmt.Println()
 			}
 
 			return nil

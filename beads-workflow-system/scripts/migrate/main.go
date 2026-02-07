@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 	"github.com/your-org/beads-workflow-system/internal/migrations"
 )
 
@@ -75,21 +76,9 @@ func runMigrations() {
 	}
 	fmt.Println("✓ Tempolite database migrated")
 
-	// Apply to beads database
-	fmt.Println("Applying migrations to beads database...")
-	beadsDB, err := sql.Open("sqlite3", "./.beads/beads.db")
-	if err != nil {
-		fmt.Printf("Failed to open beads DB: %v\n", err)
-		os.Exit(1)
-	}
-	defer beadsDB.Close()
-
-	beadsMigrator := migrations.NewMigrator(beadsDB, "./migrations")
-	if err := beadsMigrator.Migrate(); err != nil {
-		fmt.Printf("Migration failed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Println("✓ Beads database migrated")
+	// Beads database is managed by the real beads library.
+	// It creates its own schema on first use -- no manual migrations needed.
+	fmt.Println("✓ Beads database managed by beads library (skipped)")
 
 	fmt.Println("\n✓ All migrations completed successfully!")
 }

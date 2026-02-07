@@ -88,23 +88,31 @@ func (eb *EventBus) Publish(event Event) {
 	}
 }
 
-// StartWorkflow starts a new workflow and creates a beads issue
+// StartWorkflow starts a new workflow.
+// Workflow metadata is stored in the coordination DB.
+// A beads issue is only created if explicitly requested (via req.CreateBeadsIssue).
+// This keeps the beads database clean for real issue tracking.
 func (cb *CoordinationBridge) StartWorkflow(ctx context.Context, req *models.StartWorkflowRequest) (*models.Workflow, error) {
-	// 1. Create beads issue
-	issueReq := &models.CreateIssueRequest{
-		Title:    req.IssueTitle,
-		Type:     req.WorkflowType,
-		Priority: req.Priority,
-		Labels:   []string{req.WorkflowType, "workflow"},
-	}
-
-	issue, err := cb.beadsClient.CreateIssue(ctx, issueReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create beads issue: %w", err)
-	}
-
-	// 2. Generate workflow ID
+	// 1. Generate workflow ID
 	workflowID := generateWorkflowID(req.WorkflowType)
+
+	// 2. Optionally create a beads issue (type "task", with workflow type as label).
+	var beadsIssueID string
+	if req.CreateBeadsIssue {
+		issueReq := &models.CreateIssueRequest{
+			Title:    req.IssueTitle,
+			Type:     "task",
+			Priority: req.Priority,
+			Labels:   []string{req.WorkflowType, "workflow"},
+		}
+		issue, err := cb.beadsClient.CreateIssue(ctx, issueReq)
+		if err != nil {
+			// Best-effort: log but don't block workflow creation.
+			fmt.Printf("warning: failed to create beads issue: %v\n", err)
+		} else {
+			beadsIssueID = issue.ID
+		}
+	}
 
 	// 3. Create mapping in coordination database
 	metadata := map[string]interface{}{
@@ -113,21 +121,16 @@ func (cb *CoordinationBridge) StartWorkflow(ctx context.Context, req *models.Sta
 	}
 	metadataJSON, _ := json.Marshal(metadata)
 
-	_, err = cb.coordDB.ExecContext(ctx, `
+	_, err := cb.coordDB.ExecContext(ctx, `
 		INSERT INTO workflow_mappings (beads_issue_id, tempolite_workflow_id, workflow_type, priority, metadata, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, issue.ID, workflowID, req.WorkflowType, req.Priority, metadataJSON, time.Now(), time.Now())
+	`, beadsIssueID, workflowID, req.WorkflowType, req.Priority, metadataJSON, time.Now(), time.Now())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create workflow mapping: %w", err)
 	}
 
-	// 4. Store tempolite entity ID if a workflow function is executed later.
-	// The bridge records the mapping so recovery can resume via tempolite.
-	// Actual tempolite execution is triggered by ExecuteViaTempolite()
-	// after the caller registers and runs the workflow function.
-
-	// 5. Create initial agent assignment
+	// 4. Create initial agent assignment
 	if req.AgentType != "" {
 		_, err = cb.coordDB.ExecContext(ctx, `
 			INSERT INTO agent_assignments (workflow_id, agent_type, agent_id, status, assigned_at)
@@ -139,12 +142,12 @@ func (cb *CoordinationBridge) StartWorkflow(ctx context.Context, req *models.Sta
 		}
 	}
 
-	// 6. Publish event
+	// 5. Publish event
 	cb.eventBus.Publish(Event{
 		Type:       "workflow:started",
 		WorkflowID: workflowID,
 		Data: map[string]interface{}{
-			"beads_issue_id": issue.ID,
+			"beads_issue_id": beadsIssueID,
 			"workflow_type":  req.WorkflowType,
 			"agent_type":     req.AgentType,
 		},
@@ -153,7 +156,7 @@ func (cb *CoordinationBridge) StartWorkflow(ctx context.Context, req *models.Sta
 
 	return &models.Workflow{
 		ID:           workflowID,
-		BeadsIssueID: issue.ID,
+		BeadsIssueID: beadsIssueID,
 		Type:         req.WorkflowType,
 		Status:       models.WorkflowStatusActive,
 		Priority:     req.Priority,
@@ -161,6 +164,33 @@ func (cb *CoordinationBridge) StartWorkflow(ctx context.Context, req *models.Sta
 		StartedAt:    time.Now(),
 		Variables:    req.Variables,
 	}, nil
+
+}
+
+// LinkWorkflowToIssue creates a beads issue and links it to an existing workflow.
+func (cb *CoordinationBridge) LinkWorkflowToIssue(ctx context.Context, workflowID string, title string, issueType string, priority int) (string, error) {
+	if issueType == "" {
+		issueType = "task"
+	}
+	issueReq := &models.CreateIssueRequest{
+		Title:    title,
+		Type:     issueType,
+		Priority: priority,
+		Labels:   []string{"workflow"},
+	}
+	issue, err := cb.beadsClient.CreateIssue(ctx, issueReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to create beads issue: %w", err)
+	}
+
+	_, err = cb.coordDB.ExecContext(ctx, `
+		UPDATE workflow_mappings SET beads_issue_id = ?, updated_at = ? WHERE tempolite_workflow_id = ?
+	`, issue.ID, time.Now(), workflowID)
+	if err != nil {
+		return "", fmt.Errorf("failed to link workflow to issue: %w", err)
+	}
+
+	return issue.ID, nil
 }
 
 // GetWorkflow retrieves a workflow by ID
