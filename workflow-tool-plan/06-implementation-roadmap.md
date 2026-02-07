@@ -11,6 +11,11 @@
 ## 📅 Phase Timeline Overview
 
 ### Phase 1: Foundation (Weeks 1-2)
+**Dates**: Feb 6 - Feb 19  
+**Focus**: Core infrastructure and basic functionality  
+**Deliverables**: Working CLI + AgentFS + DuckDB + Local LLM + Session Management
+
+### Phase 1: Foundation (Weeks 1-2)
 
 **Dates**: Feb 6 - Feb 19  
 **Focus**: Core infrastructure and basic functionality  

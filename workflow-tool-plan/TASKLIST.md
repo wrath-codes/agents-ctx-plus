@@ -76,7 +76,7 @@
 
 #### Performance Optimization
 
-- [ ] **TASK-033**: Implement hardware capability detection
+- [ ] **TASK-033**: Implement Git-based hardware capability detection
 - [ ] **TASK-034**: Create adaptive agent concurrency management
 - [ ] **TASK-035**: Build multi-tier caching system
 - [ ] **TASK-036**: Optimize vector search performance

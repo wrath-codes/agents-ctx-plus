@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  bd-workflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bd-workflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - workflow-data:/app/data
+      - beads-data:/app/.beads
+    environment:
+      - BD_DB_PATH=/app/data
+      - BD_LOG_LEVEL=info
+    restart: unless-stopped
+
+volumes:
+  workflow-data:
+  beads-data:
