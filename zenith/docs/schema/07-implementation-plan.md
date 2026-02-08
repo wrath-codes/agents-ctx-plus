@@ -48,10 +48,10 @@
 | 0.4 | ~~Add `duckdb` crate (bundled), write spike: create table, insert, query~~ | **DONE** — `duckdb` 1.4 (bundled) compiles and works. Validated: CRUD, Appender bulk insert (1000 rows), transactions, JSON columns, `FLOAT[384]` arrays with `array_cosine_similarity()`, `execute_batch`, file persistence. DuckDB is synchronous; async strategy documented (prefer `spawn_blocking`, `async-duckdb` as alternative). `FLOAT[N]` enforces dimension at insert time. | Phase 2 |
 | 0.5 | Add `duckdb` VSS extension spike: create HNSW index, vector search | Vector search works in DuckDB | Phase 4 |
 | 0.6 | Add `fastembed` crate, write spike: embed text, verify 384 dimensions | Embeddings generate locally | Phase 3 |
-| 0.7 | Add `agentfs` from git, write spike: create workspace, read/write file, delete workspace | AgentFS compiles and works | Phase 7 |
+| 0.7 | ~~Add `agentfs` from git~~ → Add `agentfs-sdk` from crates.io, write spike: KV CRUD, filesystem ops, tool tracking | **DONE** — `agentfs-sdk` 0.6.0 works (crates.io, not git). Validated: ephemeral + persistent modes, KV (set/get/delete/keys, serde structs), filesystem (mkdir/create_file/pwrite/read_file/stat/remove), tool tracking (start/success/error, record, recent, stats). **Note**: Turso docs say `agentfs = "0.1"` but correct crate is `agentfs-sdk`; docs show simplified API that doesn't match v0.6.0 (POSIX-level FS, `&V` refs for KV, positional args for tools). Task 0.10 (fallback) not needed. | Phase 7 |
 | 0.8 | Add `ast-grep-core` + `ast-grep-language`, write spike: parse Rust file, pattern match, walk AST nodes | ast-grep pattern matching and Node traversal work | Phase 3 |
 | 0.9 | Add `clap` derive, write spike: parse subcommands, output JSON | CLI framework works | Phase 5 |
-| 0.10 | If 0.7 fails: design `Workspace` trait, implement `TempDirWorkspace` fallback | AgentFS fallback ready | Phase 7 |
+| 0.10 | ~~If 0.7 fails: design `Workspace` trait, implement `TempDirWorkspace` fallback~~ | **CANCELLED** — 0.7 passed, AgentFS works from crates.io | N/A |
 
 ### Milestone 0
 
@@ -413,7 +413,7 @@ Parallel path: 0 → 3 (can run alongside 1+2)
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|------------|
-| AgentFS doesn't compile from git | Lose workspace isolation and file audit | Medium | Phase 0 spike (0.7). Fallback: `TempDirWorkspace` trait implementation (0.10) |
+| AgentFS doesn't compile from git | Lose workspace isolation and file audit | **Mitigated** | Spike 0.7 confirmed: `agentfs-sdk` 0.6.0 works from crates.io (no git dep needed). KV, filesystem, tool tracking all validated. **New risk**: Turso docs (`agentfs = "0.1"`) don't match actual crate name (`agentfs-sdk`) or API surface (POSIX-level vs high-level). May need thin wrapper. Task 0.10 (fallback) cancelled. |
 | `turso` crate API differs from docs | Blocks all DB work | **Realized** | Spike 0.2 confirmed: `turso` 0.5.0-pre.8 lacks FTS (experimental flag not exposed). **Mitigated**: switched to `libsql` 0.9.29 which has native FTS5. Plan to re-evaluate `turso` when stable. |
 | DuckDB VSS extension doesn't work in Rust | Lose vector search in lake | Low | Phase 0 spike (0.5). Fallback: use Turso's `libsql_vector_idx` for vectors |
 | fastembed model download fails or is slow | Blocks indexing pipeline | Low | Phase 0 spike (0.6). Fallback: skip embeddings, use FTS only |

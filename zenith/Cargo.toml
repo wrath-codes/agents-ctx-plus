@@ -22,8 +22,8 @@ libsql = "0.9.29"
 # NOTE: turso crate (Limbo-based) planned for future switch once FTS is stable.
 # turso = "0.5.0-pre.8"
 
-# Workspace isolation (validate in spike 0.7 before uncommenting)
-# agentfs = { git = "https://github.com/tursodatabase/agentfs", path = "sdk/rust" }
+# Workspace isolation — AgentFS SDK from crates.io (spike 0.7)
+agentfs-sdk = "0.6"
 
 # Embeddings
 fastembed = "5.8"

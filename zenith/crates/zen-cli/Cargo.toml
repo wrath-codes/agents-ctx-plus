@@ -26,6 +26,8 @@ anyhow.workspace = true
 dotenvy.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+agentfs-sdk.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
