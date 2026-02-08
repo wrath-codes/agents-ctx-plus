@@ -427,14 +427,14 @@ pub enum AuditAction {
 
 **Purpose**: Layered configuration loading from env vars, TOML files, and defaults.
 
-**Validated in**: aether `aether-config` (figment with TOML + env layering, fully tested)
+**Validated in**: zen-config spike (46/46 tests pass). Adapted from aether `aether-config` with key changes: figment `Env` provider replaces manual `std::env::var()`, `String` fields with empty defaults replace `Option<String>`, added `ClerkConfig`, `AxiomConfig`, storage wiring helpers (`create_secret_sql()`, `connection_string()`), `figment::Jail` for safe test isolation.
 
 ### Dependencies
 
 ```toml
 [dependencies]
 zen-core.workspace = true
-figment.workspace = true
+figment.workspace = true          # features = ["toml", "env", "test"]
 serde.workspace = true
 dirs.workspace = true
 dotenvy.workspace = true
@@ -445,21 +445,24 @@ thiserror.workspace = true
 
 ```
 zen-config/src/
-├── lib.rs              # ZenConfig struct, load(), from_env()
-├── turso.rs            # TursoConfig (url, token, db_name)
-├── motherduck.rs       # MotherDuckConfig (token, db_name)
-├── r2.rs               # R2Config (account_id, access_key, secret, bucket)
-└── general.rs          # GeneralConfig (auto_commit, default_ecosystem, limit)
+├── lib.rs              # ZenConfig struct, load(), load_with_dotenv(), figment()
+├── error.rs            # ConfigError (wraps figment::Error + NotConfigured + InvalidValue)
+├── turso.rs            # TursoConfig (url, auth_token, platform_api_key, org_slug, sync, replica)
+├── motherduck.rs       # MotherDuckConfig (access_token, db_name, connection_string())
+├── r2.rs               # R2Config (account_id, keys, bucket, endpoint_url(), create_secret_sql())
+├── clerk.rs            # ClerkConfig (publishable_key, secret_key, jwks_url, backend/frontend)
+├── axiom.rs            # AxiomConfig (token, dataset, endpoint, is_valid_token())
+└── general.rs          # GeneralConfig (auto_commit, default_ecosystem, default_limit)
 ```
 
 ### Key Types
 
-**Pattern from**: aether `AetherConfig`
+**Implemented in**: `zen-config/src/lib.rs`
 
 ```rust
 use figment::{Figment, providers::{Env, Format, Toml, Serialized}};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ZenConfig {
     #[serde(default)]
     pub turso: TursoConfig,
@@ -468,89 +471,82 @@ pub struct ZenConfig {
     #[serde(default)]
     pub r2: R2Config,
     #[serde(default)]
+    pub clerk: ClerkConfig,
+    #[serde(default)]
+    pub axiom: AxiomConfig,
+    #[serde(default)]
     pub general: GeneralConfig,
 }
 
 impl ZenConfig {
-    /// Load config with layered precedence:
-    /// env vars > ./zenith.toml > ~/.config/zenith/config.toml > defaults
-    pub fn load() -> Result<Self, ConfigError> {
-        let figment = Self::figment();
-        figment.extract().map_err(ConfigError::from)
-    }
+    /// Load config. Precedence: env > .zenith/config.toml > ~/.config/zenith/config.toml > defaults
+    pub fn load() -> Result<Self, ConfigError> { ... }
 
-    fn figment() -> Figment {
-        let mut figment = Figment::new()
-            .merge(Serialized::defaults(ZenConfig::default()));
+    /// Load with .env file support (calls dotenvy first).
+    pub fn load_with_dotenv() -> Result<Self, ConfigError> { ... }
 
-        // Global config
-        if let Some(config_dir) = dirs::config_dir() {
-            let global_path = config_dir.join("zenith").join("config.toml");
-            if global_path.exists() {
-                figment = figment.merge(Toml::file(global_path));
-            }
-        }
-
-        // Project-local config
-        let local_path = std::path::Path::new(".zenith/config.toml");
-        if local_path.exists() {
-            figment = figment.merge(Toml::file(local_path));
-        }
-
-        // Env vars (ZENITH_ prefix)
-        figment.merge(Env::prefixed("ZENITH_").split("__"))
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TursoConfig {
-    pub url: Option<String>,
-    pub auth_token: Option<String>,
-    pub db_name: Option<String>,
-    pub sync_interval_secs: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct R2Config {
-    pub account_id: Option<String>,
-    pub access_key_id: Option<String>,
-    pub secret_access_key: Option<String>,
-    pub bucket_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct MotherDuckConfig {
-    pub access_token: Option<String>,
-    pub db_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneralConfig {
-    pub auto_commit: bool,
-    pub default_ecosystem: Option<String>,
-    pub default_limit: u32,
-}
-
-impl Default for GeneralConfig {
-    fn default() -> Self {
-        Self {
-            auto_commit: false,
-            default_ecosystem: None,
-            default_limit: 20,
-        }
-    }
+    /// Build the figment provider chain (public for test access).
+    pub fn figment() -> Figment { ... }
 }
 ```
 
+All sub-config fields use `String` with empty defaults (not `Option<String>`). Each sub-config has `is_configured() -> bool`.
+
+#### Env Var Mapping
+
+Figment's `Env::prefixed("ZENITH_").split("__")` maps env vars to nested fields:
+
+| Env var | Config field |
+|---------|-------------|
+| `ZENITH_TURSO__URL` | `turso.url` |
+| `ZENITH_TURSO__PLATFORM_API_KEY` | `turso.platform_api_key` |
+| `ZENITH_R2__ACCOUNT_ID` | `r2.account_id` |
+| `ZENITH_MOTHERDUCK__ACCESS_TOKEN` | `motherduck.access_token` |
+| `ZENITH_CLERK__SECRET_KEY` | `clerk.secret_key` |
+| `ZENITH_AXIOM__TOKEN` | `axiom.token` |
+| `ZENITH_GENERAL__DEFAULT_LIMIT` | `general.default_limit` |
+
+#### Storage Wiring Helpers
+
+```rust
+// R2Config — generates DuckDB SQL for R2 secret creation
+r2.create_secret_sql("r2_zenith")       // CREATE SECRET ... (TYPE s3, ...)
+r2.create_secret_sql_motherduck("r2_z") // CREATE SECRET ... IN MOTHERDUCK (...)
+r2.endpoint_url()                        // https://{account_id}.r2.cloudflarestorage.com
+
+// MotherDuckConfig — generates connection string
+motherduck.connection_string()           // md:{db_name}?motherduck_token={token}
+
+// TursoConfig — db name extraction + token minting readiness
+turso.db_name()                          // extracts "zenith-dev" from libsql:// URL
+turso.can_mint_tokens()                  // true if platform_api_key + org_slug + url set
+```
+
+### Gotchas (discovered in spike)
+
+1. **Figment silently ignores typo'd env var keys.** `ZENITH_TURSO__URLL` (typo) is silently ignored — `url` stays at its default empty string. No error, no warning. Test `typo_env_var_silently_ignored` documents this.
+2. **`dotenvy` must be called before `Figment::extract()`.** Figment reads `std::env` at extract time, not at provider construction time. Use `load_with_dotenv()` for CLI/tests.
+3. **`String` with `#[serde(default)]` means figment treats missing keys as empty string, not error.** This is why `is_configured()` checks for non-empty fields rather than `Option::is_some()`.
+4. **Use `figment::Jail` for safe env var testing** (Rust 2024 edition makes `set_var`/`remove_var` unsafe). Jail synchronizes tests, creates temp dirs, and cleans up env vars automatically. Requires `figment` feature `test`.
+5. **AWS env vars are NOT managed by figment.** Lance extension reads `AWS_ACCESS_KEY_ID` etc. directly from its own credential chain. These stay as flat env vars in `.env`.
+
 ### Tests
 
-**Pattern from**: aether `config/tests/toml_loading.rs`
+**46 tests total**: 26 unit + 10 TOML/Jail integration + 9 dotenv integration + 1 doctest
 
 - Default config loads without any files
-- TOML file loading (use tempfile)
-- Env var override (set `ZENITH_TURSO__URL`)
-- Layered precedence: env > local TOML > global TOML > defaults
-- `is_configured()` checks for each sub-config
+- TOML file loading per section (figment::Jail + tempfile)
+- Full config TOML loading (all 6 sections)
+- Env var overrides TOML value (figment::Jail)
+- Env var overrides default (figment::Jail)
+- Typo'd env var silently ignored (documents gotcha)
+- Full env provider chain (all sections via Jail)
+- Real `.env` loading: Turso, R2, MotherDuck, Clerk, Axiom values verified
+- Spike compatibility: figment-extracted values match `std::env::var()` reads
+- `is_configured()` / `is_valid_token()` / `can_mint_tokens()` checks
+- `create_secret_sql()` contains real credentials
+- `connection_string()` format validation
+- `db_name()` extraction from libsql:// URL
 
 ---
 

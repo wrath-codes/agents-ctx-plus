@@ -493,7 +493,7 @@ Zenith skips test files and test directories by default during indexing (configu
 **What we take:**
 - Validated DuckDB + DuckLake + MotherDuck + R2 storage stack
 - Validated Turso/libSQL embedded replicas
-- Validated figment configuration loading
+- Validated figment configuration loading (zen-config spike: `Env::prefixed("ZENITH_").split("__")`, `figment::Jail` for tests, 46/46 pass)
 - object_store crate for S3/R2
 - Cargo workspace structure patterns
 

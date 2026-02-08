@@ -87,7 +87,7 @@ cargo test --workspace
 | 1.2 | Define all enums (status types, entity types, relations, actions) | zen-core | 1.4 |
 | 1.3 | Define error hierarchy (`ZenError`, sub-errors per crate) | zen-core | 1.4 |
 | 1.4 | Implement ID prefix constants and `gen_id_sql()` helper | zen-core | 1.6 |
-| 1.5 | Implement `ZenConfig` with figment (turso, motherduck, r2, general sections) | zen-config | 1.6 |
+| 1.5 | ~~Implement `ZenConfig` with figment (turso, motherduck, r2, general sections)~~ | zen-config | **DONE** — 46/46 tests pass. Figment `Env::prefixed("ZENITH_").split("__")` handles env vars (no manual `std::env::var()`). `String` fields with empty defaults (not `Option<String>`). Added Clerk + Axiom config sections. Storage wiring helpers: `R2Config::create_secret_sql()`, `MotherDuckConfig::connection_string()`, `TursoConfig::db_name()` / `can_mint_tokens()`. All `.env` vars renamed to `ZENITH_*__*` format, existing spikes updated. `figment::Jail` for safe test isolation (Rust 2024 `set_var` is unsafe). Real `.env` values flow through figment and match spike `std::env::var()` reads. See `05-crate-designs.md` §4 for gotchas. |
 | 1.6 | Write full SQL migration file (all 14 tables + 7 FTS5 + indexes + triggers) from `01-turso-data-model.md` | zen-db | 1.7 |
 | 1.7 | Implement `ZenDb::open_local()`, run migrations, verify schema | zen-db | 1.8 |
 | 1.8 | Implement `ZenDb::generate_id()` using Turso's `randomblob()` | zen-db | Phase 2 |
@@ -95,7 +95,7 @@ cargo test --workspace
 ### Tests
 
 - zen-core: Serde roundtrip for every entity, enum string representation, ID prefix correctness
-- zen-config: Default config loads, TOML loading (tempfile), env var override
+- zen-config: **DONE** — 46 tests (26 unit + 10 TOML/Jail + 9 dotenv + 1 doctest). Default loads, TOML per-section, env overrides TOML, typo gotcha documented, full provider chain, real `.env` values, spike compatibility
 - zen-db: Schema creation, `generate_id()` produces correct prefix format, basic INSERT+SELECT for each table
 
 ### Milestone 1
@@ -455,6 +455,7 @@ Parallel path: 0.14 → 3.16-3.18 → 4.10-4.12 → 5.19-5.20 (zen grep, can run
 | `gix` adds significant compile time | Slower builds for all developers | Medium | `gix` isolated in `zen-hooks` crate — only rebuilds when hooks code changes. Spike 0.13 measures compile time delta and identifies minimal feature flags. |
 | `zen rebuild` too slow for post-checkout hook | Branch switches become sluggish | Low (< 5K ops) | Spike 0.13 measures rebuild at 100/1000/5000 ops. Threshold-based decision: auto below threshold, warn above. Configurable via `.zenith/config.toml`. |
 | `zen` binary not in PATH when hooks run | Hooks skip validation silently | Medium | Wrapper approach: graceful fallback with guidance message. Pre-commit skips validation rather than blocking commit. |
+| Figment silently ignores typo'd env var keys | Config appears loaded but values are defaults; hard to debug | Medium | **Confirmed** in zen-config spike. `ZENITH_TURSO__URLL` (typo) is silently ignored. Mitigation: `is_configured()` checks on every sub-config, `warn_unconfigured()` planned for CLI startup. Test `typo_env_var_silently_ignored` documents the behavior. |
 
 ---
 

@@ -29,12 +29,16 @@
 //! }
 //! ```
 
+mod axiom;
+mod clerk;
 mod error;
 mod general;
 mod motherduck;
 mod r2;
 mod turso;
 
+pub use axiom::AxiomConfig;
+pub use clerk::ClerkConfig;
 pub use error::ConfigError;
 pub use general::GeneralConfig;
 pub use motherduck::MotherDuckConfig;
@@ -56,6 +60,10 @@ pub struct ZenConfig {
     pub motherduck: MotherDuckConfig,
     #[serde(default)]
     pub r2: R2Config,
+    #[serde(default)]
+    pub clerk: ClerkConfig,
+    #[serde(default)]
+    pub axiom: AxiomConfig,
     #[serde(default)]
     pub general: GeneralConfig,
 }

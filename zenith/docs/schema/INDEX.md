@@ -81,6 +81,6 @@
 | Project | What We Take |
 |---------|-------------|
 | klaw-effect-tracker | CLI tools with JSON I/O, FTS5 docs, findings with tags, two-tier extraction (ast-grep + regex), rich ParsedItem metadata |
-| aether | DuckDB + DuckLake + MotherDuck + R2 (validated), Turso embedded replicas (validated), figment config, object_store |
+| aether | DuckDB + DuckLake + MotherDuck + R2 (validated), Turso embedded replicas (validated), figment config (adapted for zenith: `ZENITH_*` env prefix, `String` fields, Clerk/Axiom sections, storage wiring helpers, `figment::Jail` for tests), object_store |
 | beads/btcab | JSONL append-only audit trail, collision-resistant IDs, git hooks |
 | workflow-tool-plan | Context management research, session lifecycle, parsing strategy |

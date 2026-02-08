@@ -13,7 +13,7 @@
 //!
 //! ## Part 2: MotherDuck — Cloud Compute
 //!
-//! - **Connection**: `md:` protocol with `MOTHERDUCK_ACCESS_TOKEN`
+//! - **Connection**: `md:` protocol with `ZENITH_MOTHERDUCK__ACCESS_TOKEN`
 //! - **Remote DB creation**: `CREATE DATABASE` on MotherDuck
 //! - **Remote table ops**: CREATE TABLE, INSERT, SELECT through MotherDuck
 //! - **Mixed local/remote**: Query local data alongside MotherDuck data
@@ -33,9 +33,9 @@
 //! ## Prerequisites
 //!
 //! - **VSS tests**: No credentials needed (local only)
-//! - **MotherDuck tests**: Require `MOTHERDUCK_ACCESS_TOKEN` env var
-//! - **R2 tests**: Require `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-//!   `R2_ACCOUNT_ID`, `R2_BUCKET_NAME` env vars
+//! - **MotherDuck tests**: Require `ZENITH_MOTHERDUCK__ACCESS_TOKEN` env var
+//! - **R2 tests**: Require `ZENITH_R2__ACCESS_KEY_ID`, `ZENITH_R2__SECRET_ACCESS_KEY`,
+//!   `ZENITH_R2__ACCOUNT_ID`, `ZENITH_R2__BUCKET_NAME` env vars
 //!
 //! Cloud tests are skipped (not failed) when credentials are missing.
 
@@ -394,7 +394,7 @@ fn spike_vss_persisted_index_creation() {
 
 fn motherduck_token() -> Option<String> {
     load_env();
-    std::env::var("MOTHERDUCK_ACCESS_TOKEN")
+    std::env::var("ZENITH_MOTHERDUCK__ACCESS_TOKEN")
         .ok()
         .filter(|t| !t.is_empty())
 }
@@ -403,7 +403,7 @@ fn motherduck_token() -> Option<String> {
 #[test]
 fn spike_motherduck_connect_and_query() {
     let Some(token) = motherduck_token() else {
-        eprintln!("SKIP: MOTHERDUCK_ACCESS_TOKEN not set");
+        eprintln!("SKIP: ZENITH_MOTHERDUCK__ACCESS_TOKEN not set");
         return;
     };
 
@@ -477,7 +477,7 @@ fn spike_motherduck_connect_and_query() {
 #[test]
 fn spike_motherduck_vss() {
     let Some(token) = motherduck_token() else {
-        eprintln!("SKIP: MOTHERDUCK_ACCESS_TOKEN not set");
+        eprintln!("SKIP: ZENITH_MOTHERDUCK__ACCESS_TOKEN not set");
         return;
     };
 
@@ -558,10 +558,10 @@ struct R2Creds {
 fn r2_credentials() -> Option<R2Creds> {
     load_env();
     Some(R2Creds {
-        account_id: std::env::var("R2_ACCOUNT_ID").ok()?,
-        access_key_id: std::env::var("R2_ACCESS_KEY_ID").ok()?,
-        secret_access_key: std::env::var("R2_SECRET_ACCESS_KEY").ok()?,
-        bucket_name: std::env::var("R2_BUCKET_NAME").ok()?,
+        account_id: std::env::var("ZENITH_R2__ACCOUNT_ID").ok()?,
+        access_key_id: std::env::var("ZENITH_R2__ACCESS_KEY_ID").ok()?,
+        secret_access_key: std::env::var("ZENITH_R2__SECRET_ACCESS_KEY").ok()?,
+        bucket_name: std::env::var("ZENITH_R2__BUCKET_NAME").ok()?,
     })
 }
 
@@ -1130,7 +1130,7 @@ fn spike_lance_on_r2() {
 #[test]
 fn spike_ducklake_managed() {
     let Some(token) = motherduck_token() else {
-        eprintln!("SKIP: MOTHERDUCK_ACCESS_TOKEN not set");
+        eprintln!("SKIP: ZENITH_MOTHERDUCK__ACCESS_TOKEN not set");
         return;
     };
 
@@ -1216,7 +1216,7 @@ fn spike_ducklake_managed() {
 #[test]
 fn spike_ducklake_r2_with_data() {
     let Some(token) = motherduck_token() else {
-        eprintln!("SKIP: MOTHERDUCK_ACCESS_TOKEN not set");
+        eprintln!("SKIP: ZENITH_MOTHERDUCK__ACCESS_TOKEN not set");
         return;
     };
     let Some(creds) = r2_credentials() else {

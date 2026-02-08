@@ -19,15 +19,15 @@
 //! These tests require a live Turso Cloud database. Set environment variables in `zenith/.env`:
 //!
 //! ```bash
-//! ZENINTH_TURSO_DB_URL=libsql://zenith-dev-<org>.<region>.turso.io
-//! TURSO_PLATFORM_API_KEY=<platform-api-key>       # from `turso auth api-tokens mint <name>`
-//! ZENINTH_TURSO_ORG_SLUG=<org-slug>               # from `turso org list`
+//! ZENITH_TURSO__URL=libsql://zenith-dev-<org>.<region>.turso.io
+//! ZENITH_TURSO__PLATFORM_API_KEY=<platform-api-key>  # from `turso auth api-tokens mint <name>`
+//! ZENITH_TURSO__ORG_SLUG=<org-slug>                  # from `turso org list`
 //! ```
 //!
 //! The database name is extracted from the URL (the part before `-{org-slug}`).
 //!
 //! The tests programmatically generate a fresh database auth token via the Turso Platform API
-//! on each run, so the token never goes stale. The platform API key (`TURSO_PLATFORM_API_KEY`)
+//! on each run, so the token never goes stale. The platform API key (`ZENITH_TURSO__PLATFORM_API_KEY`)
 //! is long-lived and does not expire.
 //!
 //! Tests are skipped (not failed) when credentials are missing or the API call fails.
@@ -59,9 +59,9 @@ fn load_env() {
 /// Generate a fresh database auth token via the Turso Platform API.
 ///
 /// Requires these env vars:
-/// - `TURSO_PLATFORM_API_KEY` — long-lived platform API key (from `turso auth api-tokens mint`)
-/// - `ZENINTH_TURSO_ORG_SLUG` — organization slug
-/// - `ZENINTH_TURSO_DB_URL` — libsql:// URL for the database
+/// - `ZENITH_TURSO__PLATFORM_API_KEY` — long-lived platform API key (from `turso auth api-tokens mint`)
+/// - `ZENITH_TURSO__ORG_SLUG` — organization slug
+/// - `ZENITH_TURSO__URL` — libsql:// URL for the database
 ///
 /// The database name is extracted from the URL by parsing `libsql://{db_name}-{org_slug}.{rest}`.
 ///
@@ -69,9 +69,9 @@ fn load_env() {
 async fn turso_credentials() -> Option<(String, String)> {
     load_env();
 
-    let url = std::env::var("ZENINTH_TURSO_DB_URL").ok()?;
-    let api_key = std::env::var("TURSO_PLATFORM_API_KEY").ok()?;
-    let org = std::env::var("ZENINTH_TURSO_ORG_SLUG").ok()?;
+    let url = std::env::var("ZENITH_TURSO__URL").ok()?;
+    let api_key = std::env::var("ZENITH_TURSO__PLATFORM_API_KEY").ok()?;
+    let org = std::env::var("ZENITH_TURSO__ORG_SLUG").ok()?;
 
     if url.is_empty() || api_key.is_empty() || org.is_empty() {
         return None;
@@ -160,7 +160,7 @@ fn unique_table_name(prefix: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Spike tests — all require TURSO_PLATFORM_API_KEY + ZENINTH_TURSO_ORG_SLUG + ZENINTH_TURSO_DB_URL
+// Spike tests — all require ZENITH_TURSO__PLATFORM_API_KEY + ZENITH_TURSO__ORG_SLUG + ZENITH_TURSO__URL
 // ---------------------------------------------------------------------------
 
 /// Verify that we can create an embedded replica and connect to Turso Cloud.
@@ -168,7 +168,7 @@ fn unique_table_name(prefix: &str) -> String {
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_replica_connects() {
     let Some((url, token)) = turso_credentials().await else {
-        eprintln!("SKIP: Turso credentials not available (set TURSO_PLATFORM_API_KEY, ZENINTH_TURSO_ORG_SLUG, ZENINTH_TURSO_DB_URL)");
+        eprintln!("SKIP: Turso credentials not available (set ZENITH_TURSO__PLATFORM_API_KEY, ZENITH_TURSO__ORG_SLUG, ZENITH_TURSO__URL)");
         return;
     };
 

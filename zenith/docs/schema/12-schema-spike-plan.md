@@ -107,7 +107,7 @@ From research:
 |---|----------|-------|------|
 | 4 | **CLI JSON output** — 37+ documented JSON shapes in 04-cli-api-design.md | 5 | Drift between docs and implementation; LLM consumers get unexpected shapes |
 | 5 | **CLI JSON input** — `--tasks` JSON array in PRD workflow | 5, 6 | Malformed input from LLMs silently accepted or panics |
-| 6 | **Config schema** — `ZenConfig` with nested Turso/MotherDuck/R2/General sections | 1 | Invalid config silently ignored by figment; no editor autocompletion |
+| 6 | **Config schema** — `ZenConfig` with nested Turso/MotherDuck/R2/Clerk/Axiom/General sections | 1 | Invalid config silently ignored by figment (confirmed in spike); no editor autocompletion. **Note**: zen-config uses `String` fields (not `Option<String>`), so schemars `#[derive(JsonSchema)]` will produce non-nullable string properties with defaults, not nullable fields. |
 
 ### Medium-Value Boundaries (structured metadata)
 
@@ -258,7 +258,7 @@ This is NOT added during the spike. The spike defines sample types locally. Phas
 
 | # | Test | What It Validates |
 |---|------|-------------------|
-| 10 | `spike_schema_config_derive` | Define `ZenConfig`, `TursoConfig`, `MotherDuckConfig`, `R2Config`, `GeneralConfig` matching `05-crate-designs.md` (lines 462-520). Add `#[derive(JsonSchema)]`. Generate schema. Verify: nested structs produce `$ref` or inline object schemas, `Option<String>` produces nullable, `#[serde(default)]` is reflected (field becomes non-required), all sections appear as properties of root object. |
+| 10 | `spike_schema_config_derive` | Add `#[derive(JsonSchema)]` to existing `ZenConfig`, `TursoConfig`, `MotherDuckConfig`, `R2Config`, `ClerkConfig`, `AxiomConfig`, `GeneralConfig` from `zen-config` crate. Generate schema. Verify: nested structs produce `$ref` or inline object schemas, `String` fields produce non-nullable string properties (not nullable -- zen-config uses `String` not `Option<String>`), `#[serde(default)]` is reflected (field becomes non-required), all 6 sections appear as properties of root object. |
 | 11 | `spike_schema_config_validate` | Create valid config JSON → passes. Create invalid: (a) wrong type for `sync_interval_secs` (string instead of integer) → fails, (b) completely unknown top-level section → document behavior (schemars may or may not add `additionalProperties: false`), (c) missing all sections (empty object) → should pass because all sections have `#[serde(default)]`. |
 | 12 | `spike_schema_config_export` | Export config schema to `config.schema.json`. Verify well-formed. Document: could be shipped in `.zenith/` directory for editor TOML validation plugins. |
 
