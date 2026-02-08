@@ -1,0 +1,21 @@
+[package]
+name = "zen-registry"
+description = "Package registry HTTP clients for Zenith"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zen-core.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

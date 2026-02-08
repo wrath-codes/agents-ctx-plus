@@ -1,0 +1,18 @@
+[package]
+name = "zen-embeddings"
+description = "Local embedding generation for Zenith using fastembed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zen-core.workspace = true
+fastembed.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

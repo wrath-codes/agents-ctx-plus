@@ -1,0 +1,28 @@
+[package]
+name = "zen-lake"
+description = "DuckDB/DuckLake operations for Zenith documentation lake"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zen-core.workspace = true
+zen-config.workspace = true
+zen-embeddings.workspace = true
+duckdb.workspace = true
+object_store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+rstest.workspace = true
+
+[lints]
+workspace = true

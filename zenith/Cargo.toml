@@ -1,0 +1,84 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Async
+tokio = { version = "1.49", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database
+duckdb = { version = "1.4", features = ["bundled"] }
+libsql = "0.9.29"
+# NOTE: turso crate (Limbo-based) planned for future switch once FTS is stable.
+# turso = "0.5.0-pre.8"
+
+# Workspace isolation (validate in spike 0.7 before uncommenting)
+# agentfs = { git = "https://github.com/tursodatabase/agentfs", path = "sdk/rust" }
+
+# Embeddings
+fastembed = "5.8"
+
+# Parsing (ast-grep wraps tree-sitter with pattern matching + composable matchers)
+ast-grep-core = "0.40"
+ast-grep-language = "0.40"
+
+# HTTP
+reqwest = { version = "0.13", features = ["json"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Config
+figment = { version = "0.10", features = ["toml", "env"] }
+
+# Object storage
+object_store = { version = "0.13", features = ["aws"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Env
+dotenvy = "0.15"
+dirs = "6.0"
+
+# Testing
+pretty_assertions = "1.4"
+tempfile = "3.20"
+rstest = "0.26"
+
+# Internal crates
+zen-core = { path = "crates/zen-core" }
+zen-config = { path = "crates/zen-config" }
+zen-db = { path = "crates/zen-db" }
+zen-lake = { path = "crates/zen-lake" }
+zen-parser = { path = "crates/zen-parser" }
+zen-embeddings = { path = "crates/zen-embeddings" }
+zen-registry = { path = "crates/zen-registry" }
+zen-search = { path = "crates/zen-search" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"

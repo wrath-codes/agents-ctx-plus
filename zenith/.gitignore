@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Cargo lock for libraries (keep for binary)
+# Cargo.lock is committed for the workspace since zen-cli is a binary
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Zenith runtime data (created by `zen init`)
+.zenith/
+
+# DuckDB files
+*.duckdb
+*.duckdb.wal
+
+# ONNX model cache (fastembed downloads)
+onnx_models/

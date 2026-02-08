@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/your-org/beads-workflow-system/internal/llm"
+	"github.com/your-org/beads-workflow-system/internal/parser"
 	"github.com/your-org/beads-workflow-system/internal/registry"
 	"github.com/your-org/beads-workflow-system/pkg/models"
 )
@@ -260,14 +263,7 @@ func (ra *ResearchAgent) analyzeDocumentation(ctx context.Context, input map[str
 		return ra.analyzeDocumentationFallback(findings)
 	}
 
-	// Fetch READMEs for the top 3 libraries (by downloads) to give the LLM more context.
-	type readmeEntry struct {
-		name    string
-		content string
-	}
-	var readmes []readmeEntry
-
-	// Sort by downloads descending to pick the top ones.
+	// Sort by downloads descending to pick the top ones for deep analysis.
 	sorted := make([]LibraryFinding, len(findings))
 	copy(sorted, findings)
 	for i := 0; i < len(sorted); i++ {
@@ -277,22 +273,44 @@ func (ra *ResearchAgent) analyzeDocumentation(ctx context.Context, input map[str
 			}
 		}
 	}
+
+	// For the top 3 libraries, try to extract compressed API surface from source
+	// via tree-sitter. Falls back to README text if no source is available.
+	type libContext struct {
+		name     string
+		apiIndex string // tree-sitter compressed API (preferred)
+		readme   string // fallback README excerpt
+	}
+	var contexts []libContext
+
 	for _, lib := range sorted {
-		if len(readmes) >= 3 {
+		if len(contexts) >= 3 {
 			break
 		}
-		if lib.ReadmeURL == "" {
-			continue
+
+		entry := libContext{name: lib.Name}
+
+		// Try tree-sitter API extraction from GitHub source files first.
+		if lib.RepositoryURL != "" {
+			if apiIdx := ra.fetchAndExtractAPI(ctx, lib.RepositoryURL, lib.Registry); apiIdx != "" {
+				entry.apiIndex = apiIdx
+			}
 		}
-		content, err := ra.registry.FetchReadme(ctx, lib.ReadmeURL)
-		if err != nil || content == "" {
-			continue
+
+		// Fall back to README if no API surface was extracted.
+		if entry.apiIndex == "" && lib.ReadmeURL != "" {
+			content, err := ra.registry.FetchReadme(ctx, lib.ReadmeURL)
+			if err == nil && content != "" {
+				if len(content) > 3072 {
+					content = content[:3072] + "\n...(truncated)"
+				}
+				entry.readme = content
+			}
 		}
-		// Truncate to 3KB per README so we don't blow the context window.
-		if len(content) > 3072 {
-			content = content[:3072] + "\n...(truncated)"
+
+		if entry.apiIndex != "" || entry.readme != "" {
+			contexts = append(contexts, entry)
 		}
-		readmes = append(readmes, readmeEntry{name: lib.Name, content: content})
 	}
 
 	// Build a single batched prompt for ALL libraries (1 API call total).
@@ -311,11 +329,16 @@ func (ra *ResearchAgent) analyzeDocumentation(ctx context.Context, input map[str
 		}
 	}
 
-	// Append README excerpts.
-	if len(readmes) > 0 {
-		fmt.Fprintf(&libSummaries, "\n\n=== README Excerpts ===\n")
-		for _, r := range readmes {
-			fmt.Fprintf(&libSummaries, "\n--- %s README ---\n%s\n", r.name, r.content)
+	// Append extracted API surfaces and/or README excerpts.
+	if len(contexts) > 0 {
+		fmt.Fprintf(&libSummaries, "\n\n=== Detailed Context ===\n")
+		for _, c := range contexts {
+			if c.apiIndex != "" {
+				fmt.Fprintf(&libSummaries, "\n--- %s Public API (tree-sitter extracted) ---\n%s\n", c.name, c.apiIndex)
+			}
+			if c.readme != "" {
+				fmt.Fprintf(&libSummaries, "\n--- %s README ---\n%s\n", c.name, c.readme)
+			}
 		}
 	}
 
@@ -326,7 +349,7 @@ Research query: "%s" (focus: %s)
 Here are %d libraries found across package registries:
 %s
 
-For each library, provide a JSON analysis. Respond with a single JSON object where keys are library names and values have these fields:
+For each library, provide a JSON analysis. The "Public API" sections contain compressed API signatures extracted via tree-sitter — use these to assess API design quality, ergonomics, and completeness. Respond with a single JSON object where keys are library names and values have these fields:
 {
   "<library_name>": {
     "relevance_score": 0.0-1.0,
@@ -397,6 +420,12 @@ func (ra *ResearchAgent) performStaticAnalysis(ctx context.Context, input map[st
 	variables, _ := input["variables"].(map[string]interface{})
 	projectPath, _ := variables["project_path"].(string)
 
+	// include_tests: when "true", test files and test directories are scanned.
+	includeTests := false
+	if v, ok := variables["include_tests"].(string); ok && v == "true" {
+		includeTests = true
+	}
+
 	// Default to current working directory.
 	if projectPath == "" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -455,9 +484,15 @@ func (ra *ResearchAgent) performStaticAnalysis(ctx context.Context, input map[st
 		analysis["note"] = "No Go/Rust/Node project detected at " + projectPath
 	}
 
+	// Extract local project API surface via tree-sitter.
+	if apiIndex, fileCount := extractLocalProjectAPI(projectPath, includeTests); apiIndex != "" {
+		analysis["api_surface"] = apiIndex
+		analysis["api_files_parsed"] = fileCount
+	}
+
 	return map[string]interface{}{
 		"static_analysis": analysis,
-		"analysis_method": "automated",
+		"analysis_method": "automated_with_treesitter",
 	}, nil
 }
 
@@ -490,6 +525,8 @@ func (ra *ResearchAgent) synthesizeFindings(ctx context.Context, input map[strin
 
 Research Data:
 %s
+
+Note: "api_surface" fields contain compressed public API signatures extracted via tree-sitter from actual source code. Use these to assess API design quality, type safety, ergonomics, and compatibility with the local project.
 
 Write a report in JSON with exactly these fields:
 {
@@ -615,13 +652,6 @@ func (ra *ResearchAgent) synthesizeFallback(findings []LibraryFinding, docAnalys
 // Helpers
 // -----------------------------------------------------------------------
 
-func readmeSection(readme string) string {
-	if readme == "" {
-		return ""
-	}
-	return fmt.Sprintf("README (first 8KB):\n%s", readme)
-}
-
 func extractJSON(s string) string {
 	// Try to find JSON between ```json and ``` fences.
 	if idx := strings.Index(s, "```json"); idx != -1 {
@@ -651,11 +681,181 @@ func runCmd(ctx context.Context, dir string, name string, args ...string) ([]byt
 	return cmd.Output()
 }
 
-func communitySupport(stars int) string {
-	if stars > 10000 {
-		return "strong"
+// -----------------------------------------------------------------------
+// Tree-sitter integration
+// -----------------------------------------------------------------------
+
+// fetchAndExtractAPI fetches key source files from a GitHub repository and
+// extracts compressed API surface via tree-sitter. Returns the formatted
+// API index string, or "" if extraction failed.
+func (ra *ResearchAgent) fetchAndExtractAPI(ctx context.Context, repoURL, registryName string) string {
+	owner, repo := parseGitHubURL(repoURL)
+	if owner == "" || repo == "" {
+		return ""
 	}
-	return "moderate"
+
+	// Determine which file extensions to look for based on the registry.
+	var entryFiles []string
+	switch registryName {
+	case "crates.io":
+		entryFiles = []string{"src/lib.rs", "src/main.rs"}
+	case "npm":
+		entryFiles = []string{"src/index.ts", "src/index.js", "index.ts", "index.js", "lib/index.js", "src/index.tsx"}
+	case "hex":
+		entryFiles = []string{"lib/%s.ex"} // %s = repo name
+	case "pypi":
+		entryFiles = []string{"%s/__init__.py", "src/%s/__init__.py", "%s.py"}
+	default:
+		entryFiles = []string{"src/lib.rs", "src/index.ts", "index.ts", "lib/index.js"}
+	}
+
+	// Expand %s with the repo name (for hex/pypi conventions).
+	for i, f := range entryFiles {
+		if strings.Contains(f, "%s") {
+			entryFiles[i] = fmt.Sprintf(f, repo)
+		}
+	}
+
+	var apis []*parser.FileAPI
+	const maxTotalBytes = 8192 // Budget: ~8KB of source across all files
+
+	totalBytes := 0
+	for _, filePath := range entryFiles {
+		if totalBytes >= maxTotalBytes {
+			break
+		}
+
+		rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/HEAD/%s", owner, repo, filePath)
+		content, err := ra.registry.FetchReadme(ctx, rawURL) // reuse HTTP fetcher
+		if err != nil || content == "" {
+			continue
+		}
+
+		// Respect the byte budget.
+		if totalBytes+len(content) > maxTotalBytes {
+			content = content[:maxTotalBytes-totalBytes]
+		}
+		totalBytes += len(content)
+
+		lang, ok := parser.DetectLanguage(filePath)
+		if !ok {
+			continue
+		}
+
+		api, err := parser.ExtractAPI([]byte(content), lang)
+		if err != nil || len(api.Symbols) == 0 {
+			continue
+		}
+		api.Path = filePath
+		apis = append(apis, api)
+	}
+
+	if len(apis) == 0 {
+		return ""
+	}
+
+	return parser.FormatAPIIndex(apis)
+}
+
+// parseGitHubURL extracts owner and repo from a GitHub URL.
+// Handles: https://github.com/owner/repo, https://github.com/owner/repo.git,
+// git://github.com/owner/repo, etc.
+func parseGitHubURL(rawURL string) (owner, repo string) {
+	rawURL = strings.TrimSuffix(rawURL, ".git")
+	rawURL = strings.TrimSuffix(rawURL, "/")
+
+	// Try to find github.com in the URL.
+	idx := strings.Index(rawURL, "github.com/")
+	if idx == -1 {
+		return "", ""
+	}
+	path := rawURL[idx+len("github.com/"):]
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
+}
+
+// extractLocalProjectAPI walks source files in a project directory and
+// extracts a compressed API index via tree-sitter. When includeTests is
+// true, test files and test directories are included in the scan.
+// Returns the formatted index and the number of files parsed.
+func extractLocalProjectAPI(projectPath string, includeTests bool) (string, int) {
+	var apis []*parser.FileAPI
+	totalBytes := 0
+	const maxTotalBytes = 16384 // 16KB budget for local project
+	const maxFileBytes = 4096   // 4KB per file
+
+	_ = filepath.WalkDir(projectPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip errors
+		}
+		if totalBytes >= maxTotalBytes {
+			return filepath.SkipAll
+		}
+
+		// Skip non-source directories (always) and test directories (unless opted in).
+		if d.IsDir() {
+			name := d.Name()
+			switch name {
+			case "vendor", "node_modules", ".git", "target", "build", "dist",
+				"__pycache__", ".next", ".nuxt", "_build", "deps", "priv":
+				return filepath.SkipDir
+			}
+			if !includeTests && parser.IsTestDir(name) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Skip test files unless opted in.
+		if !includeTests && parser.IsTestFile(d.Name()) {
+			return nil
+		}
+
+		lang, ok := parser.DetectLanguage(path)
+		if !ok {
+			return nil
+		}
+		// Skip non-code languages for API extraction.
+		switch lang {
+		case parser.LangJSON, parser.LangCSS, parser.LangTOML, parser.LangMarkdown:
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil || info.Size() > int64(maxFileBytes) {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		api, err := parser.ExtractAPI(content, lang)
+		if err != nil || len(api.Symbols) == 0 {
+			return nil
+		}
+
+		// Use relative path for cleaner output.
+		rel, err := filepath.Rel(projectPath, path)
+		if err == nil {
+			api.Path = rel
+		} else {
+			api.Path = path
+		}
+
+		apis = append(apis, api)
+		totalBytes += len(content)
+		return nil
+	})
+
+	if len(apis) == 0 {
+		return "", 0
+	}
+	return parser.FormatAPIIndex(apis), len(apis)
 }
 
 func (ra *ResearchAgent) calculateConfidence(findings []LibraryFinding) float64 {
