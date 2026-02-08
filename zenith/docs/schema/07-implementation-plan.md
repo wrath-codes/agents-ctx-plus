@@ -45,7 +45,7 @@
 | 0.1 | Create Cargo workspace with all 9 crate stubs | Rust 2024 edition, workspace structure | Everything |
 | 0.2 | ~~Add `turso` crate~~ → Add `libsql` crate, write spike: create local DB, execute SQL, query rows, FTS5 | **DONE** — libsql 0.9.29 works locally (turso crate FTS blocked) | Phase 1 |
 | 0.3 | ~~Add `libsql` embedded replica spike: connect to Turso Cloud, sync~~ | **DONE** — `Builder::new_remote_replica()` + `db.sync().await` works. Validated: connect, write-forward, two-replica roundtrip, FTS5 through replica, transactions, deferred batch sync. Requires `tokio multi_thread` runtime. | Phase 8 |
-| 0.4 | Add `duckdb` crate (bundled), write spike: create table, insert, query | DuckDB compiles and works | Phase 2 |
+| 0.4 | ~~Add `duckdb` crate (bundled), write spike: create table, insert, query~~ | **DONE** — `duckdb` 1.4 (bundled) compiles and works. Validated: CRUD, Appender bulk insert (1000 rows), transactions, JSON columns, `FLOAT[384]` arrays with `array_cosine_similarity()`, `execute_batch`, file persistence. DuckDB is synchronous; async strategy documented (prefer `spawn_blocking`, `async-duckdb` as alternative). `FLOAT[N]` enforces dimension at insert time. | Phase 2 |
 | 0.5 | Add `duckdb` VSS extension spike: create HNSW index, vector search | Vector search works in DuckDB | Phase 4 |
 | 0.6 | Add `fastembed` crate, write spike: embed text, verify 384 dimensions | Embeddings generate locally | Phase 3 |
 | 0.7 | Add `agentfs` from git, write spike: create workspace, read/write file, delete workspace | AgentFS compiles and works | Phase 7 |
