@@ -16,6 +16,7 @@ thiserror.workspace = true
 pretty_assertions.workspace = true
 chrono.workspace = true
 tempfile.workspace = true
+serde-jsonlines.workspace = true
 
 [lints]
 workspace = true

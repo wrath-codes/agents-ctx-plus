@@ -42,7 +42,7 @@
 
 | ID | Task | Validates | Blocks |
 |----|------|-----------|--------|
-| 0.1 | Create Cargo workspace with all 10 crate stubs (9 original + zen-hooks) | Rust 2024 edition, workspace structure | Everything |
+| 0.1 | Create Cargo workspace with all 11 crate stubs (9 original + zen-hooks + zen-schema) | Rust 2024 edition, workspace structure | Everything |
 | 0.2 | ~~Add `turso` crate~~ → Add `libsql` crate, write spike: create local DB, execute SQL, query rows, FTS5 | **DONE** — libsql 0.9.29 works locally (turso crate FTS blocked) | Phase 1 |
 | 0.3 | ~~Add `libsql` embedded replica spike: connect to Turso Cloud, sync~~ | **DONE** — `Builder::new_remote_replica()` + `db.sync().await` works. Validated: connect, write-forward, two-replica roundtrip, FTS5 through replica, transactions, deferred batch sync. Requires `tokio multi_thread` runtime. | Phase 8 |
 | 0.4 | ~~Add `duckdb` crate (bundled), write spike: create table, insert, query~~ | **DONE** — `duckdb` 1.4 (bundled) compiles and works. Validated: CRUD, Appender bulk insert (1000 rows), transactions, JSON columns, `FLOAT[384]` arrays with `array_cosine_similarity()`, `execute_batch`, file persistence. DuckDB is synchronous; async strategy documented (prefer `spawn_blocking`, `async-duckdb` as alternative). `FLOAT[N]` enforces dimension at insert time. | Phase 2 |
@@ -50,12 +50,14 @@
 | 0.6 | ~~Add `fastembed` crate, write spike: embed text, verify 384 dimensions~~ | **DONE** — fastembed 5.8.1 works locally. Validated: `BGESmallENV15` (default, CLS pooling, 384-dim, ~100MB) and `AllMiniLML6V2` (design model, Mean pooling, 384-dim, ~80MB). Both produce correct 384-dim vectors. Confirmed: single/batch embed, determinism, cosine similarity sanity (similar texts cluster, dissimilar don't), query/passage prefix behavior (BGE), edge cases (empty/short/long text), batch size control. API is synchronous (`&mut self`); use `spawn_blocking` from async code. Models cache to `~/.zenith/cache/fastembed/`. **Gotcha**: fastembed default cache is `.fastembed_cache` (relative CWD) — use `with_cache_dir()` for stable path. `embed()` takes `&mut self`, not `&self`. Dynamic quantized models reject sub-total batch sizes. | Phase 3 |
 | 0.7 | ~~Add `agentfs` from git~~ → Add `agentfs-sdk` from crates.io, write spike: KV CRUD, filesystem ops, tool tracking | **DONE** — `agentfs-sdk` 0.6.0 works (crates.io, not git). Validated: ephemeral + persistent modes, KV (set/get/delete/keys, serde structs), filesystem (mkdir/create_file/pwrite/read_file/stat/remove), tool tracking (start/success/error, record, recent, stats). **Note**: Turso docs say `agentfs = "0.1"` but correct crate is `agentfs-sdk`; docs show simplified API that doesn't match v0.6.0 (POSIX-level FS, `&V` refs for KV, positional args for tools). Task 0.10 (fallback) not needed. | Phase 7 |
 | 0.8 | ~~Add `ast-grep-core` + `ast-grep-language`, write spike: parse Rust file, pattern match, walk AST nodes~~ | **DONE** — `ast-grep-core` 0.40.5 + `ast-grep-language` 0.40.5 work. Validated 19 tests across 7 sections: (1) Core parsing works for all 7 rich languages + all 26 built-in grammars. (2) Pattern matching with metavariables works (`$NAME` single, `$$$PARAMS` multi). (3) `KindMatcher` + `Any`/`All`/`Not` composable matchers work. (4) Node traversal: `field("name")`, `field("parameters")`, `field("return_type")`, `field("body")`, `field("trait")` for impl discrimination, `prev()` sibling walking for doc comments, `children()` for enum variants/struct fields/methods, `parent()`/`ancestors()` for nesting detection. (5) Position: `start_pos().line()` zero-based, `column()` takes `&Node` arg (O(n)). (6) Raw tree-sitter fallback via `LanguageExt::get_ts_language()` + `Query`/`QueryCursor` works (uses `StreamingIterator`). **Key findings**: (a) Pattern matching is fragile for Rust — `fn $NAME() { $$$ }` does NOT match functions with return types or generics; **use `KindMatcher` as primary extraction strategy** (klaw approach), patterns only for specific structural queries. (b) `async`/`unsafe` appear as children of `function_modifiers` node, not as direct children — walk into modifiers for detection. (c) `All::new()` requires homogeneous matcher types; use `ops::Op` for mixed types. (d) `get_match()` returns `None` for `$$$` multi-metavars — must use `get_multiple_matches()`. (e) `Position::column()` requires `&Node` argument unlike `line()`. (f) `text()`/`kind()` return `Cow<str>`. (g) Smart strictness only matches `fn foo()` (not `pub fn` or `pub async fn`) — confirms KindMatcher-first approach. (h) `tree-sitter` 0.26 `QueryMatches` uses `StreamingIterator`, not `Iterator`. | Phase 3 |
-| 0.9 | ~~Add `clap` derive, write spike: parse subcommands, output JSON~~ | **DONE** — clap 4.5 derive works. Validated: `Parser`/`Subcommand`/`ValueEnum` derive macros, global flags with `global = true` (work before AND after subcommand), `OutputFormat` enum restricting `--format` to json/table/raw, nested two-level subcommands (`zen finding create`), positional + optional arg mixing, default values, error rejection for missing args and unknown subcommands, JSON serialization of response structs via serde. Representative subset covers all patterns needed for the full 16-domain command tree. No gotchas found — clap derive works exactly as documented. | Phase 5 |
+| 0.9 | ~~Add `clap` derive, write spike: parse subcommands, output JSON~~ | **DONE** — clap 4.5 derive works. Validated: `Parser`/`Subcommand`/`ValueEnum` derive macros, global flags with `global = true` (work before AND after subcommand), `OutputFormat` enum restricting `--format` to json/table/raw, nested two-level subcommands (`znt finding create`), positional + optional arg mixing, default values, error rejection for missing args and unknown subcommands, JSON serialization of response structs via serde. Representative subset covers all patterns needed for the full 16-domain command tree. No gotchas found — clap derive works exactly as documented. | Phase 5 |
 | 0.10 | ~~If 0.7 fails: design `Workspace` trait, implement `TempDirWorkspace` fallback~~ | **CANCELLED** — 0.7 passed, AgentFS works from crates.io | N/A |
 | 0.11 | ~~Write studies feature spike: test Approach A vs Approach B~~ | **DONE** — Approach B (hybrid) selected. One new `studies` table + reuse existing entities. 15/15 tests pass. Type-safe filtering, purpose-built fields (`topic`, `library`, `methodology`), dedicated lifecycle. See [08-studies-spike-plan.md](./08-studies-spike-plan.md) | Phase 2 (StudyRepo), Phase 5 (CLI) |
-| 0.12 | ~~Write JSONL trail spike: test Approach A (export only) vs Approach B (source of truth), evaluate `serde-jsonlines` crate~~ | **DONE** — Approach B (source of truth) selected. 15/15 tests pass. DB is rebuildable from JSONL (FTS5 + entity_links survive). `serde-jsonlines` confirmed (1-line batch read/write/append). Per-session files concurrent-safe (4 agents, 100 ops). Replay logic ~60 LOC. See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | Phase 2 (JSONL writer + replayer), Phase 5 (`zen rebuild` CLI) |
+| 0.12 | ~~Write JSONL trail spike: test Approach A (export only) vs Approach B (source of truth), evaluate `serde-jsonlines` crate~~ | **DONE** — Approach B (source of truth) selected. 15/15 tests pass. DB is rebuildable from JSONL (FTS5 + entity_links survive). `serde-jsonlines` confirmed (1-line batch read/write/append). Per-session files concurrent-safe (4 agents, 100 ops). Replay logic ~60 LOC. See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | Phase 2 (JSONL writer + replayer), Phase 5 (`znt rebuild` CLI) |
 | 0.13 | ~~Write git hooks spike: test hook implementation, installation strategy, post-checkout rebuild, `gix` for repo discovery + config + index + tree diff + session tags~~ | **DONE** — 22/22 tests pass. Decisions: (1) Hook implementation: thin shell wrapper calling `znt hook` (Rust validation via `serde_json` + `jsonschema` for schema enforcement, graceful skip if `znt` not in PATH). (2) Installation: symlink for MVP (coexists with existing hooks). (3) Post-checkout: threshold-based auto-rebuild (JSONL parse <25ms for 5K ops). (4) `gix` 0.70 adopted with `max-performance-safe` + `index` + `blob-diff`. (5) Session tags: adopt lightweight `zenith/ses-xxx` tags. (6) CLI renamed from `zen` to `znt` (zen-browser collision). **Gotchas**: `gix` `MustNotExist` doesn't reject duplicate refs — use `find_reference()` first; `config_snapshot_mut()` is in-memory only — `forget()` + `write_to()` to persist; `jq` not default-installed — Rust is the only reliable JSON validation path. See [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md) | Phase 5 (tasks 5.18a-e), session-git integration |
 | 0.14 | ~~Write zen grep spike: validate `grep` crate (ripgrep library), `ignore` crate (gitignore-aware walking), DuckDB `source_files` table, symbol correlation~~ | **DONE** — 26/26 tests pass. Validated: (1) `grep` 0.4 — `RegexMatcher` compiles patterns with flags (case-insensitive, word, literal, smart-case), `Searcher` + `UTF8` sink with line numbers, custom `Sink` for context lines, binary detection, `search_path` for files. (2) `ignore` 0.4 — `WalkBuilder` respects `.gitignore`, override globs for include/exclude, `filter_entry` for test file skipping, custom ignore filename (`.zenithignore`), hidden file skipping, combined grep+ignore workflow. (3) DuckDB `source_files` table — CRUD, Appender bulk insert, `regexp_matches()` with flags, `string_split()`+`unnest()` line-level grep with line numbers, language filtering, cache management (DELETE, stats). (4) Symbol correlation — `idx_symbols_file_lines` composite index, batch symbol lookup per file, binary search matches line→symbol range, `SymbolRef` population with all fields (id, kind, name, signature). (5) Combined pipeline — store source during indexing → grep with `RegexMatcher`+`Searcher` over stored content → correlate with `api_symbols` → `CorrelatedHit` with all fields validated. **Key findings**: (a) DuckDB fetch + Rust regex is faster than SQL-level line splitting; use DuckDB as compressed storage, Rust for line matching. (b) `grep` crate's `RegexMatcher` and DuckDB's RE2 are both linear-time; no semantic differences for common patterns. (c) `ignore` crate's `filter_entry` is evaluated before file I/O — test file skipping is free. (d) Appender bulk insert for source files adds negligible time to indexing. See [13-zen-grep-design.md](./13-zen-grep-design.md) | Phase 3 (3.16-3.18), Phase 4 (4.10-4.12), Phase 5 (5.19-5.20) |
+| 0.15 | ~~Write schema generation & validation spike: validate `schemars` 1.x + `jsonschema` 0.28 full integration, per-entity data dispatch, SchemaRegistry~~ | **DONE** — 22/22 tests pass. Validated: (1) `schemars` 1.x `#[derive(JsonSchema)]` works with all entity structs, serde attributes (`rename_all`, `Option`, `DateTime<Utc>`, `serde_json::Value`), and `chrono04` feature. (2) All 12 entity types + 8 enums generate correct schemas; roundtrip (serialize → validate → deserialize) passes for every entity. (3) Per-entity `data` dispatch works: correct entity data passes, wrong entity data fails with descriptive errors. (4) Trail envelope schema matches spike 0.13 hand-written schema; schemars-generated version is strictly superior (validates `data` sub-schemas). (5) Config schema generation works for all 6 sections. (6) Audit detail per-action schemas work (StatusChanged, Linked, Tagged, Indexed). (7) DuckDB metadata schemas for Rust/Python/TypeScript all generate correctly including nested `Option<Vec<String>>` and `HashMap<String,String>`. (8) SchemaRegistry prototype: 39 schemas, construction <50ms, validation sub-microsecond. (9) Both Draft 2020-12 (schemars default) and Draft 7 (via `SchemaSettings`) work with `jsonschema` 0.28. **Gotcha**: schemars does NOT add `additionalProperties: false` by default — convention decision needed. **Decision**: Use schemars-generated schemas everywhere; retire hand-written schema from spike 0.13. See [12-schema-spike-plan.md](./12-schema-spike-plan.md) | Phase 1 (entity structs get `#[derive(JsonSchema)]`), Phase 2 (trail + audit validation), Phase 5 (`znt schema` command, pre-commit uses generated schema) |
+| 0.16 | ~~Write JSONL trail schema versioning spike: validate Approach D (Hybrid) — `v` field with `#[serde(default)]`, additive evolution, version-dispatch migration, `additionalProperties` convention, `serde-jsonlines` roundtrip~~ | **DONE** — 10/10 tests pass. Validated: (1) `#[serde(default = "fn")]` on `v: u32` — old trails without `v` field deserialize as v1. schemars does NOT include `v` in `required` array. (2) Additive evolution — `Option<T>` and `#[serde(default)]` fields work for both serde deserialization AND schema validation (schemars excludes default fields from `required`). (3) `#[serde(alias)]` — serde deserialization works (old field names map to new), BUT schemars schema uses Rust field name only (schema validation rejects old names). (4) Version-dispatch migration — transform `serde_json::Value` in-place, validate against target schema, dispatch by `op.v`, reject unsupported versions. (5) `additionalProperties` convention confirmed — trail (no `deny_unknown_fields`) accepts unknowns; config (`#[serde(deny_unknown_fields)]`) generates `additionalProperties: false` and rejects unknowns. (6) `serde-jsonlines` roundtrip preserves `v` field; old-format files (no `v`) read back with `v == 1`; mixed old+new files work. **Decision**: Approach D adopted. Trail envelope gets `v: u32` with `#[serde(default)]`. Evolution rules: additive by default, version bump for breaking changes. `additionalProperties`: permissive for trails, strict for config. `serde(alias)` is serde-safe but schema-unsafe. See [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md) | Phase 2 (tasks 2.15-2.17 trail writer/replayer/versioning) |
 
 ### Milestone 0
 
@@ -83,8 +85,8 @@ cargo test --workspace
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 1.1 | Define all entity structs (Finding, Hypothesis, Issue, Task, etc.) | zen-core | 1.4 |
-| 1.2 | Define all enums (status types, entity types, relations, actions) | zen-core | 1.4 |
+| 1.1 | Define all entity structs (Finding, Hypothesis, Issue, Task, etc.) with `#[derive(JsonSchema)]` | zen-core | 1.4 |
+| 1.2 | Define all enums (status types, entity types, relations, actions) with `#[derive(JsonSchema)]` | zen-core | 1.4 |
 | 1.3 | Define error hierarchy (`ZenError`, sub-errors per crate) | zen-core | 1.4 |
 | 1.4 | Implement ID prefix constants and `gen_id_sql()` helper | zen-core | 1.6 |
 | 1.5 | ~~Implement `ZenConfig` with figment (turso, motherduck, r2, general sections)~~ | zen-config | **DONE** — 46/46 tests pass. Figment `Env::prefixed("ZENITH_").split("__")` handles env vars (no manual `std::env::var()`). `String` fields with empty defaults (not `Option<String>`). Added Clerk + Axiom config sections. Storage wiring helpers: `R2Config::create_secret_sql()`, `MotherDuckConfig::connection_string()`, `TursoConfig::db_name()` / `can_mint_tokens()`. All `.env` vars renamed to `ZENITH_*__*` format, existing spikes updated. `figment::Jail` for safe test isolation (Rust 2024 `set_var` is unsafe). Real `.env` values flow through figment and match spike `std::env::var()` reads. See `05-crate-designs.md` §4 for gotchas. |
@@ -94,15 +96,17 @@ cargo test --workspace
 
 ### Tests
 
-- zen-core: Serde roundtrip for every entity, enum string representation, ID prefix correctness
+- zen-core: Serde roundtrip for every entity, enum string representation, ID prefix correctness, `JsonSchema` generation validates against serde output
 - zen-config: **DONE** — 46 tests (26 unit + 10 TOML/Jail + 9 dotenv + 1 doctest). Default loads, TOML per-section, env overrides TOML, typo gotcha documented, full provider chain, real `.env` values, spike compatibility
 - zen-db: Schema creation, `generate_id()` produces correct prefix format, basic INSERT+SELECT for each table
+- zen-schema: SchemaRegistry loads all entity + trail + audit + config schemas, `validate()` accepts valid data and rejects invalid data with descriptive errors
 
 ### Milestone 1
 
-- `cargo test -p zen-core -p zen-config -p zen-db` all pass
+- `cargo test -p zen-core -p zen-config -p zen-db -p zen-schema` all pass
 - Database opens, schema created, IDs generate correctly
 - Every entity can be inserted and queried back
+- SchemaRegistry available with all entity and trail operation schemas
 
 ---
 
@@ -127,10 +131,11 @@ cargo test --workspace
 | 2.9 | Implement `ImplLogRepo`: CRUD + file path queries | zen-db | Phase 5 |
 | 2.10 | Implement `CompatRepo`: CRUD + package pair queries | zen-db | Phase 5 |
 | 2.14 | Implement `StudyRepo`: CRUD + FTS + progress tracking + conclude lifecycle | zen-db | Phase 5 |
-| 2.15 | Implement JSONL trail writer: append operations to per-session `.zenith/trail/ses-xxx.jsonl` on every mutation | zen-db | Phase 5 |
-| 2.16 | Implement JSONL replayer: read all trail files, replay operations to rebuild DB (`zen rebuild`) | zen-db | Phase 5 |
+| 2.15 | Implement JSONL trail writer: append operations to per-session `.zenith/trail/ses-xxx.jsonl` on every mutation. Validate `Operation.data` against per-entity schema from zen-schema before writing. | zen-db | Phase 5 |
+| 2.16 | Implement JSONL replayer: read all trail files, replay operations to rebuild DB (`znt rebuild`). Support `--strict` flag for schema validation on replay. | zen-db | Phase 5 |
+| 2.17 | Implement JSONL schema versioning (Approach D, validated in spike 0.16): add `v: u32` with `#[serde(default)]` to `TrailOperation` envelope, implement replay version dispatch with `match op.v`, implement first migration function when needed. Evolution rules: additive changes (Option/default) don't bump version; type changes and required-field additions bump version. `additionalProperties`: permissive for trails, strict for config. | zen-db + zen-schema | Phase 5, Phase 8 |
 | 2.11 | Implement `LinkRepo`: create, delete, query by source, query by target | zen-db | Phase 5 |
-| 2.12 | Implement `AuditRepo`: append (every repo method calls this), query with filters | zen-db | 2.13 |
+| 2.12 | Implement `AuditRepo`: append (every repo method calls this), query with filters. Validate audit `detail` payloads against per-action schemas from zen-schema. | zen-db | 2.13 |
 | 2.13 | Implement `whats_next()` query: aggregate open tasks, pending hypotheses, recent audit | zen-db | Phase 5 |
 
 ### Tests
@@ -150,7 +155,8 @@ cargo test --workspace
 
 ### Milestone 2
 
-- Complete CRUD layer with 14 repo modules (including StudyRepo)
+- Complete CRUD layer with 13 repo modules (Session, Project, Research, Finding, Hypothesis, Insight, Issue, Task, ImplLog, Compat, Study, Link, Audit)
+- JSONL trail writer validates and appends every mutation; replayer rebuilds DB from trail
 - Every mutation writes to audit trail
 - FTS5 search works across all searchable entities
 - `whats_next()` returns structured project state
@@ -179,7 +185,7 @@ cargo test --workspace
 | 3.10 | Implement two-tier extraction fallback: ast-grep → regex | zen-parser | 3.14 |
 | 3.11 | Implement `EmbeddingEngine`: init fastembed, `embed_batch()`, `embed_single()` | zen-embeddings | 3.14 |
 | 3.12 | Implement `ZenLake::open_local()`: DuckDB connection, extension loading, table creation | zen-lake | 3.13 |
-| 3.13 | Implement `ZenLake::store_symbols()`, `store_doc_chunks()`, `register_package()` | zen-lake | 3.14 |
+| 3.13 | Implement `ZenLake::store_symbols()`, `store_doc_chunks()`, `register_package()`. **Note**: DuckLake does not support `FLOAT[N]` — store embeddings as `FLOAT[]` and cast to `FLOAT[384]` at query time. | zen-lake | 3.14 |
 | 3.14 | Implement full indexing pipeline: clone repo → walk files → parse → extract → embed → store in lake | zen-lake + zen-parser + zen-embeddings | Phase 4 |
 | 3.15 | Implement doc chunking: split README/docs by section headings, chunk to ~512 tokens | zen-parser or zen-lake | 3.14 |
 | 3.16 | Add `source_files` table to DuckDB schema, add `source_cached` to `indexed_packages` | zen-lake | 3.17 |
@@ -217,9 +223,9 @@ cargo test --workspace
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 4.1 | Implement vector search: embed query → HNSW similarity search in DuckDB | zen-search | 4.4 |
+| 4.1 | Implement vector search: embed query → Lance `lance_vector_search()` or brute-force `array_cosine_similarity()` in DuckDB. **Note**: embeddings stored as `FLOAT[]`, cast to `FLOAT[384]` for cosine ops. | zen-search | 4.4 |
 | 4.2 | Implement FTS search: query zen-db FTS5 tables (findings, tasks, audit, etc.) | zen-search | 4.4 |
-| 4.3 | Implement hybrid search: combine vector + FTS scores | zen-search | 4.4 |
+| 4.3 | Implement hybrid search: combine vector + FTS scores. **Note**: Lance FTS is term-exact (no stemming) vs libSQL FTS5 (porter stemming) — vector should be primary signal, FTS as boost. Validate `alpha` parameter with real queries. | zen-search | 4.4 |
 | 4.4 | Implement `SearchEngine` orchestrator with filters (package, kind, ecosystem, limit, context-budget) | zen-search | Phase 5 |
 | 4.5 | Implement crates.io client | zen-registry | Phase 5 |
 | 4.6 | Implement npm registry client (+ api.npmjs.org for downloads) | zen-registry | Phase 5 |
@@ -240,15 +246,15 @@ cargo test --workspace
 
 ### Milestone 4
 
-- `zen search "async spawn"` returns ranked results from indexed packages
-- `zen research registry "http client" --ecosystem rust` returns crates.io results
+- `znt search "async spawn"` returns ranked results from indexed packages
+- `znt research registry "http client" --ecosystem rust` returns crates.io results
 - Hybrid search combines vector similarity + FTS relevance
 
 ---
 
 ## 7. Phase 5: CLI Shell
 
-**Goal**: Working `zen` binary with all commands wired up. This is the first fully usable milestone.
+**Goal**: Working `znt` binary with all commands wired up. This is the first fully usable milestone.
 
 **Depends on**: Phase 2 (all repos), Phase 4 (search + registry)
 
@@ -258,41 +264,44 @@ cargo test --workspace
 |----|------|-------|--------|
 | 5.1 | Implement clap `Cli` struct with all subcommands and global flags | zen-cli | 5.2 |
 | 5.2 | Implement `main.rs`: load config, init tracing, open database, dispatch commands | zen-cli | 5.3 |
-| 5.3 | Implement `zen init`: detect project, parse manifest, create `.zenith/`, init DB | zen-cli | 5.4 |
-| 5.4 | Implement `zen session start/end/list` | zen-cli | 5.5 |
-| 5.5 | Implement knowledge commands: `zen research`, `zen finding`, `zen hypothesis`, `zen insight` (all CRUD) | zen-cli | 5.7 |
-| 5.6 | Implement work commands: `zen issue`, `zen task`, `zen log`, `zen compat` | zen-cli | 5.7 |
-| 5.7 | Implement linking: `zen link`, `zen unlink` | zen-cli | 5.8 |
-| 5.16 | Implement study commands: `zen study create/assume/test/get/conclude/list` | zen-cli | Done |
-| 5.17 | Implement `zen rebuild`: delete DB, replay all JSONL trail files, rebuild FTS5 | zen-cli | Done |
-| 5.18a | Implement `zen init` `.gitignore` template (ignore DB files, track trail/ and hooks/) | zen-cli | 5.18b |
-| 5.18b | Implement pre-commit hook: validate staged `.zenith/trail/*.jsonl` files via `zen hook pre-commit` (Rust validation with `serde_json`, schema checks). Thin shell wrapper with graceful fallback if `zen` not in PATH. | zen-hooks + zen-cli | 5.18e |
-| 5.18c | Implement post-checkout hook: detect JSONL trail changes between old and new HEAD via `gix` tree diff, trigger `zen rebuild` or warn based on performance threshold from spike 0.13 | zen-hooks + zen-cli | 5.18e |
+| 5.3 | Implement `znt init`: detect project, parse manifest, create `.zenith/`, init DB | zen-cli | 5.4 |
+| 5.4 | Implement `znt session start/end/list` | zen-cli | 5.5 |
+| 5.5 | Implement knowledge commands: `znt research`, `znt finding`, `znt hypothesis`, `znt insight` (all CRUD) | zen-cli | 5.7 |
+| 5.6 | Implement work commands: `znt issue`, `znt task`, `znt log`, `znt compat` | zen-cli | 5.7 |
+| 5.7 | Implement linking: `znt link`, `znt unlink` | zen-cli | 5.8 |
+| 5.16 | Implement study commands: `znt study create/assume/test/get/conclude/list` | zen-cli | Done |
+| 5.17 | Implement `znt rebuild`: delete DB, replay all JSONL trail files, rebuild FTS5 | zen-cli | Done |
+| 5.18a | Implement `znt init` `.gitignore` template (ignore DB files, track trail/ and hooks/) | zen-cli | 5.18b |
+| 5.18b | Implement pre-commit hook: validate staged `.zenith/trail/*.jsonl` files via `znt hook pre-commit` (Rust validation with `serde_json`, schema checks). Thin shell wrapper with graceful fallback if `znt` not in PATH. | zen-hooks + zen-cli | 5.18e |
+| 5.18c | Implement post-checkout hook: detect JSONL trail changes between old and new HEAD via `gix` tree diff, trigger `znt rebuild` or warn based on performance threshold from spike 0.13 | zen-hooks + zen-cli | 5.18e |
 | 5.18d | Implement post-merge hook: detect conflict markers in JSONL files, trigger rebuild if clean merge changed trail files | zen-hooks + zen-cli | 5.18e |
-| 5.18e | Implement hook installation in `zen init`: detect git repo via `gix`, detect existing hooks / `core.hooksPath`, install using strategy chosen by spike 0.13 (hookspath / symlink / chain), support `--skip-hooks` flag | zen-hooks + zen-cli | Done |
-| 5.8 | Implement `zen audit` with all filters | zen-cli | 5.9 |
-| 5.9 | Implement `zen whats-next` (both JSON and raw formats) | zen-cli | 5.11 |
-| 5.10 | Implement `zen search` wired to SearchEngine | zen-cli | 5.11 |
-| 5.11 | Implement `zen install`: clone repo, run indexing pipeline, update project_dependencies | zen-cli | 5.12 |
-| 5.12 | Implement `zen onboard`: detect project, parse manifest, batch index all deps | zen-cli | 5.13 |
-| 5.13 | Implement `zen wrap-up`: session summary, snapshot, audit export | zen-cli | 5.14 |
-| 5.14 | Implement `zen research registry` wired to RegistryClient | zen-cli | 5.15 |
+| 5.18e | Implement hook installation in `znt init`: detect git repo via `gix`, detect existing hooks / `core.hooksPath`, install using strategy chosen by spike 0.13 (hookspath / symlink / chain), support `--skip-hooks` flag | zen-hooks + zen-cli | Done |
+| 5.8 | Implement `znt audit` with all filters | zen-cli | 5.9 |
+| 5.9 | Implement `znt whats-next` (both JSON and raw formats) | zen-cli | 5.11 |
+| 5.10 | Implement `znt search` wired to SearchEngine | zen-cli | 5.11 |
+| 5.11 | Implement `znt install`: clone repo, run indexing pipeline, update project_dependencies | zen-cli | 5.12 |
+| 5.12 | Implement `znt onboard`: detect project, parse manifest, batch index all deps | zen-cli | 5.13 |
+| 5.13 | Implement `znt wrap-up`: session summary, snapshot, audit export | zen-cli | 5.14 |
+| 5.14 | Implement `znt research registry` wired to RegistryClient | zen-cli | 5.15 |
 | 5.15 | Implement JSON/table/raw output formatting for all commands | zen-cli | Done |
-| 5.19 | Implement `zen grep` CLI command (package mode + local mode, all flags) | zen-cli | Done |
-| 5.20 | Implement `zen cache` CLI command (list, clean, stats) | zen-cli | Done |
+| 5.19 | Implement `znt grep` CLI command (package mode + local mode, all flags) | zen-cli | Done |
+| 5.20 | Implement `znt cache` CLI command (list, clean, stats) | zen-cli | Done |
+| 5.21 | Implement `warn_unconfigured()` at CLI startup: detect figment config sections with all-default values, warn user about possible typo'd env var keys (confirmed gotcha from zen-config spike) | zen-cli | Done |
+| 5.22 | Implement `znt schema <type>` CLI command: dump JSON Schema for any registered type from SchemaRegistry. Uses `SchemaRegistry.get()` + pretty print. | zen-cli | Done |
+| 5.23 | Update pre-commit hook (task 5.18b) to use schemars-generated schemas from zen-schema instead of hand-written schema from spike 0.13 | zen-hooks + zen-schema | Done |
 
 ### Tests
 
 - Integration tests: build the binary, run commands as subprocesses, verify JSON output
-- `zen init` creates `.zenith/` with valid DB
-- `zen session start` → `zen finding create` → `zen audit` shows the finding creation
-- `zen install <small-crate>` → `zen search` returns results from it
-- `zen whats-next` returns correct state after a sequence of operations
+- `znt init` creates `.zenith/` with valid DB
+- `znt session start` → `znt finding create` → `znt audit` shows the finding creation
+- `znt install <small-crate>` → `znt search` returns results from it
+- `znt whats-next` returns correct state after a sequence of operations
 - Error cases: invalid command, missing args, entity not found
 
 ### Milestone 5
 
-**This is the MVP.** The `zen` binary is functional:
+**This is the MVP.** The `znt` binary is functional:
 - Initialize a project, start sessions, track knowledge
 - Install and index packages, search documentation
 - Query registries, manage issues/tasks
@@ -303,7 +312,7 @@ cargo test --workspace
 
 ## 8. Phase 6: PRD Workflow
 
-**Goal**: Full ai-dev-tasks PRD workflow via `zen prd` commands.
+**Goal**: Full ai-dev-tasks PRD workflow via `znt prd` commands.
 
 **Depends on**: Phase 5 (working CLI with issues and tasks)
 
@@ -311,19 +320,19 @@ cargo test --workspace
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 6.1 | Implement `zen prd create`: creates epic issue, returns ID | zen-cli | 6.2 |
-| 6.2 | Implement `zen prd update`: stores PRD markdown in issue description | zen-cli | 6.3 |
-| 6.3 | Implement `zen prd tasks`: creates parent tasks linked to epic, returns list with "confirm" message | zen-cli | 6.4 |
-| 6.4 | Implement `zen prd subtasks`: creates sub-tasks linked to parent via entity_links | zen-cli | 6.5 |
-| 6.5 | Implement `zen prd get`: returns full PRD with tasks, progress, findings, open questions | zen-cli | 6.6 |
-| 6.6 | Implement `zen prd complete`: marks epic done, creates summary audit entry | zen-cli | 6.7 |
-| 6.7 | Implement `zen prd list`: lists all epic issues with progress percentages | zen-cli | Done |
+| 6.1 | Implement `znt prd create`: creates epic issue, returns ID | zen-cli | 6.2 |
+| 6.2 | Implement `znt prd update`: stores PRD markdown in issue description | zen-cli | 6.3 |
+| 6.3 | Implement `znt prd tasks`: creates parent tasks linked to epic, returns list with "confirm" message | zen-cli | 6.4 |
+| 6.4 | Implement `znt prd subtasks`: creates sub-tasks linked to parent via entity_links | zen-cli | 6.5 |
+| 6.5 | Implement `znt prd get`: returns full PRD with tasks, progress, findings, open questions | zen-cli | 6.6 |
+| 6.6 | Implement `znt prd complete`: marks epic done, creates summary audit entry | zen-cli | 6.7 |
+| 6.7 | Implement `znt prd list`: lists all epic issues with progress percentages | zen-cli | Done |
 
 ### Tests
 
 - Full PRD lifecycle: create → update → tasks → subtasks → execute → complete
-- `zen prd get` returns correct progress counts (done/total tasks)
-- Multi-session PRD: start PRD in session 1, complete half tasks, wrap-up, start session 2, `zen prd get` shows correct state
+- `znt prd get` returns correct progress counts (done/total tasks)
+- Multi-session PRD: start PRD in session 1, complete half tasks, wrap-up, start session 2, `znt prd get` shows correct state
 - Task execution: `in_progress` → `done` with implementation log entries
 
 ### Milestone 6
@@ -347,9 +356,9 @@ cargo test --workspace
 | 7.1 | Create `Workspace` trait in zen-core | zen-core | 7.2 |
 | 7.2 | Implement `AgentFsWorkspace` wrapping the AgentFS Rust SDK | zen-cli or zen-lake | 7.3 |
 | 7.3 | Wire session start to create AgentFS workspace per session | zen-cli | 7.4 |
-| 7.4 | Wire `zen install` to use AgentFS workspace for cloning | zen-lake | 7.5 |
-| 7.5 | Wire `zen wrap-up` to snapshot AgentFS workspace | zen-cli | 7.6 |
-| 7.6 | Wire `zen audit --files` to query AgentFS audit log | zen-cli | Done |
+| 7.4 | Wire `znt install` to use AgentFS workspace for cloning | zen-lake | 7.5 |
+| 7.5 | Wire `znt wrap-up` to snapshot AgentFS workspace | zen-cli | 7.6 |
+| 7.6 | Wire `znt audit --files` to query AgentFS audit log | zen-cli | Done |
 
 ### If AgentFS Doesn't Work (0.7 failed, 0.10 executed)
 
@@ -357,7 +366,7 @@ cargo test --workspace
 |----|------|-------|--------|
 | 7.1 | Create `Workspace` trait in zen-core | zen-core | 7.2b |
 | 7.2b | Implement `TempDirWorkspace` using `tempfile::TempDir` | zen-core or zen-lake | 7.4b |
-| 7.4b | Wire `zen install` to use TempDirWorkspace for cloning | zen-lake | Done |
+| 7.4b | Wire `znt install` to use TempDirWorkspace for cloning | zen-lake | Done |
 
 Note: without AgentFS, we skip session workspaces and file-level audit. These become future enhancements when AgentFS stabilizes.
 
@@ -370,7 +379,7 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 ### Milestone 7
 
 - Package indexing uses isolated workspaces (crash-safe)
-- Session file-level audit available via `zen audit --files` (AgentFS path)
+- Session file-level audit available via `znt audit --files` (AgentFS path)
 
 ---
 
@@ -385,11 +394,11 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
 | 8.1 | Implement `ZenDb::open_synced()` with Turso Cloud | zen-db | 8.2 |
-| 8.2 | Wire `zen wrap-up` to call `ZenDb::sync()` | zen-cli | 8.5 |
+| 8.2 | Wire `znt wrap-up` to call `ZenDb::sync()` | zen-cli | 8.5 |
 | 8.3 | Implement `ZenLake::open_cloud()` with MotherDuck + R2 | zen-lake | 8.5 |
 | 8.4 | ~~Implement JSONL audit trail export at wrap-up (for git)~~ | **MOVED** — JSONL trail is now real-time append in Phase 2 (tasks 2.15-2.16), not wrap-up-only export. See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | N/A |
-| 8.5 | ~~Implement `--auto-commit` flag on `zen wrap-up`: git add + commit~~ | **DESCOPED** — git operations are the user's/LLM's responsibility, not Zenith's. Zenith produces JSONL files; user commits them. | N/A |
-| 8.6 | Implement `zen onboard` cloud mode: check DuckLake for already-indexed packages | zen-cli | 8.7 |
+| 8.5 | ~~Implement `--auto-commit` flag on `znt wrap-up`: git add + commit~~ | **DESCOPED** — git operations are the user's/LLM's responsibility, not Zenith's. Zenith produces JSONL files; user commits them. | N/A |
+| 8.6 | Implement `znt onboard` cloud mode: check DuckLake for already-indexed packages | zen-cli | 8.7 |
 | 8.7 | Implement config validation: check R2/MotherDuck/Turso credentials at startup | zen-config | Done |
 
 ### Tests
@@ -412,9 +421,9 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 ```
 Phase 0: Spikes (all parallel)
     │
-    ├─► Phase 1: Foundation (zen-core, zen-config, zen-db schema)
+    ├─► Phase 1: Foundation (zen-core + zen-schema, zen-config, zen-db schema)
     │       │
-    │       ├─► Phase 2: Storage Layer (zen-db repos, all 13 modules)
+    │       ├─► Phase 2: Storage Layer (zen-db repos, all 13 modules + JSONL trail with schema validation)
     │       │       │
     │       │       └─► Phase 4: Search & Registry (zen-search, zen-registry)
     │       │               │
@@ -436,6 +445,8 @@ Critical path: 0 → 1 → 2 → 4 → 5 (MVP)
 Parallel path: 0 → 3 (can run alongside 1+2)
 Parallel path: 0.13 → 5.18a-e (git hooks, can run alongside Phase 1-4)
 Parallel path: 0.14 → 3.16-3.18 → 4.10-4.12 → 5.19-5.20 (zen grep, can run alongside other Phase 3-5 tasks)
+Parallel path: 0.15 → 1.1-1.2 (zen-schema, entity structs get #[derive(JsonSchema)])
+Parallel path: 0.16 → 2.15-2.17 (trail versioning, envelope v field + migration dispatch)
 ```
 
 ---
@@ -453,9 +464,11 @@ Parallel path: 0.14 → 3.16-3.18 → 4.10-4.12 → 5.19-5.20 (zen grep, can run
 | Turso Cloud sync is slow or unreliable | Poor wrap-up experience | Low | Sync is manual (wrap-up only), can retry. Local DB always works |
 | User has existing git hooks (husky, lefthook, pre-commit) | Zenith hooks fail to install or overwrite user's hooks | Medium | Spike 0.13 evaluates three installation strategies (`core.hooksPath`, symlink, chain-append). Detect existing hooks before installing. Support `--skip-hooks` flag. See [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md) |
 | `gix` adds significant compile time | Slower builds for all developers | Medium | `gix` isolated in `zen-hooks` crate — only rebuilds when hooks code changes. Spike 0.13 measures compile time delta and identifies minimal feature flags. |
-| `zen rebuild` too slow for post-checkout hook | Branch switches become sluggish | Low (< 5K ops) | Spike 0.13 measures rebuild at 100/1000/5000 ops. Threshold-based decision: auto below threshold, warn above. Configurable via `.zenith/config.toml`. |
-| `zen` binary not in PATH when hooks run | Hooks skip validation silently | Medium | Wrapper approach: graceful fallback with guidance message. Pre-commit skips validation rather than blocking commit. |
-| Figment silently ignores typo'd env var keys | Config appears loaded but values are defaults; hard to debug | Medium | **Confirmed** in zen-config spike. `ZENITH_TURSO__URLL` (typo) is silently ignored. Mitigation: `is_configured()` checks on every sub-config, `warn_unconfigured()` planned for CLI startup. Test `typo_env_var_silently_ignored` documents the behavior. |
+| `znt rebuild` too slow for post-checkout hook | Branch switches become sluggish | Low (< 5K ops) | Spike 0.13 measures rebuild at 100/1000/5000 ops. Threshold-based decision: auto below threshold, warn above. Configurable via `.zenith/config.toml`. |
+| `znt` binary not in PATH when hooks run | Hooks skip validation silently | Medium | Wrapper approach: graceful fallback with guidance message. Pre-commit skips validation rather than blocking commit. |
+| Figment silently ignores typo'd env var keys | Config appears loaded but values are defaults; hard to debug | Medium | **Confirmed** in zen-config spike. `ZENITH_TURSO__URLL` (typo) is silently ignored. Mitigation: `is_configured()` checks on every sub-config, `warn_unconfigured()` at CLI startup (task 5.21). Test `typo_env_var_silently_ignored` documents the behavior. |
+| schemars `additionalProperties` convention undecided | Validation strictness mismatch between generated and hand-written schemas | Medium | **Confirmed** in spike 0.15: schemars does NOT add `additionalProperties: false` by default. Must decide convention: strict (reject unknown fields) vs permissive (allow forward-compat). Recommend: permissive for trail operations (forward-compat), strict for config (catch typos). Decision needed before Phase 2 trail writer. |
+| JSONL trail schema versioning | Old trail files become unreplayable after entity shape changes | **Mitigated** | Spike 0.16 validated Approach D (Hybrid): `v: u32` field with `#[serde(default)]` in trail envelope, additive evolution by default, version-dispatch migration for breaking changes. 10/10 tests pass. **Gotcha**: `serde(alias)` is serde-safe but schema-unsafe (schemars uses Rust field name, not alias). Field renames should use alias for serde + skip schema validation for aliased fields. |
 
 ---
 
@@ -466,11 +479,11 @@ At each milestone, verify:
 | Milestone | Validation | Command |
 |-----------|-----------|---------|
 | 0 | All spikes compile and pass | `cargo test --workspace` |
-| 1 | DB opens, schema created, entities insertable | `cargo test -p zen-core -p zen-config -p zen-db` |
-| 2 | All 13 repos work, FTS search works, audit trail logs everything | `cargo test -p zen-db` |
+| 1 | DB opens, schema created, entities insertable, SchemaRegistry validates all entity types | `cargo test -p zen-core -p zen-config -p zen-db -p zen-schema` |
+| 2 | All 13 repos work, FTS search works, audit trail logs everything, JSONL trail validates on write | `cargo test -p zen-db` |
 | 3 | Parse Rust/Python/TS files via ast-grep, extract symbols, embed, store in DuckDB | `cargo test -p zen-parser -p zen-embeddings -p zen-lake` |
 | 4 | Vector search returns relevant results, registry clients work | `cargo test -p zen-search -p zen-registry` |
-| **5 (MVP)** | **`zen init` → `zen install tokio` → `zen search "spawn"` returns results. Git hooks install correctly, pre-commit validates JSONL, post-checkout detects trail changes.** | **Build binary, run e2e** |
+| **5 (MVP)** | **`znt init` → `znt install tokio` → `znt search "spawn"` returns results. Git hooks install correctly, pre-commit validates JSONL, post-checkout detects trail changes.** | **Build binary, run e2e** |
 | 6 | Full PRD lifecycle works across sessions | E2E test with sequential commands |
 | 7 | Package indexing uses isolated workspaces | `cargo test -p zen-cli` (workspace tests) |
 | 8 | Cloud sync works, indexed packages accessible from another machine | Manual test with Turso Cloud + MotherDuck |
@@ -481,43 +494,43 @@ This is the sequence that must work end-to-end:
 
 ```bash
 # 1. Initialize
-zen init
+znt init
 
 # 2. Start working
-zen session start
+znt session start
 
 # 3. Research
-zen research create --title "Evaluate HTTP clients"
-zen research registry "http client" --ecosystem rust
+znt research create --title "Evaluate HTTP clients"
+znt research registry "http client" --ecosystem rust
 
 # 4. Install and index a package
-zen install reqwest --ecosystem rust
+znt install reqwest --ecosystem rust
 
 # 5. Search indexed docs
-zen search "connection pool" --package reqwest
+znt search "connection pool" --package reqwest
 
 # 6. Track knowledge
-zen finding create --content "reqwest supports connection pooling" --tag verified
-zen hypothesis create --content "reqwest works with tower middleware"
+znt finding create --content "reqwest supports connection pooling" --tag verified
+znt hypothesis create --content "reqwest works with tower middleware"
 
 # 7. Create an issue
-zen issue create --type feature --title "Add HTTP client layer" --priority 2
+znt issue create --type feature --title "Add HTTP client layer" --priority 2
 
 # 8. Create tasks
-zen task create --title "Implement retry logic" --issue <issue-id>
-zen task update <task-id> --status in_progress
-zen task complete <task-id>
-zen log src/http/retry.rs#1-45 --task <task-id>
+znt task create --title "Implement retry logic" --issue <issue-id>
+znt task update <task-id> --status in_progress
+znt task complete <task-id>
+znt log src/http/retry.rs#1-45 --task <task-id>
 
 # 9. Check state
-zen whats-next
-zen audit --limit 10
+znt whats-next
+znt audit --limit 10
 
 # 10. Wrap up
-zen wrap-up
+znt wrap-up
 ```
 
-Every command must return valid JSON. Every mutation must appear in the audit trail. `zen whats-next` must reflect the current state accurately.
+Every command must return valid JSON. Every mutation must appear in the audit trail. `znt whats-next` must reflect the current state accurately.
 
 ---
 
@@ -531,3 +544,5 @@ Every command must return valid JSON. Every mutation must appear in the audit tr
 - PRD workflow: [06-prd-workflow.md](./06-prd-workflow.md)
 - Git hooks spike plan: [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md)
 - Git & JSONL strategy: [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md)
+- Schema spike plan: [12-schema-spike-plan.md](./12-schema-spike-plan.md)
+- Trail versioning spike plan: [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md)

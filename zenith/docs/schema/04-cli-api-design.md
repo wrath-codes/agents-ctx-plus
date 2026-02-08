@@ -35,7 +35,7 @@
 All commands follow the pattern:
 
 ```
-zen <domain> <action> [args] [flags]
+znt <domain> <action> [args] [flags]
 ```
 
 All commands return JSON to stdout by default. Human-readable table format available via `--format table`.
@@ -43,7 +43,7 @@ All commands return JSON to stdout by default. Human-readable table format avail
 ### Command Map
 
 ```
-zen
+znt
 ├── init                          # Initialize zenith for a project
 ├── onboard                       # Onboard existing project (detect + index deps)
 ├── session
@@ -99,6 +99,7 @@ zen
 ├── link <src> <target> <rel>     # Create entity link
 ├── unlink <link-id>              # Remove entity link
 ├── rebuild                        # Rebuild DB from JSONL trail files
+├── schema <type>                  # Dump JSON Schema for a registered type
 ├── study
 │   ├── create                    # Create a structured learning study
 │   ├── assume <id>               # Add an assumption (hypothesis) to study
@@ -135,12 +136,12 @@ zen
 
 ## 3. Project Management
 
-### `zen init`
+### `znt init`
 
 Initialize Zenith for a new or existing project.
 
 ```bash
-zen init [--name <name>] [--ecosystem <ecosystem>]
+znt init [--name <name>] [--ecosystem <ecosystem>]
 ```
 
 **Flags:**
@@ -173,12 +174,12 @@ zen init [--name <name>] [--ecosystem <ecosystem>]
 }
 ```
 
-### `zen onboard`
+### `znt onboard`
 
 Onboard an existing project that doesn't have Zenith yet. Detects project type, parses manifest, indexes all dependencies.
 
 ```bash
-zen onboard [--workspace] [--root <path>] [--skip-indexing]
+znt onboard [--workspace] [--root <path>] [--skip-indexing]
 ```
 
 **Flags:**
@@ -216,12 +217,12 @@ zen onboard [--workspace] [--root <path>] [--skip-indexing]
 
 ## 4. Session Management
 
-### `zen session start`
+### `znt session start`
 
 Start a new work session. Detects and cleans up orphaned active sessions.
 
 ```bash
-zen session start
+znt session start
 ```
 
 **Output:**
@@ -241,12 +242,12 @@ zen session start
 }
 ```
 
-### `zen session end`
+### `znt session end`
 
 End the current session without a full wrap-up (no sync, no summary).
 
 ```bash
-zen session end [--abandon]
+znt session end [--abandon]
 ```
 
 **Flags:**
@@ -255,12 +256,12 @@ zen session end [--abandon]
 |------|-------------|
 | `--abandon` | Mark as abandoned instead of wrapped_up |
 
-### `zen session list`
+### `znt session list`
 
 List all sessions.
 
 ```bash
-zen session list [--limit 10] [--status active|wrapped_up|abandoned]
+znt session list [--limit 10] [--status active|wrapped_up|abandoned]
 ```
 
 **Output:**
@@ -289,12 +290,12 @@ zen session list [--limit 10] [--status active|wrapped_up|abandoned]
 
 ## 5. Package Indexing
 
-### `zen install`
+### `znt install`
 
 Clone a package repository, parse with tree-sitter, generate embeddings, store in DuckLake.
 
 ```bash
-zen install <package> [--ecosystem <eco>] [--version <ver>]
+znt install <package> [--ecosystem <eco>] [--version <ver>]
 ```
 
 **Args:**
@@ -336,12 +337,12 @@ zen install <package> [--ecosystem <eco>] [--version <ver>]
 
 ## 6. Search
 
-### `zen search`
+### `znt search`
 
 Search indexed package documentation. Supports filtering by package, ecosystem, symbol kind, and result limit.
 
 ```bash
-zen search <query> [flags]
+znt search <query> [flags]
 ```
 
 **Args:**
@@ -387,20 +388,20 @@ zen search <query> [flags]
 }
 ```
 
-### `zen grep`
+### `znt grep`
 
 Regex or literal text search over indexed package source or local project files. See [13-zen-grep-design.md](./13-zen-grep-design.md) for full design.
 
 ```bash
-zen grep <pattern> [path...] [flags]
+znt grep <pattern> [path...] [flags]
 ```
 
 **Modes** (one required):
 
 ```bash
-zen grep <pattern> --package <pkg>        # Search one indexed package
-zen grep <pattern> --all-packages         # Search all indexed packages
-zen grep <pattern> <path...>              # Search local project files
+znt grep <pattern> --package <pkg>        # Search one indexed package
+znt grep <pattern> --all-packages         # Search all indexed packages
+znt grep <pattern> <path...>              # Search local project files
 ```
 
 **Args:**
@@ -459,18 +460,18 @@ zen grep <pattern> <path...>              # Search local project files
 }
 ```
 
-### `zen cache`
+### `znt cache`
 
-Manage cached source files stored in DuckDB for `zen grep` package mode.
+Manage cached source files stored in DuckDB for `znt grep` package mode.
 
 ```bash
-zen cache list                    # Show cached packages + sizes
-zen cache clean                   # Remove all cached source
-zen cache clean <package>         # Remove one package's cached source
-zen cache stats                   # Total cache size, package count
+znt cache list                    # Show cached packages + sizes
+znt cache clean                   # Remove all cached source
+znt cache clean <package>         # Remove one package's cached source
+znt cache stats                   # Total cache size, package count
 ```
 
-**Output** (`zen cache list`):
+**Output** (`znt cache list`):
 
 ```json
 {
@@ -487,12 +488,12 @@ zen cache stats                   # Total cache size, package count
 
 ## 7. Research
 
-### `zen research create`
+### `znt research create`
 
 Create a new research item.
 
 ```bash
-zen research create --title <title> [--description <desc>]
+znt research create --title <title> [--description <desc>]
 ```
 
 **Output:**
@@ -510,24 +511,24 @@ zen research create --title <title> [--description <desc>]
 }
 ```
 
-### `zen research update <id>`
+### `znt research update <id>`
 
 ```bash
-zen research update <id> [--title <title>] [--description <desc>] [--status <status>]
+znt research update <id> [--title <title>] [--description <desc>] [--status <status>]
 ```
 
-### `zen research list`
+### `znt research list`
 
 ```bash
-zen research list [--status open|in_progress|resolved|abandoned] [--limit 20]
+znt research list [--status open|in_progress|resolved|abandoned] [--limit 20]
 ```
 
-### `zen research get <id>`
+### `znt research get <id>`
 
 Returns research item with linked findings, hypotheses, tasks, and insights.
 
 ```bash
-zen research get <id>
+znt research get <id>
 ```
 
 **Output:**
@@ -555,12 +556,12 @@ zen research get <id>
 }
 ```
 
-### `zen research registry <query>`
+### `znt research registry <query>`
 
 Query package registries directly (crates.io, npm, hex, pypi). Does not create any state -- pure lookup.
 
 ```bash
-zen research registry <query> [--ecosystem rust|npm|hex|pypi|all] [--limit 10]
+znt research registry <query> [--ecosystem rust|npm|hex|pypi|all] [--limit 10]
 ```
 
 **Output:**
@@ -587,10 +588,10 @@ zen research registry <query> [--ecosystem rust|npm|hex|pypi|all] [--limit 10]
 
 ## 8. Findings
 
-### `zen finding create`
+### `znt finding create`
 
 ```bash
-zen finding create --content <content> [--research <id>] [--source <src>] [--confidence high|medium|low] [--tag <tag>...]
+znt finding create --content <content> [--research <id>] [--source <src>] [--confidence high|medium|low] [--tag <tag>...]
 ```
 
 **Output:**
@@ -609,29 +610,29 @@ zen finding create --content <content> [--research <id>] [--source <src>] [--con
 }
 ```
 
-### `zen finding update <id>`
+### `znt finding update <id>`
 
 ```bash
-zen finding update <id> [--content <content>] [--confidence <conf>] [--source <src>]
+znt finding update <id> [--content <content>] [--confidence <conf>] [--source <src>]
 ```
 
-### `zen finding list`
+### `znt finding list`
 
 ```bash
-zen finding list [--research <id>] [--tag <tag>] [--confidence high|medium|low] [--limit 20] [--search <fts-query>]
+znt finding list [--research <id>] [--tag <tag>] [--confidence high|medium|low] [--limit 20] [--search <fts-query>]
 ```
 
 The `--search` flag uses FTS5 full-text search on the content and source fields.
 
-### `zen finding get <id>`
+### `znt finding get <id>`
 
 Returns finding with tags, linked entities, and related audit entries.
 
-### `zen finding tag <id> <tag>`
+### `znt finding tag <id> <tag>`
 
 Add a tag to a finding.
 
-### `zen finding untag <id> <tag>`
+### `znt finding untag <id> <tag>`
 
 Remove a tag from a finding.
 
@@ -639,10 +640,10 @@ Remove a tag from a finding.
 
 ## 9. Hypotheses
 
-### `zen hypothesis create`
+### `znt hypothesis create`
 
 ```bash
-zen hypothesis create --content <content> [--research <id>] [--finding <id>]
+znt hypothesis create --content <content> [--research <id>] [--finding <id>]
 ```
 
 **Output:**
@@ -660,26 +661,26 @@ zen hypothesis create --content <content> [--research <id>] [--finding <id>]
 }
 ```
 
-### `zen hypothesis update <id>`
+### `znt hypothesis update <id>`
 
 ```bash
-zen hypothesis update <id> [--status unverified|analyzing|confirmed|debunked|partially_confirmed|inconclusive] [--reason <reason>] [--content <content>]
+znt hypothesis update <id> [--status unverified|analyzing|confirmed|debunked|partially_confirmed|inconclusive] [--reason <reason>] [--content <content>]
 ```
 
 When status changes, `reason` should explain why:
 
 ```bash
-zen hypothesis update hyp-e1c4b2 --status confirmed \
+znt hypothesis update hyp-e1c4b2 --status confirmed \
     --reason "Tested in spike. reqwest::ClientBuilder supports tower::Layer via .layer() method."
 ```
 
-### `zen hypothesis list`
+### `znt hypothesis list`
 
 ```bash
-zen hypothesis list [--status <status>] [--research <id>] [--limit 20]
+znt hypothesis list [--status <status>] [--research <id>] [--limit 20]
 ```
 
-### `zen hypothesis get <id>`
+### `znt hypothesis get <id>`
 
 Returns hypothesis with linked research, findings, and related entities.
 
@@ -687,66 +688,66 @@ Returns hypothesis with linked research, findings, and related entities.
 
 ## 10. Insights
 
-### `zen insight create`
+### `znt insight create`
 
 ```bash
-zen insight create --content <content> [--research <id>] [--confidence high|medium|low]
+znt insight create --content <content> [--research <id>] [--confidence high|medium|low]
 ```
 
-### `zen insight update <id>`
+### `znt insight update <id>`
 
 ```bash
-zen insight update <id> [--content <content>] [--confidence <conf>]
+znt insight update <id> [--content <content>] [--confidence <conf>]
 ```
 
-### `zen insight list`
+### `znt insight list`
 
 ```bash
-zen insight list [--research <id>] [--limit 20]
+znt insight list [--research <id>] [--limit 20]
 ```
 
-### `zen insight get <id>`
+### `znt insight get <id>`
 
 ---
 
 ## 11. Tasks
 
-### `zen task create`
+### `znt task create`
 
 ```bash
-zen task create --title <title> [--description <desc>] [--research <id>]
+znt task create --title <title> [--description <desc>] [--research <id>]
 ```
 
-### `zen task update <id>`
+### `znt task update <id>`
 
 ```bash
-zen task update <id> [--title <title>] [--description <desc>] [--status open|in_progress|done|blocked]
+znt task update <id> [--title <title>] [--description <desc>] [--status open|in_progress|done|blocked]
 ```
 
-### `zen task list`
+### `znt task list`
 
 ```bash
-zen task list [--status <status>] [--research <id>] [--limit 20]
+znt task list [--status <status>] [--research <id>] [--limit 20]
 ```
 
-### `zen task get <id>`
+### `znt task get <id>`
 
 Returns task with linked research, findings, implementation log entries, and blocking/blocked-by relationships.
 
-### `zen task complete <id>`
+### `znt task complete <id>`
 
-Shorthand for `zen task update <id> --status done`.
+Shorthand for `znt task update <id> --status done`.
 
 ---
 
 ## 12. Implementation Log
 
-### `zen log`
+### `znt log`
 
 Record an implementation location.
 
 ```bash
-zen log <file#lines> [--task <id>] [--description <desc>]
+znt log <file#lines> [--task <id>] [--description <desc>]
 ```
 
 **Args:**
@@ -775,12 +776,12 @@ zen log <file#lines> [--task <id>] [--description <desc>]
 
 ## 13. Compatibility
 
-### `zen compat check`
+### `znt compat check`
 
 Create or update a compatibility check between two packages.
 
 ```bash
-zen compat check <package-a> <package-b> [--status compatible|incompatible|conditional|unknown] [--conditions <text>] [--finding <id>]
+znt compat check <package-a> <package-b> [--status compatible|incompatible|conditional|unknown] [--conditions <text>] [--finding <id>]
 ```
 
 **Args:**
@@ -805,24 +806,24 @@ zen compat check <package-a> <package-b> [--status compatible|incompatible|condi
 }
 ```
 
-### `zen compat list`
+### `znt compat list`
 
 ```bash
-zen compat list [--package <name>] [--status <status>] [--limit 20]
+znt compat list [--package <name>] [--status <status>] [--limit 20]
 ```
 
-### `zen compat get <id>`
+### `znt compat get <id>`
 
 ---
 
 ## 14. Entity Links
 
-### `zen link`
+### `znt link`
 
 Create a relationship between any two entities.
 
 ```bash
-zen link <source> <target> <relation>
+znt link <source> <target> <relation>
 ```
 
 **Args:**
@@ -850,7 +851,7 @@ zen link <source> <target> <relation>
 }
 ```
 
-### `zen unlink <link-id>`
+### `znt unlink <link-id>`
 
 Remove an entity link.
 
@@ -858,12 +859,12 @@ Remove an entity link.
 
 ## 15. Audit Trail
 
-### `zen audit`
+### `znt audit`
 
 View the audit trail.
 
 ```bash
-zen audit [--limit 20] [--entity-type <type>] [--entity-id <id>] [--action <action>] [--session <id>] [--search <fts-query>]
+znt audit [--limit 20] [--entity-type <type>] [--entity-id <id>] [--action <action>] [--session <id>] [--search <fts-query>]
 ```
 
 **Flags:**
@@ -905,12 +906,12 @@ zen audit [--limit 20] [--entity-type <type>] [--entity-id <id>] [--action <acti
 
 ## 16. Studies (Structured Learning)
 
-### `zen study create`
+### `znt study create`
 
 Create a new structured learning study.
 
 ```bash
-zen study create --topic <topic> [--library <lib>] [--methodology explore|test-driven|compare] [--research <id>]
+znt study create --topic <topic> [--library <lib>] [--methodology explore|test-driven|compare] [--research <id>]
 ```
 
 **Flags:**
@@ -938,12 +939,12 @@ zen study create --topic <topic> [--library <lib>] [--methodology explore|test-d
 }
 ```
 
-### `zen study assume <id>`
+### `znt study assume <id>`
 
 Add an assumption (creates a hypothesis linked to the study).
 
 ```bash
-zen study assume <study-id> --content <assumption>
+znt study assume <study-id> --content <assumption>
 ```
 
 **Output:**
@@ -959,12 +960,12 @@ zen study assume <study-id> --content <assumption>
 }
 ```
 
-### `zen study test <id>`
+### `znt study test <id>`
 
 Record a test result against an assumption. Creates a finding tagged `test-result`, links it to the hypothesis, and updates hypothesis status.
 
 ```bash
-zen study test <study-id> --assumption <hyp-id> --result validated|invalidated|inconclusive --evidence <text>
+znt study test <study-id> --assumption <hyp-id> --result validated|invalidated|inconclusive --evidence <text>
 ```
 
 **Output:**
@@ -981,12 +982,12 @@ zen study test <study-id> --assumption <hyp-id> --result validated|invalidated|i
 }
 ```
 
-### `zen study get <id>`
+### `znt study get <id>`
 
 Get full study state including all assumptions, findings, and progress.
 
 ```bash
-zen study get <id>
+znt study get <id>
 ```
 
 **Output:**
@@ -1020,12 +1021,12 @@ zen study get <id>
 }
 ```
 
-### `zen study conclude <id>`
+### `znt study conclude <id>`
 
 Conclude the study. Sets status to `completed`, stores summary, creates an insight.
 
 ```bash
-zen study conclude <id> --summary <text>
+znt study conclude <id> --summary <text>
 ```
 
 **Output:**
@@ -1044,24 +1045,24 @@ zen study conclude <id> --summary <text>
 }
 ```
 
-### `zen study list`
+### `znt study list`
 
 List all studies.
 
 ```bash
-zen study list [--status active|concluding|completed|abandoned] [--library <lib>] [--limit 20]
+znt study list [--status active|concluding|completed|abandoned] [--library <lib>] [--limit 20]
 ```
 
 ---
 
 ## 17. Database & Trail Commands
 
-### `zen rebuild`
+### `znt rebuild`
 
 Rebuild the SQLite database from JSONL trail files. Deletes the existing DB and replays all operations from `.zenith/trail/*.jsonl`.
 
 ```bash
-zen rebuild [--trail-dir <path>]
+znt rebuild [--trail-dir <path>]
 ```
 
 **Flags:**
@@ -1091,20 +1092,20 @@ zen rebuild [--trail-dir <path>]
 ```
 
 **When to use:**
-- DB corruption: `rm .zenith/zenith.db && zen rebuild`
-- New machine: `git clone <repo> && zen rebuild`
+- DB corruption: `rm .zenith/zenith.db && znt rebuild`
+- New machine: `git clone <repo> && znt rebuild`
 - Schema migration: update schema, rebuild from trail
 
 ---
 
 ## 18. Workflow Commands
 
-### `zen whats-next`
+### `znt whats-next`
 
 Returns current project state and suggested next actions. Reads the last session snapshot, open tasks, pending hypotheses, and recent audit entries.
 
 ```bash
-zen whats-next [--limit 10] [--format json|table|raw]
+znt whats-next [--limit 10] [--format json|table|raw]
 ```
 
 **Output (JSON):**
@@ -1145,12 +1146,12 @@ zen whats-next [--limit 10] [--format json|table|raw]
 
 When `--format raw`, returns the last N audit trail entries as-is (for the LLM to reason over directly).
 
-### `zen wrap-up`
+### `znt wrap-up`
 
 End the current session, generate summary, sync to cloud.
 
 ```bash
-zen wrap-up [--auto-commit] [--message <msg>]
+znt wrap-up [--auto-commit] [--message <msg>]
 ```
 
 **Flags:**

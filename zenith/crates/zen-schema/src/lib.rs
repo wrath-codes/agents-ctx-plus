@@ -15,3 +15,6 @@
 
 #[cfg(test)]
 mod spike_schema_gen;
+
+#[cfg(test)]
+mod spike_trail_versioning;

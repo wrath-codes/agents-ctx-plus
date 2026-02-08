@@ -1,9 +1,9 @@
 # Zenith: JSON Schema Generation & Validation — Spike Plan
 
 **Version**: 2026-02-08
-**Status**: Pending
+**Status**: DONE -- 22/22 tests pass
 **Purpose**: Validate `schemars` 1.x for auto-generating JSON Schemas from all Zenith types, and `jsonschema` 0.28 for runtime validation at every JSON boundary. Prove the full pipeline: Rust struct → `#[derive(JsonSchema)]` → generated schema → `jsonschema::validate()` → descriptive errors.
-**Spike ID**: 0.14
+**Spike ID**: 0.15
 **Crate**: zen-schema (new, 11th in workspace)
 **Blocks**: Phase 1 (entity structs get `#[derive(JsonSchema)]`), Phase 2 (trail + audit validation), Phase 3 (DuckDB metadata validation), Phase 5 (`znt schema` command, pre-commit uses generated schemas)
 
@@ -319,8 +319,8 @@ This is NOT added during the spike. The spike defines sample types locally. Phas
 - **Runtime wiring** — actual integration into zen-db trail writer, zen-hooks pre-commit, or zen-cli is Phase 1-5 work. The spike only proves the schema generation and validation pipeline works in isolation.
 - **SQL-generated JSON** — `json_group_array(json_object(...))` in SQLite produces JSON strings that aren't validated by schema. This is a future concern (would need to deserialize SQL output into typed structs first).
 - **Parquet/Lance schema alignment** — DuckDB table schemas and JSON Schemas are different systems. Alignment is a Phase 3 stretch goal.
-- **Schema versioning/migration** — what happens when entity structs change. Future concern — JSONL trail files may reference older schema versions.
-- **`additionalProperties: false`** — schemars may or may not set this by default. The spike documents the behavior but doesn't force a decision.
+- **Schema versioning/migration** — ~~what happens when entity structs change. Future concern~~ **NOW TESTED** in spike 0.16. Approach D (Hybrid) validated: `v` field with `#[serde(default)]`, additive evolution, version-dispatch migration. See [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md).
+- **`additionalProperties` convention** — ~~schemars may or may not set this by default. The spike documents the behavior but doesn't force a decision.~~ **NOW DECIDED** in spike 0.16: trail operations use permissive (schemars default, no `deny_unknown_fields`), config uses strict (`#[serde(deny_unknown_fields)]` generates `additionalProperties: false`).
 - **Schema publishing** — hosting schemas at a URL for external consumers. Out of scope.
 
 ---
@@ -387,7 +387,7 @@ If schemars fails on critical types (DateTime, nested optionals, HashMaps):
 | schemars generates Draft 2020-12 but jsonschema 0.28 can't validate it | Cross-crate incompatibility | Low (jsonschema auto-detects) | Spike test 20 validates directly |
 | `serde_json::Value` produces unhelpfully permissive `{}` schema | Trail `data` field validation is useless from envelope schema alone | Expected | Per-entity data sub-schemas (test 7) provide the real validation — dispatch by `entity` field |
 | schemars adds significant compile time to zen-core | Slower workspace builds | Medium | Measure in spike. Proc-macro cost is per-derive, not per-crate. zen-schema isolates the heavy validation logic. |
-| Schema versioning: old trail files reference outdated entity shapes | Rebuild fails on schema-validated replay of old trail data | Low (Phase 0-2 only) | `--strict` is opt-in for rebuild. Non-strict mode skips schema validation. Versioning is a Phase 8+ concern. |
+| Schema versioning: old trail files reference outdated entity shapes | Rebuild fails on schema-validated replay of old trail data | **Mitigated** | Spike 0.16 validated Approach D: `v` field + additive evolution + version-dispatch migration. See [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md). |
 | `additionalProperties` behavior differs between schemars and hand-written schemas | Validation strictness mismatch | Medium | Test 22 compares hand-written vs generated. Document and decide on convention. |
 
 ---
