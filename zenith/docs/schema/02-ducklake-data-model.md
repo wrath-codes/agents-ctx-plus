@@ -147,6 +147,7 @@ CREATE TABLE indexed_packages (
     indexed_at TIMESTAMP DEFAULT current_timestamp,
     file_count INTEGER DEFAULT 0,
     symbol_count INTEGER DEFAULT 0,
+    source_cached BOOLEAN DEFAULT FALSE,
     PRIMARY KEY (ecosystem, name, version)
 );
 ```
@@ -162,6 +163,7 @@ CREATE TABLE indexed_packages (
 | `downloads` | Download count at time of indexing (for relevance ranking) |
 | `file_count` | Number of source files parsed |
 | `symbol_count` | Total API symbols extracted |
+| `source_cached` | Whether source files are stored in `source_files` table for `zen grep` |
 
 ### api_symbols
 
@@ -309,6 +311,34 @@ CREATE TABLE doc_chunks (
 | `format` | `md`, `rst`, `txt`, `html` |
 | `embedding` | 384-dimensional fastembed vector |
 
+### source_files
+
+Source file contents stored for `zen grep` package-mode search. Populated during the indexing pipeline (step 6.5). Content is FSST-compressed by DuckDB automatically (~2-3x compression for source code). See [13-zen-grep-design.md](./13-zen-grep-design.md).
+
+```sql
+CREATE TABLE source_files (
+    ecosystem TEXT NOT NULL,
+    package TEXT NOT NULL,
+    version TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    content TEXT NOT NULL,
+    language TEXT,
+    size_bytes INTEGER,
+    line_count INTEGER,
+    PRIMARY KEY (ecosystem, package, version, file_path)
+);
+```
+
+| Column | Description |
+|--------|-------------|
+| `file_path` | Relative path within the cloned repo (e.g., `src/task/spawn.rs`) |
+| `content` | Full file content, unmodified |
+| `language` | Detected language (`rust`, `python`, `typescript`, etc.) |
+| `size_bytes` | Original file size in bytes |
+| `line_count` | Pre-computed line count |
+
+**Size estimate**: ~20-25 MB (FSST compressed) for 10 packages with ~50 MB raw source.
+
 ---
 
 ## 5. Vector Search
@@ -329,6 +359,13 @@ CREATE INDEX idx_symbols_name ON api_symbols(name);
 CREATE INDEX idx_symbols_visibility ON api_symbols(visibility);
 CREATE INDEX idx_chunks_pkg ON doc_chunks(ecosystem, package, version);
 CREATE INDEX idx_chunks_source ON doc_chunks(source_file);
+
+-- Source file indexes (for zen grep)
+CREATE INDEX idx_source_pkg ON source_files(ecosystem, package, version);
+CREATE INDEX idx_source_lang ON source_files(ecosystem, package, version, language);
+
+-- Symbol correlation index (for zen grep: match grep results to enclosing symbols)
+CREATE INDEX idx_symbols_file_lines ON api_symbols(ecosystem, package, version, file_path, line_start, line_end);
 ```
 
 ### Similarity Search
@@ -392,6 +429,11 @@ LIMIT 10;
    INSERT INTO api_symbols ...
    INSERT INTO doc_chunks ...
    INSERT INTO indexed_packages ...
+
+6.5 Store Source Files (for zen grep)
+    For each source file walked in step 2 (content already in memory from step 3):
+      INSERT INTO source_files (ecosystem, package, version, file_path, content, language, size_bytes, line_count)
+    UPDATE indexed_packages SET source_cached = TRUE WHERE ecosystem = ... AND name = ...
 
 7. Update Turso
    UPDATE project_dependencies SET indexed = TRUE WHERE name = <pkg>
@@ -524,16 +566,22 @@ LOAD ducklake;
 R2_ACCOUNT_ID=<cloudflare-account-id>
 R2_ACCESS_KEY_ID=<r2-access-key>
 R2_SECRET_ACCESS_KEY=<r2-secret>
-R2_BUCKET_NAME=zenith-lake
+R2_BUCKET_NAME=zenith                  # us-east-1 (must match MotherDuck region)
 
 MOTHERDUCK_ACCESS_TOKEN=<motherduck-token>
+
+# AWS-style vars for Lance S3/R2 access (Lance uses its own credential chain)
+AWS_ACCESS_KEY_ID=<same-as-R2_ACCESS_KEY_ID>
+AWS_SECRET_ACCESS_KEY=<same-as-R2_SECRET_ACCESS_KEY>
+AWS_ENDPOINT_URL=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+AWS_DEFAULT_REGION=auto
 ```
 
-### DuckLake Initialization
+### DuckLake Initialization (validated in spike 0.5)
 
 ```sql
 -- 1. Create R2 secret in MotherDuck
-CREATE SECRET r2_zenith IN MOTHERDUCK (
+CREATE OR REPLACE SECRET r2_zenith IN MOTHERDUCK (
     TYPE s3,
     KEY_ID '<R2_ACCESS_KEY_ID>',
     SECRET '<R2_SECRET_ACCESS_KEY>',
@@ -542,21 +590,24 @@ CREATE SECRET r2_zenith IN MOTHERDUCK (
 );
 
 -- 2. Create DuckLake database with R2 storage
-CREATE DATABASE zenith_lake (
+CREATE DATABASE IF NOT EXISTS zenith_lake (
     TYPE DUCKLAKE,
-    DATA_PATH 's3://zenith-lake/'
+    DATA_PATH 's3://zenith/lake/'
 );
 
 -- 3. Create tables
 USE zenith_lake;
 
+-- NOTE: DuckLake does NOT support FLOAT[N] (fixed-size arrays).
+-- Use FLOAT[] (variable-length) for embeddings, cast to FLOAT[384] at query time.
 CREATE TABLE indexed_packages ( ... );
-CREATE TABLE api_symbols ( ... );
-CREATE TABLE doc_chunks ( ... );
+CREATE TABLE api_symbols ( ..., embedding FLOAT[] );   -- NOT FLOAT[384]
+CREATE TABLE doc_chunks ( ..., embedding FLOAT[] );    -- NOT FLOAT[384]
 
--- 4. Create HNSW indexes
-CREATE INDEX idx_symbols_embedding ON api_symbols USING HNSW(embedding);
-CREATE INDEX idx_chunks_embedding ON doc_chunks USING HNSW(embedding);
+-- 4. HNSW indexes: NOT recommended on DuckLake (persistence crashes DuckDB 1.4)
+-- Use Lance for vector search instead, or brute-force array_cosine_similarity()
+-- with FLOAT[] → FLOAT[384] cast:
+--   ORDER BY array_cosine_similarity(embedding::FLOAT[384], $query::FLOAT[384]) DESC
 ```
 
 ### Local Development (No Cloud)
@@ -570,6 +621,98 @@ ATTACH 'zenith_lake.duckdb' AS zenith_lake;
 -- Same schema, data stored in local Parquet files
 -- .zenith/lake/ directory
 ```
+
+---
+
+## 10. Lance Alternative (Spike 0.5 Finding)
+
+> **Status**: Validated in spike 0.5. Strongly recommended over Parquet + HNSW for the documentation lake.
+
+### Problem with Parquet + HNSW
+
+Spike 0.5 revealed two critical issues with the original Parquet + VSS HNSW approach:
+
+1. **HNSW persistence crashes DuckDB 1.4**: Reopening a file-backed DB with a persisted HNSW index causes `SIGABRT` (assertion failure in `table_index_list.cpp`). The `hnsw_enable_experimental_persistence` flag exists but is explicitly labeled "do not use in production."
+2. **Parquet strips fixed array dimensions**: `FLOAT[384]` becomes `FLOAT[]` after Parquet roundtrip, requiring explicit `::FLOAT[384]` casts for `array_cosine_similarity()`.
+
+### Lance as the Storage Layer
+
+[Lance](https://lance.org) is an open lakehouse format designed for ML/AI workloads. The DuckDB community extension (`INSTALL lance FROM community`) provides native SQL access to Lance datasets with built-in search:
+
+| Capability | Parquet + VSS | Lance |
+|-----------|--------------|-------|
+| **Vector index persistence** | Experimental, crashes on reopen | Native, stable, built into format |
+| **FTS (full-text search)** | Requires separate `fts` extension | Built-in BM25 via `lance_fts()` |
+| **Hybrid search** | Manual score combination | `lance_hybrid_search()` with alpha blending |
+| **Cloud storage** | Parquet on R2 via `httpfs` | `.lance` on R2 natively (`s3://bucket/path.lance`) |
+| **Array dimension handling** | `FLOAT[384]` → `FLOAT[]` on roundtrip | Preserved (Arrow-native columnar format) |
+| **Write from DuckDB** | `COPY ... TO '...' (FORMAT PARQUET)` | `COPY ... TO '...' (FORMAT lance)` |
+| **Read in DuckDB** | `read_parquet('s3://...')` | `SELECT * FROM 's3://...lance'` |
+
+### Proposed Architecture Change
+
+```
+Before (Parquet + HNSW):
+  DuckDB → COPY TO Parquet → R2
+  DuckDB ← read_parquet() ← R2
+  DuckDB: in-memory HNSW (lost on restart)
+  DuckDB: array_cosine_similarity() (brute-force fallback)
+
+After (Lance):
+  DuckDB → COPY TO Lance → R2
+  DuckDB ← lance_vector_search() ← R2 (persistent index)
+  DuckDB ← lance_fts() ← R2 (BM25, auto-built)
+  DuckDB ← lance_hybrid_search() ← R2 (vector + FTS combined)
+```
+
+### Key Functions (validated in spike)
+
+```sql
+-- Vector search (returns _distance, smaller is closer)
+SELECT name, signature, _distance
+FROM lance_vector_search('s3://zenith-lake/rust/tokio/1.40.0/symbols.lance',
+    'embedding', $query_embedding::FLOAT[384], k=20)
+ORDER BY _distance ASC;
+
+-- Full-text search (returns _score, larger is better)
+SELECT name, doc_comment, _score
+FROM lance_fts('s3://zenith-lake/rust/tokio/1.40.0/symbols.lance',
+    'doc_comment', 'spawn task', k=10)
+ORDER BY _score DESC;
+
+-- Hybrid search (returns _hybrid_score, _distance, _score)
+SELECT name, signature, _hybrid_score
+FROM lance_hybrid_search('s3://zenith-lake/rust/tokio/1.40.0/symbols.lance',
+    'embedding', $query_embedding::FLOAT[384],
+    'doc_comment', 'spawn task',
+    k=10, alpha=0.5, oversample_factor=4)
+ORDER BY _hybrid_score DESC;
+```
+
+### Credential Handling
+
+Lance uses its own AWS credential chain (via `lance-io` crate), NOT DuckDB's `CREATE SECRET`:
+
+```bash
+# .env — Lance reads these directly (not DuckDB S3 secrets)
+AWS_ACCESS_KEY_ID=<R2_ACCESS_KEY_ID>
+AWS_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY>
+AWS_ENDPOINT_URL=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+AWS_DEFAULT_REGION=auto
+```
+
+DuckDB's `httpfs` (for Parquet) still uses `CREATE SECRET`. Both can coexist.
+
+### FTS Behavior Note
+
+Lance FTS uses BM25 with exact term matching by default — "spawning" does NOT match a query for "spawn". This differs from SQLite FTS5's porter stemming. For zenith's search, we may need to:
+- Use vector search as the primary relevance signal (semantic similarity handles morphological variants)
+- Use FTS as a boosting signal for exact term matches
+- Set `alpha` in hybrid search to favor vector (e.g., `alpha=0.7`)
+
+### Decision
+
+**Use Lance as the primary storage format for the documentation lake.** Keep Parquet as a fallback format for interop and MotherDuck analytics. The `vss` HNSW extension remains useful for in-memory-only ad-hoc vector queries during development.
 
 ---
 

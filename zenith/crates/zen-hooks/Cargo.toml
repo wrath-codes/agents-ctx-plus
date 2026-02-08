@@ -1,0 +1,23 @@
+[package]
+name = "zen-hooks"
+description = "Git hooks management and session-git integration for Zenith (gix-based)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gix.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonschema.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

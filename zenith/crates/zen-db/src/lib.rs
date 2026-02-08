@@ -14,3 +14,9 @@ mod spike_libsql;
 
 #[cfg(test)]
 mod spike_libsql_sync;
+
+#[cfg(test)]
+mod spike_studies;
+
+#[cfg(test)]
+mod spike_jsonl;

@@ -11,6 +11,7 @@ zen-config.workspace = true
 libsql.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde-jsonlines.workspace = true
 chrono.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
@@ -22,6 +23,8 @@ pretty_assertions.workspace = true
 tempfile.workspace = true
 rstest.workspace = true
 dotenvy.workspace = true
+serde-jsonlines.workspace = true
+reqwest.workspace = true
 
 [lints]
 workspace = true

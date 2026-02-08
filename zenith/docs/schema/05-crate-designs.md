@@ -215,6 +215,7 @@ zen-core/src/
 │   ├── compat.rs       # CompatibilityCheck
 │   ├── session.rs      # Session, SessionSnapshot
 │   ├── project.rs      # ProjectMeta, ProjectDependency
+│   ├── study.rs        # Study
 │   ├── link.rs         # EntityLink
 │   └── audit.rs        # AuditEntry
 └── enums.rs            # Status enums, EntityType, Relation, Action
@@ -238,6 +239,7 @@ pub const PREFIX_ISSUE: &str = "iss";
 pub const PREFIX_TASK: &str = "tsk";
 pub const PREFIX_IMPL_LOG: &str = "imp";
 pub const PREFIX_COMPAT: &str = "cmp";
+pub const PREFIX_STUDY: &str = "stu";
 pub const PREFIX_LINK: &str = "lnk";
 pub const PREFIX_AUDIT: &str = "aud";
 
@@ -590,6 +592,8 @@ zen-db/src/
 │   ├── task.rs         # TaskRepo (CRUD + FTS)
 │   ├── impl_log.rs     # ImplLogRepo (CRUD)
 │   ├── compat.rs       # CompatRepo (CRUD)
+│   ├── study.rs        # StudyRepo (CRUD + FTS + progress tracking)
+│   ├── trail.rs        # TrailWriter (append operations to per-session JSONL) + TrailReplayer (rebuild DB from JSONL)
 │   ├── link.rs         # LinkRepo (create, delete, query by entity)
 │   ├── audit.rs        # AuditRepo (append, query with filters)
 │   ├── session.rs      # SessionRepo (start, end, snapshot)
@@ -1424,16 +1428,22 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+
+# Grep feature — local project search (ripgrep library)
+grep.workspace = true        # RegexMatcher, Searcher, Sink, Printer
+ignore.workspace = true      # gitignore-aware file walking
 ```
 
 ### Module Structure
 
 ```
 zen-search/src/
-├── lib.rs              # SearchEngine, SearchResult, SearchMode
+├── lib.rs              # SearchEngine, GrepEngine, SearchResult, SearchMode
 ├── vector.rs           # Vector search via DuckDB HNSW
 ├── fts.rs              # FTS5 search via Turso (findings, audit, etc.)
-└── hybrid.rs           # Hybrid: vector + FTS combined ranking
+├── hybrid.rs           # Hybrid: vector + FTS combined ranking
+├── grep.rs             # GrepEngine: package mode (DuckDB) + local mode (grep crate)
+└── walk.rs             # File walker factory (ignore crate, WalkMode, test skip)
 ```
 
 ### Key Types
@@ -1483,6 +1493,55 @@ impl SearchEngine {
 }
 ```
 
+### Grep Types (spike 0.14 validated — 26/26 tests)
+
+See [13-zen-grep-design.md](./13-zen-grep-design.md) for full design.
+
+```rust
+pub struct GrepEngine {
+    lake: Option<ZenLake>,  // For package mode (source_files + symbol correlation)
+}
+
+pub struct GrepMatch {
+    pub path: String,
+    pub line_number: u64,
+    pub text: String,
+    pub context_before: Vec<String>,
+    pub context_after: Vec<String>,
+    pub symbol: Option<SymbolRef>,  // Package mode only
+}
+
+pub struct SymbolRef {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub signature: String,
+}
+
+pub struct GrepResult {
+    pub matches: Vec<GrepMatch>,
+    pub stats: GrepStats,
+}
+
+impl GrepEngine {
+    /// Grep indexed package source (DuckDB fetch + Rust regex + symbol correlation)
+    pub fn grep_package(
+        &self,
+        pattern: &str,
+        packages: &[(String, String, String)],
+        opts: &GrepOptions,
+    ) -> Result<GrepResult, SearchError>;
+
+    /// Grep local project files (grep crate + ignore crate)
+    pub fn grep_local(
+        &self,
+        pattern: &str,
+        paths: &[PathBuf],
+        opts: &GrepOptions,
+    ) -> Result<GrepResult, SearchError>;
+}
+```
+
 ### Tests
 
 - Vector search returns results ranked by cosine similarity
@@ -1490,6 +1549,7 @@ impl SearchEngine {
 - Hybrid search combines both scoring methods
 - Package and kind filters work correctly
 - Context budget truncation works
+- **Grep (spike 0.14)**: `grep` crate regex matching (6 tests), `ignore` crate file walking (5 tests), DuckDB `source_files` storage + grep (6 tests), symbol correlation (2 tests), combined pipeline (3 tests), `source_cached` flag (1 test), `--all-packages` cross-package search (1 test)
 
 ---
 
@@ -1545,6 +1605,7 @@ zen-cli/src/
 │   ├── task.rs         # zen task {create,update,list,get,complete}
 │   ├── log.rs          # zen log
 │   ├── compat.rs       # zen compat {check,list,get}
+│   ├── study.rs        # zen study {create,assume,test,get,conclude,list}
 │   ├── link.rs         # zen link, zen unlink
 │   ├── audit.rs        # zen audit
 │   ├── whats_next.rs   # zen whats-next

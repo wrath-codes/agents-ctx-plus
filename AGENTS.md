@@ -2,7 +2,7 @@
 
 > **Retrieval-led reasoning directive**: When working with any library or framework listed below, consult the reference documentation _before_ relying on pre-training knowledge. Pre-training knowledge is the fallback, not the default.
 
-## Reference Map (266 files · 17 sections)
+## Reference Map (267 files · 17 sections)
 
 | section                | description                                                                         |
 | ---------------------- | ----------------------------------------------------------------------------------- |
@@ -15,7 +15,7 @@
 | duckdb                 | Embedded analytical database — core extensions, community extensions, Rust SDK      |
 | fastembed              | Rust embedding models — ONNX runtime, text/image embeddings                         |
 | graphflow              | DAG-based execution engine — tasks, context, storage, flow runner                   |
-| llm-context-management | Context management research — observation masking, summarization, hybrid, safety    |
+| llm-context-management | Context management research — observation masking, summarization, hybrid, safety, KG extraction |
 | opencode_rs            | OpenCode Rust client — HTTP/SSE APIs, sessions, configuration                       |
 | rig                    | LLM agent framework — providers, tools, RAG, vector stores (7 backends)             |
 | tokio                  | Async runtime — tasks, I/O, networking, sync, channels, select, streams             |

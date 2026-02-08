@@ -1,6 +1,6 @@
 # llm-context-management — Sub-Index
 
-> Context management research for LLM-powered SE agents (27 files)
+> Context management research for LLM-powered SE agents (28 files)
 
 ### Root
 
@@ -8,6 +8,8 @@
 |---|---|
 |[README.md](README.md)|Introduction and overview|
 | |↳ [Key Findings](README.md#key-findings) · [Research Context](README.md#research-context) · [Architecture Overview](README.md#architecture-overview) · [Performance Highlights](README.md#performance-highlights) · [Documentation Map](README.md#documentation-map) · [Quick Links](README.md#quick-links) · [The Core Insight](README.md#the-core-insight) · [Citation](README.md#citation) · +1 more|
+|[kggen_paper.md](kggen_paper.md)|KGGen — LLM-based KG extraction with iterative clustering, MINE benchmark|
+| |↳ [Introduction](kggen_paper.md#1-introduction) · [Existing Methods](kggen_paper.md#2-existing-methods) · [KGGen: KGs From Plain Text](kggen_paper.md#3-kggen-kgs-from-plain-text) · [A Benchmark for Extraction Performance](kggen_paper.md#4-a-benchmark-for-extraction-performance) · [Results](kggen_paper.md#5-results) · [Future Work](kggen_paper.md#6-future-work) · [Appendices](kggen_paper.md#appendices)|
 
 ### [architecture](architecture/)
 
@@ -114,4 +116,4 @@ Vercel: passive AGENTS.md (100%) beats active skills (56-79%).
 ```
 
 ---
-*27 files*
+*28 files*

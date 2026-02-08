@@ -29,3 +29,4 @@
 
 # ONNX model cache (fastembed downloads)
 onnx_models/
+.fastembed_cache/

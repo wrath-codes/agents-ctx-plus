@@ -31,6 +31,7 @@ fastembed = "5.8"
 # Parsing (ast-grep wraps tree-sitter with pattern matching + composable matchers)
 ast-grep-core = "0.40"
 ast-grep-language = "0.40"
+tree-sitter = "0.26"
 
 # HTTP
 reqwest = { version = "0.13", features = ["json"] }
@@ -64,6 +65,26 @@ pretty_assertions = "1.4"
 tempfile = "3.20"
 rstest = "0.26"
 
+# JSONL (spike 0.12 — evaluating for production use)
+serde-jsonlines = "0.7"
+
+# Git integration (spike 0.13 — pure Rust git via gix)
+gix = { version = "0.70", default-features = false, features = [
+    "max-performance-safe",
+    "index",
+    "blob-diff",
+] }
+
+# JSON Schema validation (spike 0.13 — JSONL trail schema enforcement)
+jsonschema = "0.28"
+
+# JSON Schema generation from Rust types (spike 0.14 — schemars + jsonschema full integration)
+schemars = { version = "1", features = ["chrono04"] }
+
+# Grep (ripgrep library — spike 0.14 zen grep feature)
+grep = "0.4"
+ignore = "0.4"
+
 # Internal crates
 zen-core = { path = "crates/zen-core" }
 zen-config = { path = "crates/zen-config" }
@@ -73,6 +94,8 @@ zen-parser = { path = "crates/zen-parser" }
 zen-embeddings = { path = "crates/zen-embeddings" }
 zen-registry = { path = "crates/zen-registry" }
 zen-search = { path = "crates/zen-search" }
+zen-hooks = { path = "crates/zen-hooks" }
+zen-schema = { path = "crates/zen-schema" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

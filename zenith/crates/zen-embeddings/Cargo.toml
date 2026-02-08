@@ -12,6 +12,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+dirs.workspace = true
 pretty_assertions.workspace = true
 
 [lints]

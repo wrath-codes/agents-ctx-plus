@@ -8,3 +8,6 @@
 
 #[cfg(test)]
 mod spike_duckdb;
+
+#[cfg(test)]
+mod spike_duckdb_vss;

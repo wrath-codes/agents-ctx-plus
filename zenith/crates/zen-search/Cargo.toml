@@ -1,6 +1,6 @@
 [package]
 name = "zen-search"
-description = "Search orchestration for Zenith (vector + FTS)"
+description = "Search orchestration for Zenith (vector + FTS + grep)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,9 +16,15 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 
+# Grep feature — local project search (ripgrep library)
+grep.workspace = true
+ignore.workspace = true
+
 [dev-dependencies]
 pretty_assertions.workspace = true
 rstest.workspace = true
+tempfile.workspace = true
+duckdb.workspace = true
 
 [lints]
 workspace = true

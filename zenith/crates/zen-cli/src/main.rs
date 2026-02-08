@@ -4,3 +4,5 @@ fn main() {
 
 #[cfg(test)]
 mod spike_agentfs;
+#[cfg(test)]
+mod spike_clap;

@@ -9,3 +9,5 @@
 //!   kind-based extraction capturing function/class/type definitions
 //!
 //! Uses a two-tier fallback: ast-grep pattern matching -> regex.
+
+mod spike_ast_grep;

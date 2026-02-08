@@ -16,15 +16,17 @@
 2. [Project & Session Management](#2-project--session-management)
 3. [Core Knowledge Entities](#3-core-knowledge-entities)
 4. [Issues & Work Tracking](#4-issues--work-tracking)
-5. [Compatibility Tracking](#5-compatibility-tracking)
-6. [Universal Linking](#6-universal-linking)
-7. [Audit Trail](#7-audit-trail)
-8. [Full-Text Search (FTS5)](#8-full-text-search-fts5)
-9. [Indexes](#9-indexes)
-10. [FTS5 Sync Triggers](#10-fts5-sync-triggers)
-11. [Entity Relationship Diagram](#11-entity-relationship-diagram)
-12. [Sync Strategy](#12-sync-strategy)
-13. [AgentFS Integration](#13-agentfs-integration)
+5. [Studies (Structured Learning)](#5-studies-structured-learning)
+6. [Compatibility Tracking](#6-compatibility-tracking)
+7. [Universal Linking](#7-universal-linking)
+8. [Audit Trail](#8-audit-trail)
+9. [Full-Text Search (FTS5)](#9-full-text-search-fts5)
+10. [Indexes](#10-indexes)
+11. [FTS5 Sync Triggers](#11-fts5-sync-triggers)
+12. [Entity Relationship Diagram](#12-entity-relationship-diagram)
+13. [Sync Strategy](#13-sync-strategy)
+15. [JSONL Trail (Source of Truth)](#15-jsonl-trail-source-of-truth)
+16. [AgentFS Integration](#16-agentfs-integration)
 
 ---
 
@@ -71,6 +73,7 @@ SELECT lower(hex(randomblob(4)));  -- returns e.g., "a3f8b2c1"
 | Task | `tsk-` | `tsk-a8d3e2b5` |
 | Implementation Log | `imp-` | `imp-c1f4b7a9` |
 | Compatibility Check | `cmp-` | `cmp-e5a2d9f3` |
+| Study | `stu-` | `stu-a1b2c3d4` |
 | Entity Link | `lnk-` | `lnk-b3c8f1d6` |
 | Audit Entry | `aud-` | `aud-d7e2a4c8` |
 
@@ -424,7 +427,54 @@ CREATE TABLE implementation_log (
 
 ---
 
-## 5. Compatibility Tracking
+## 5. Studies (Structured Learning)
+
+### studies
+
+A study is a structured learning process where the LLM systematically investigates a topic, validates assumptions through code, and produces documented findings. Studies are linked to a `research_item` and use `hypotheses`, `findings`, and `insights` for content via `entity_links`.
+
+**Added in**: Spike 0.11 — Approach B (hybrid) validated over compose-only approach. See `08-studies-spike-plan.md`.
+
+```sql
+CREATE TABLE studies (
+    id TEXT PRIMARY KEY,
+    session_id TEXT REFERENCES sessions(id),
+    research_id TEXT REFERENCES research_items(id),
+    topic TEXT NOT NULL,
+    library TEXT,
+    methodology TEXT NOT NULL DEFAULT 'explore',
+    status TEXT NOT NULL DEFAULT 'active',
+    summary TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+| Column | Description |
+|--------|-------------|
+| `research_id` | **Nullable**. Links to the research item this study investigates |
+| `topic` | What the study is about (e.g., "How tokio::spawn works") |
+| `library` | **Nullable**. Which library/framework is being studied |
+| `methodology` | `explore` (open investigation), `test-driven` (hypothesis-first), `compare` (comparing alternatives) |
+| `status` | `active`, `concluding`, `completed`, `abandoned` |
+| `summary` | Structured conclusion written at study completion |
+
+**Status transitions:**
+
+```
+active -> concluding -> completed
+                     -> abandoned
+active -> abandoned
+```
+
+**Relationship to other entities:**
+- A study links to hypotheses, findings, and insights via `entity_links` (source_type: `study`)
+- Hypotheses can also use `research_id` FK for direct queries (since the study links to a research_item)
+- The `validates` and `debunks` entity_link relations connect findings to hypotheses as evidence
+
+---
+
+## 6. Compatibility Tracking
 
 ### compatibility_checks
 
@@ -462,7 +512,7 @@ CREATE TABLE compatibility_checks (
 
 ---
 
-## 6. Universal Linking
+## 7. Universal Linking
 
 ### entity_links
 
@@ -481,7 +531,7 @@ CREATE TABLE entity_links (
 );
 ```
 
-**Entity types:** `research`, `finding`, `hypothesis`, `task`, `issue`, `insight`, `impl_log`, `compatibility_check`, `session`
+**Entity types:** `research`, `finding`, `hypothesis`, `task`, `issue`, `insight`, `impl_log`, `compatibility_check`, `session`, `study`
 
 **Relation types:**
 
@@ -499,7 +549,7 @@ CREATE TABLE entity_links (
 
 ---
 
-## 7. Audit Trail
+## 8. Audit Trail
 
 ### audit_trail
 
@@ -553,7 +603,7 @@ CREATE TABLE audit_trail (
 
 ---
 
-## 8. Full-Text Search (FTS5)
+## 9. Full-Text Search (FTS5)
 
 FTS5 virtual tables enable fast full-text search across all knowledge entities using porter stemming and unicode61 tokenization.
 
@@ -600,6 +650,13 @@ CREATE VIRTUAL TABLE issues_fts USING fts5(
     tokenize='porter unicode61'
 );
 
+CREATE VIRTUAL TABLE studies_fts USING fts5(
+    topic, summary,
+    content='studies',
+    content_rowid='rowid',
+    tokenize='porter unicode61'
+);
+
 CREATE VIRTUAL TABLE audit_fts USING fts5(
     action, detail,
     content='audit_trail',
@@ -623,7 +680,7 @@ LIMIT 10;
 
 ---
 
-## 9. Indexes
+## 10. Indexes
 
 ```sql
 -- Findings
@@ -659,6 +716,12 @@ CREATE INDEX idx_impl_log_task ON implementation_log(task_id);
 CREATE INDEX idx_impl_log_file ON implementation_log(file_path);
 CREATE INDEX idx_impl_log_session ON implementation_log(session_id);
 
+-- Studies
+CREATE INDEX idx_studies_status ON studies(status);
+CREATE INDEX idx_studies_library ON studies(library);
+CREATE INDEX idx_studies_session ON studies(session_id);
+CREATE INDEX idx_studies_research ON studies(research_id);
+
 -- Compatibility
 CREATE INDEX idx_compat_packages ON compatibility_checks(package_a, package_b);
 CREATE INDEX idx_compat_status ON compatibility_checks(status);
@@ -681,7 +744,7 @@ CREATE INDEX idx_sessions_status ON sessions(status);
 
 ---
 
-## 10. FTS5 Sync Triggers
+## 11. FTS5 Sync Triggers
 
 Triggers keep FTS5 virtual tables in sync with their content tables on insert, update, and delete.
 
@@ -811,6 +874,27 @@ CREATE TRIGGER issues_au AFTER UPDATE ON issues BEGIN
 END;
 ```
 
+### studies
+
+```sql
+CREATE TRIGGER studies_ai AFTER INSERT ON studies BEGIN
+    INSERT INTO studies_fts(rowid, topic, summary)
+    VALUES (new.rowid, new.topic, new.summary);
+END;
+
+CREATE TRIGGER studies_ad AFTER DELETE ON studies BEGIN
+    INSERT INTO studies_fts(studies_fts, rowid, topic, summary)
+    VALUES ('delete', old.rowid, old.topic, old.summary);
+END;
+
+CREATE TRIGGER studies_au AFTER UPDATE ON studies BEGIN
+    INSERT INTO studies_fts(studies_fts, rowid, topic, summary)
+    VALUES ('delete', old.rowid, old.topic, old.summary);
+    INSERT INTO studies_fts(rowid, topic, summary)
+    VALUES (new.rowid, new.topic, new.summary);
+END;
+```
+
 ### audit_trail
 
 ```sql
@@ -824,7 +908,7 @@ Note: audit trail is append-only -- no update or delete triggers needed.
 
 ---
 
-## 11. Entity Relationship Diagram
+## 12. Entity Relationship Diagram
 
 ```
                          ┌──────────────┐
@@ -898,7 +982,7 @@ Note: audit trail is append-only -- no update or delete triggers needed.
 
 ---
 
-## 12. Sync Strategy
+## 13. Sync Strategy
 
 ### Local-First Operation
 
@@ -929,7 +1013,53 @@ If a session is abandoned (crash, force quit), the next `zen init` or `zen sessi
 
 ---
 
-## 13. AgentFS Integration
+## 15. JSONL Trail (Source of Truth)
+
+The SQLite database is a **derived state** that can be rebuilt from JSONL trail files. This follows the beads 3-layer pattern (Git/JSONL/SQLite). See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) for the full design.
+
+**Added in**: Spike 0.12 — Approach B (JSONL as source of truth) validated over export-only.
+
+### Operation Format
+
+Every mutation appends a single JSON line to `.zenith/trail/{session_id}.jsonl`:
+
+```jsonl
+{"ts":"2026-02-08T10:00:00Z","ses":"ses-001","op":"create","entity":"session","id":"ses-001","data":{"status":"active"}}
+{"ts":"2026-02-08T10:01:00Z","ses":"ses-001","op":"create","entity":"research","id":"res-001","data":{"title":"Study: How tokio::spawn works","status":"in_progress"}}
+{"ts":"2026-02-08T10:05:30Z","ses":"ses-001","op":"update","entity":"hypothesis","id":"hyp-001","data":{"status":"confirmed","reason":"E0277 proves it"}}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ts` | ISO 8601 timestamp |
+| `ses` | Session ID that produced this operation |
+| `op` | `create`, `update`, `delete` |
+| `entity` | Entity type (matches table name: `session`, `research`, `finding`, `hypothesis`, etc.) |
+| `id` | Entity ID |
+| `data` | Full entity data for creates, changed fields for updates |
+
+### Rebuild Process
+
+```bash
+# Delete the database
+rm .zenith/zenith.db
+
+# Rebuild from all trail files
+zen rebuild
+# → Reads all .zenith/trail/*.jsonl files
+# → Sorts operations by timestamp
+# → Replays each operation (INSERT/UPDATE/DELETE)
+# → FTS5 triggers fire automatically on INSERT
+# → Result: identical database state
+```
+
+### Crate
+
+`serde-jsonlines` 0.7 — provides `append_json_lines()`, `json_lines()`, batch read/write.
+
+---
+
+## 16. AgentFS Integration
 
 ### Role Separation
 

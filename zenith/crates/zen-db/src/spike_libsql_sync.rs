@@ -16,14 +16,21 @@
 //!
 //! ## Prerequisites
 //!
-//! These tests require a live Turso Cloud database. Set environment variables:
+//! These tests require a live Turso Cloud database. Set environment variables in `zenith/.env`:
 //!
 //! ```bash
-//! ZENITH_TURSO_URL=libsql://zenith-dev-<org>.turso.io
-//! ZENITH_TURSO_AUTH_TOKEN=<token>
+//! ZENINTH_TURSO_DB_URL=libsql://zenith-dev-<org>.<region>.turso.io
+//! TURSO_PLATFORM_API_KEY=<platform-api-key>       # from `turso auth api-tokens mint <name>`
+//! ZENINTH_TURSO_ORG_SLUG=<org-slug>               # from `turso org list`
 //! ```
 //!
-//! Tests are skipped (not failed) when credentials are missing.
+//! The database name is extracted from the URL (the part before `-{org-slug}`).
+//!
+//! The tests programmatically generate a fresh database auth token via the Turso Platform API
+//! on each run, so the token never goes stale. The platform API key (`TURSO_PLATFORM_API_KEY`)
+//! is long-lived and does not expire.
+//!
+//! Tests are skipped (not failed) when credentials are missing or the API call fails.
 //!
 //! ## Design Note
 //!
@@ -37,10 +44,8 @@ use tempfile::TempDir;
 // All sync tests require `flavor = "multi_thread"` because libsql's replication
 // internals spawn blocking tasks that require a multi-threaded tokio runtime.
 
-/// Load env vars from the workspace .env file (two levels up from crate root).
-/// Returns None if credentials are missing — caller should skip the test.
-fn turso_credentials() -> Option<(String, String)> {
-    // Try loading .env from the workspace root (zenith/.env)
+/// Load .env from the workspace root (zenith/.env).
+fn load_env() {
     let workspace_env = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent() // crates/
         .and_then(|p| p.parent()) // zenith/
@@ -49,15 +54,80 @@ fn turso_credentials() -> Option<(String, String)> {
     if let Some(env_path) = workspace_env {
         let _ = dotenvy::from_path(&env_path);
     }
+}
 
-    let url = std::env::var("ZENITH_TURSO_URL").ok()?;
-    let token = std::env::var("ZENITH_TURSO_AUTH_TOKEN").ok()?;
+/// Generate a fresh database auth token via the Turso Platform API.
+///
+/// Requires these env vars:
+/// - `TURSO_PLATFORM_API_KEY` — long-lived platform API key (from `turso auth api-tokens mint`)
+/// - `ZENINTH_TURSO_ORG_SLUG` — organization slug
+/// - `ZENINTH_TURSO_DB_URL` — libsql:// URL for the database
+///
+/// The database name is extracted from the URL by parsing `libsql://{db_name}-{org_slug}.{rest}`.
+///
+/// Returns `(url, fresh_db_token)` or None if any vars are missing or API call fails.
+async fn turso_credentials() -> Option<(String, String)> {
+    load_env();
 
-    if url.is_empty() || token.is_empty() {
+    let url = std::env::var("ZENINTH_TURSO_DB_URL").ok()?;
+    let api_key = std::env::var("TURSO_PLATFORM_API_KEY").ok()?;
+    let org = std::env::var("ZENINTH_TURSO_ORG_SLUG").ok()?;
+
+    if url.is_empty() || api_key.is_empty() || org.is_empty() {
         return None;
     }
 
-    Some((url, token))
+    // Extract database name from URL: libsql://{db_name}-{org_slug}.{region}.turso.io
+    // e.g. libsql://zenith-dev-wrath-codes.aws-us-east-1.turso.io -> zenith-dev
+    let hostname = url
+        .strip_prefix("libsql://")?;
+    let org_suffix = format!("-{org}.");
+    let db_name = hostname
+        .split_once(&org_suffix)
+        .map(|(name, _)| name)?;
+
+    if db_name.is_empty() {
+        eprintln!("SKIP: Could not extract database name from URL: {url}");
+        return None;
+    }
+
+    // Generate a fresh database auth token via Platform API
+    let client = reqwest::Client::new();
+    let token_url = format!(
+        "https://api.turso.tech/v1/organizations/{org}/databases/{db_name}/auth/tokens?expiration=1h&authorization=full-access"
+    );
+
+    let resp = match client
+        .post(&token_url)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("SKIP: Turso Platform API request failed: {e}");
+            return None;
+        }
+    };
+
+    if !resp.status().is_success() {
+        eprintln!(
+            "SKIP: Turso Platform API returned {}: {}",
+            resp.status(),
+            resp.text().await.unwrap_or_default()
+        );
+        return None;
+    }
+
+    let body: serde_json::Value = resp.json().await.ok()?;
+    let db_token = body["jwt"].as_str()?.to_string();
+
+    if db_token.is_empty() {
+        eprintln!("SKIP: Turso Platform API returned empty JWT");
+        return None;
+    }
+
+    Some((url, db_token))
 }
 
 /// Helper: create an embedded replica with manual sync only (no auto-sync interval).
@@ -90,15 +160,15 @@ fn unique_table_name(prefix: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Spike tests — all require ZENITH_TURSO_URL + ZENITH_TURSO_AUTH_TOKEN
+// Spike tests — all require TURSO_PLATFORM_API_KEY + ZENINTH_TURSO_ORG_SLUG + ZENINTH_TURSO_DB_URL
 // ---------------------------------------------------------------------------
 
 /// Verify that we can create an embedded replica and connect to Turso Cloud.
 /// This is the most basic smoke test: Builder::new_remote_replica() + sync().
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_replica_connects() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available (set TURSO_PLATFORM_API_KEY, ZENINTH_TURSO_ORG_SLUG, ZENINTH_TURSO_DB_URL)");
         return;
     };
 
@@ -126,8 +196,8 @@ async fn spike_sync_replica_connects() {
 /// Pattern: write via replica → sync → data is in cloud.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_write_and_read() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available");
         return;
     };
 
@@ -195,8 +265,8 @@ async fn spike_sync_write_and_read() {
 /// This is the pattern zenith needs for cross-machine sync at wrap-up.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_two_replicas() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available");
         return;
     };
 
@@ -302,8 +372,8 @@ async fn spike_sync_two_replicas() {
 /// This is the critical test — if this works, Phase 8 (ZenDb::open_synced) is unblocked.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_schema_and_fts() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available");
         return;
     };
 
@@ -431,8 +501,8 @@ async fn spike_sync_schema_and_fts() {
 /// writes happen over time and sync is deferred to wrap-up.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_deferred_batch() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available");
         return;
     };
 
@@ -512,8 +582,8 @@ async fn spike_sync_deferred_batch() {
 /// Zenith uses transactions for atomic CRUD + audit writes.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_transactions() {
-    let Some((url, token)) = turso_credentials() else {
-        eprintln!("SKIP: ZENITH_TURSO_URL / ZENITH_TURSO_AUTH_TOKEN not set");
+    let Some((url, token)) = turso_credentials().await else {
+        eprintln!("SKIP: Turso credentials not available");
         return;
     };
 

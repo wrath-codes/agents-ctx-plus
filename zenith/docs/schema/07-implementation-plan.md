@@ -42,16 +42,20 @@
 
 | ID | Task | Validates | Blocks |
 |----|------|-----------|--------|
-| 0.1 | Create Cargo workspace with all 9 crate stubs | Rust 2024 edition, workspace structure | Everything |
+| 0.1 | Create Cargo workspace with all 10 crate stubs (9 original + zen-hooks) | Rust 2024 edition, workspace structure | Everything |
 | 0.2 | ~~Add `turso` crate~~ → Add `libsql` crate, write spike: create local DB, execute SQL, query rows, FTS5 | **DONE** — libsql 0.9.29 works locally (turso crate FTS blocked) | Phase 1 |
 | 0.3 | ~~Add `libsql` embedded replica spike: connect to Turso Cloud, sync~~ | **DONE** — `Builder::new_remote_replica()` + `db.sync().await` works. Validated: connect, write-forward, two-replica roundtrip, FTS5 through replica, transactions, deferred batch sync. Requires `tokio multi_thread` runtime. | Phase 8 |
 | 0.4 | ~~Add `duckdb` crate (bundled), write spike: create table, insert, query~~ | **DONE** — `duckdb` 1.4 (bundled) compiles and works. Validated: CRUD, Appender bulk insert (1000 rows), transactions, JSON columns, `FLOAT[384]` arrays with `array_cosine_similarity()`, `execute_batch`, file persistence. DuckDB is synchronous; async strategy documented (prefer `spawn_blocking`, `async-duckdb` as alternative). `FLOAT[N]` enforces dimension at insert time. | Phase 2 |
-| 0.5 | Add `duckdb` VSS extension spike: create HNSW index, vector search | Vector search works in DuckDB | Phase 4 |
-| 0.6 | Add `fastembed` crate, write spike: embed text, verify 384 dimensions | Embeddings generate locally | Phase 3 |
+| 0.5 | ~~Add `duckdb` VSS extension spike: create HNSW index, vector search~~ | **DONE** — Full stack validated: (1) VSS HNSW works in-memory but crashes on persistence (DuckDB 1.4 bug). (2) MotherDuck cloud works (`md:` protocol). (3) R2 Parquet roundtrip works (`httpfs`). (4) **Lance community extension validated** as superior alternative: `lance_vector_search()`, `lance_fts()` (BM25), `lance_hybrid_search()` all work locally and on R2 (`s3://`). Lance has persistent vector indexes, no HNSW crash. **Decision**: Use Lance format for documentation lake instead of Parquet + HNSW. See `02-ducklake-data-model.md` §10. **Gotchas**: Lance FTS is term-exact (no stemming). Lance uses AWS env vars for S3 creds, not DuckDB `CREATE SECRET`. | Phase 4 |
+| 0.6 | ~~Add `fastembed` crate, write spike: embed text, verify 384 dimensions~~ | **DONE** — fastembed 5.8.1 works locally. Validated: `BGESmallENV15` (default, CLS pooling, 384-dim, ~100MB) and `AllMiniLML6V2` (design model, Mean pooling, 384-dim, ~80MB). Both produce correct 384-dim vectors. Confirmed: single/batch embed, determinism, cosine similarity sanity (similar texts cluster, dissimilar don't), query/passage prefix behavior (BGE), edge cases (empty/short/long text), batch size control. API is synchronous (`&mut self`); use `spawn_blocking` from async code. Models cache to `~/.zenith/cache/fastembed/`. **Gotcha**: fastembed default cache is `.fastembed_cache` (relative CWD) — use `with_cache_dir()` for stable path. `embed()` takes `&mut self`, not `&self`. Dynamic quantized models reject sub-total batch sizes. | Phase 3 |
 | 0.7 | ~~Add `agentfs` from git~~ → Add `agentfs-sdk` from crates.io, write spike: KV CRUD, filesystem ops, tool tracking | **DONE** — `agentfs-sdk` 0.6.0 works (crates.io, not git). Validated: ephemeral + persistent modes, KV (set/get/delete/keys, serde structs), filesystem (mkdir/create_file/pwrite/read_file/stat/remove), tool tracking (start/success/error, record, recent, stats). **Note**: Turso docs say `agentfs = "0.1"` but correct crate is `agentfs-sdk`; docs show simplified API that doesn't match v0.6.0 (POSIX-level FS, `&V` refs for KV, positional args for tools). Task 0.10 (fallback) not needed. | Phase 7 |
-| 0.8 | Add `ast-grep-core` + `ast-grep-language`, write spike: parse Rust file, pattern match, walk AST nodes | ast-grep pattern matching and Node traversal work | Phase 3 |
-| 0.9 | Add `clap` derive, write spike: parse subcommands, output JSON | CLI framework works | Phase 5 |
+| 0.8 | ~~Add `ast-grep-core` + `ast-grep-language`, write spike: parse Rust file, pattern match, walk AST nodes~~ | **DONE** — `ast-grep-core` 0.40.5 + `ast-grep-language` 0.40.5 work. Validated 19 tests across 7 sections: (1) Core parsing works for all 7 rich languages + all 26 built-in grammars. (2) Pattern matching with metavariables works (`$NAME` single, `$$$PARAMS` multi). (3) `KindMatcher` + `Any`/`All`/`Not` composable matchers work. (4) Node traversal: `field("name")`, `field("parameters")`, `field("return_type")`, `field("body")`, `field("trait")` for impl discrimination, `prev()` sibling walking for doc comments, `children()` for enum variants/struct fields/methods, `parent()`/`ancestors()` for nesting detection. (5) Position: `start_pos().line()` zero-based, `column()` takes `&Node` arg (O(n)). (6) Raw tree-sitter fallback via `LanguageExt::get_ts_language()` + `Query`/`QueryCursor` works (uses `StreamingIterator`). **Key findings**: (a) Pattern matching is fragile for Rust — `fn $NAME() { $$$ }` does NOT match functions with return types or generics; **use `KindMatcher` as primary extraction strategy** (klaw approach), patterns only for specific structural queries. (b) `async`/`unsafe` appear as children of `function_modifiers` node, not as direct children — walk into modifiers for detection. (c) `All::new()` requires homogeneous matcher types; use `ops::Op` for mixed types. (d) `get_match()` returns `None` for `$$$` multi-metavars — must use `get_multiple_matches()`. (e) `Position::column()` requires `&Node` argument unlike `line()`. (f) `text()`/`kind()` return `Cow<str>`. (g) Smart strictness only matches `fn foo()` (not `pub fn` or `pub async fn`) — confirms KindMatcher-first approach. (h) `tree-sitter` 0.26 `QueryMatches` uses `StreamingIterator`, not `Iterator`. | Phase 3 |
+| 0.9 | ~~Add `clap` derive, write spike: parse subcommands, output JSON~~ | **DONE** — clap 4.5 derive works. Validated: `Parser`/`Subcommand`/`ValueEnum` derive macros, global flags with `global = true` (work before AND after subcommand), `OutputFormat` enum restricting `--format` to json/table/raw, nested two-level subcommands (`zen finding create`), positional + optional arg mixing, default values, error rejection for missing args and unknown subcommands, JSON serialization of response structs via serde. Representative subset covers all patterns needed for the full 16-domain command tree. No gotchas found — clap derive works exactly as documented. | Phase 5 |
 | 0.10 | ~~If 0.7 fails: design `Workspace` trait, implement `TempDirWorkspace` fallback~~ | **CANCELLED** — 0.7 passed, AgentFS works from crates.io | N/A |
+| 0.11 | ~~Write studies feature spike: test Approach A vs Approach B~~ | **DONE** — Approach B (hybrid) selected. One new `studies` table + reuse existing entities. 15/15 tests pass. Type-safe filtering, purpose-built fields (`topic`, `library`, `methodology`), dedicated lifecycle. See [08-studies-spike-plan.md](./08-studies-spike-plan.md) | Phase 2 (StudyRepo), Phase 5 (CLI) |
+| 0.12 | ~~Write JSONL trail spike: test Approach A (export only) vs Approach B (source of truth), evaluate `serde-jsonlines` crate~~ | **DONE** — Approach B (source of truth) selected. 15/15 tests pass. DB is rebuildable from JSONL (FTS5 + entity_links survive). `serde-jsonlines` confirmed (1-line batch read/write/append). Per-session files concurrent-safe (4 agents, 100 ops). Replay logic ~60 LOC. See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | Phase 2 (JSONL writer + replayer), Phase 5 (`zen rebuild` CLI) |
+| 0.13 | ~~Write git hooks spike: test hook implementation, installation strategy, post-checkout rebuild, `gix` for repo discovery + config + index + tree diff + session tags~~ | **DONE** — 22/22 tests pass. Decisions: (1) Hook implementation: thin shell wrapper calling `znt hook` (Rust validation via `serde_json` + `jsonschema` for schema enforcement, graceful skip if `znt` not in PATH). (2) Installation: symlink for MVP (coexists with existing hooks). (3) Post-checkout: threshold-based auto-rebuild (JSONL parse <25ms for 5K ops). (4) `gix` 0.70 adopted with `max-performance-safe` + `index` + `blob-diff`. (5) Session tags: adopt lightweight `zenith/ses-xxx` tags. (6) CLI renamed from `zen` to `znt` (zen-browser collision). **Gotchas**: `gix` `MustNotExist` doesn't reject duplicate refs — use `find_reference()` first; `config_snapshot_mut()` is in-memory only — `forget()` + `write_to()` to persist; `jq` not default-installed — Rust is the only reliable JSON validation path. See [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md) | Phase 5 (tasks 5.18a-e), session-git integration |
+| 0.14 | ~~Write zen grep spike: validate `grep` crate (ripgrep library), `ignore` crate (gitignore-aware walking), DuckDB `source_files` table, symbol correlation~~ | **DONE** — 26/26 tests pass. Validated: (1) `grep` 0.4 — `RegexMatcher` compiles patterns with flags (case-insensitive, word, literal, smart-case), `Searcher` + `UTF8` sink with line numbers, custom `Sink` for context lines, binary detection, `search_path` for files. (2) `ignore` 0.4 — `WalkBuilder` respects `.gitignore`, override globs for include/exclude, `filter_entry` for test file skipping, custom ignore filename (`.zenithignore`), hidden file skipping, combined grep+ignore workflow. (3) DuckDB `source_files` table — CRUD, Appender bulk insert, `regexp_matches()` with flags, `string_split()`+`unnest()` line-level grep with line numbers, language filtering, cache management (DELETE, stats). (4) Symbol correlation — `idx_symbols_file_lines` composite index, batch symbol lookup per file, binary search matches line→symbol range, `SymbolRef` population with all fields (id, kind, name, signature). (5) Combined pipeline — store source during indexing → grep with `RegexMatcher`+`Searcher` over stored content → correlate with `api_symbols` → `CorrelatedHit` with all fields validated. **Key findings**: (a) DuckDB fetch + Rust regex is faster than SQL-level line splitting; use DuckDB as compressed storage, Rust for line matching. (b) `grep` crate's `RegexMatcher` and DuckDB's RE2 are both linear-time; no semantic differences for common patterns. (c) `ignore` crate's `filter_entry` is evaluated before file I/O — test file skipping is free. (d) Appender bulk insert for source files adds negligible time to indexing. See [13-zen-grep-design.md](./13-zen-grep-design.md) | Phase 3 (3.16-3.18), Phase 4 (4.10-4.12), Phase 5 (5.19-5.20) |
 
 ### Milestone 0
 
@@ -122,6 +126,9 @@ cargo test --workspace
 | 2.8 | Implement `TaskRepo`: CRUD + FTS + issue linkage | zen-db | Phase 5 |
 | 2.9 | Implement `ImplLogRepo`: CRUD + file path queries | zen-db | Phase 5 |
 | 2.10 | Implement `CompatRepo`: CRUD + package pair queries | zen-db | Phase 5 |
+| 2.14 | Implement `StudyRepo`: CRUD + FTS + progress tracking + conclude lifecycle | zen-db | Phase 5 |
+| 2.15 | Implement JSONL trail writer: append operations to per-session `.zenith/trail/ses-xxx.jsonl` on every mutation | zen-db | Phase 5 |
+| 2.16 | Implement JSONL replayer: read all trail files, replay operations to rebuild DB (`zen rebuild`) | zen-db | Phase 5 |
 | 2.11 | Implement `LinkRepo`: create, delete, query by source, query by target | zen-db | Phase 5 |
 | 2.12 | Implement `AuditRepo`: append (every repo method calls this), query with filters | zen-db | 2.13 |
 | 2.13 | Implement `whats_next()` query: aggregate open tasks, pending hypotheses, recent audit | zen-db | Phase 5 |
@@ -135,10 +142,15 @@ cargo test --workspace
 - Session: start → active, wrap-up → wrapped_up, orphan detection marks abandoned
 - Entity links: bidirectional query (find all links FROM entity, find all links TO entity)
 - `whats_next()`: returns correct aggregate counts
+- Study: create, add assumptions, record test results, conclude, progress tracking
+- Study FTS: searching studies by topic and summary
+- JSONL trail: every mutation appends to per-session trail file
+- JSONL rebuild: replay all trail files produces identical DB state (including FTS5)
+- JSONL concurrent: multiple sessions write to separate files without corruption
 
 ### Milestone 2
 
-- Complete CRUD layer with 13 repo modules
+- Complete CRUD layer with 14 repo modules (including StudyRepo)
 - Every mutation writes to audit trail
 - FTS5 search works across all searchable entities
 - `whats_next()` returns structured project state
@@ -170,6 +182,9 @@ cargo test --workspace
 | 3.13 | Implement `ZenLake::store_symbols()`, `store_doc_chunks()`, `register_package()` | zen-lake | 3.14 |
 | 3.14 | Implement full indexing pipeline: clone repo → walk files → parse → extract → embed → store in lake | zen-lake + zen-parser + zen-embeddings | Phase 4 |
 | 3.15 | Implement doc chunking: split README/docs by section headings, chunk to ~512 tokens | zen-parser or zen-lake | 3.14 |
+| 3.16 | Add `source_files` table to DuckDB schema, add `source_cached` to `indexed_packages` | zen-lake | 3.17 |
+| 3.17 | Store source file contents during indexing pipeline (step 6.5) | zen-lake | 4.10 |
+| 3.18 | Implement `walk.rs` walker factory (`WalkMode::LocalProject`, `Raw`) with `ignore` crate | zen-search | 4.10, 3.14 |
 
 ### Tests
 
@@ -211,6 +226,9 @@ cargo test --workspace
 | 4.7 | Implement PyPI client | zen-registry | Phase 5 |
 | 4.8 | Implement hex.pm client | zen-registry | Phase 5 |
 | 4.9 | Implement `search_all()`: concurrent search across all registries | zen-registry | Phase 5 |
+| 4.10 | Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation | zen-search | 5.19 |
+| 4.11 | Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink` | zen-search | 5.19 |
+| 4.12 | Add `idx_symbols_file_lines` index to `api_symbols` | zen-lake | 4.10 |
 
 ### Tests
 
@@ -245,6 +263,13 @@ cargo test --workspace
 | 5.5 | Implement knowledge commands: `zen research`, `zen finding`, `zen hypothesis`, `zen insight` (all CRUD) | zen-cli | 5.7 |
 | 5.6 | Implement work commands: `zen issue`, `zen task`, `zen log`, `zen compat` | zen-cli | 5.7 |
 | 5.7 | Implement linking: `zen link`, `zen unlink` | zen-cli | 5.8 |
+| 5.16 | Implement study commands: `zen study create/assume/test/get/conclude/list` | zen-cli | Done |
+| 5.17 | Implement `zen rebuild`: delete DB, replay all JSONL trail files, rebuild FTS5 | zen-cli | Done |
+| 5.18a | Implement `zen init` `.gitignore` template (ignore DB files, track trail/ and hooks/) | zen-cli | 5.18b |
+| 5.18b | Implement pre-commit hook: validate staged `.zenith/trail/*.jsonl` files via `zen hook pre-commit` (Rust validation with `serde_json`, schema checks). Thin shell wrapper with graceful fallback if `zen` not in PATH. | zen-hooks + zen-cli | 5.18e |
+| 5.18c | Implement post-checkout hook: detect JSONL trail changes between old and new HEAD via `gix` tree diff, trigger `zen rebuild` or warn based on performance threshold from spike 0.13 | zen-hooks + zen-cli | 5.18e |
+| 5.18d | Implement post-merge hook: detect conflict markers in JSONL files, trigger rebuild if clean merge changed trail files | zen-hooks + zen-cli | 5.18e |
+| 5.18e | Implement hook installation in `zen init`: detect git repo via `gix`, detect existing hooks / `core.hooksPath`, install using strategy chosen by spike 0.13 (hookspath / symlink / chain), support `--skip-hooks` flag | zen-hooks + zen-cli | Done |
 | 5.8 | Implement `zen audit` with all filters | zen-cli | 5.9 |
 | 5.9 | Implement `zen whats-next` (both JSON and raw formats) | zen-cli | 5.11 |
 | 5.10 | Implement `zen search` wired to SearchEngine | zen-cli | 5.11 |
@@ -253,6 +278,8 @@ cargo test --workspace
 | 5.13 | Implement `zen wrap-up`: session summary, snapshot, audit export | zen-cli | 5.14 |
 | 5.14 | Implement `zen research registry` wired to RegistryClient | zen-cli | 5.15 |
 | 5.15 | Implement JSON/table/raw output formatting for all commands | zen-cli | Done |
+| 5.19 | Implement `zen grep` CLI command (package mode + local mode, all flags) | zen-cli | Done |
+| 5.20 | Implement `zen cache` CLI command (list, clean, stats) | zen-cli | Done |
 
 ### Tests
 
@@ -360,8 +387,8 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 | 8.1 | Implement `ZenDb::open_synced()` with Turso Cloud | zen-db | 8.2 |
 | 8.2 | Wire `zen wrap-up` to call `ZenDb::sync()` | zen-cli | 8.5 |
 | 8.3 | Implement `ZenLake::open_cloud()` with MotherDuck + R2 | zen-lake | 8.5 |
-| 8.4 | Implement JSONL audit trail export at wrap-up (for git) | zen-db or zen-cli | 8.5 |
-| 8.5 | Implement `--auto-commit` flag on `zen wrap-up`: git add + commit | zen-cli | 8.6 |
+| 8.4 | ~~Implement JSONL audit trail export at wrap-up (for git)~~ | **MOVED** — JSONL trail is now real-time append in Phase 2 (tasks 2.15-2.16), not wrap-up-only export. See [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | N/A |
+| 8.5 | ~~Implement `--auto-commit` flag on `zen wrap-up`: git add + commit~~ | **DESCOPED** — git operations are the user's/LLM's responsibility, not Zenith's. Zenith produces JSONL files; user commits them. | N/A |
 | 8.6 | Implement `zen onboard` cloud mode: check DuckLake for already-indexed packages | zen-cli | 8.7 |
 | 8.7 | Implement config validation: check R2/MotherDuck/Turso credentials at startup | zen-config | Done |
 
@@ -369,14 +396,14 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 
 - Cloud sync: create entities locally, sync, verify they appear in Turso Cloud
 - DuckLake: write parquet to R2 via MotherDuck, query back
-- JSONL export: verify format, verify git-friendly (newline-delimited)
-- Auto-commit: verify git commit happens with correct message
+- Config validation: missing/invalid credentials produce clear error messages
+- Onboard cloud mode: already-indexed packages are skipped, not re-indexed
 
 ### Milestone 8
 
 - Full cloud sync at wrap-up
 - Indexed packages shared across machines via MotherDuck + R2
-- Audit trail versioned in git
+- Config validation catches credential issues at startup
 
 ---
 
@@ -391,7 +418,7 @@ Phase 0: Spikes (all parallel)
     │       │       │
     │       │       └─► Phase 4: Search & Registry (zen-search, zen-registry)
     │       │               │
-    │       │               └─► Phase 5: CLI Shell (zen-cli, MVP)
+    │       │               └─► Phase 5: CLI Shell (zen-cli + zen-hooks, MVP)
     │       │                       │
     │       │                       ├─► Phase 6: PRD Workflow
     │       │                       ├─► Phase 7: AgentFS Integration
@@ -401,10 +428,14 @@ Phase 0: Spikes (all parallel)
     │               │
     │               └─► Phase 4 (needs zen-lake for vector search)
     │
+    ├─► Phase 5 tasks 5.18a-e (needs spike 0.13 git hooks result)
+    │
     └─► Phase 7 (needs AgentFS spike result from 0.7)
 
 Critical path: 0 → 1 → 2 → 4 → 5 (MVP)
 Parallel path: 0 → 3 (can run alongside 1+2)
+Parallel path: 0.13 → 5.18a-e (git hooks, can run alongside Phase 1-4)
+Parallel path: 0.14 → 3.16-3.18 → 4.10-4.12 → 5.19-5.20 (zen grep, can run alongside other Phase 3-5 tasks)
 ```
 
 ---
@@ -415,11 +446,15 @@ Parallel path: 0 → 3 (can run alongside 1+2)
 |------|--------|-----------|------------|
 | AgentFS doesn't compile from git | Lose workspace isolation and file audit | **Mitigated** | Spike 0.7 confirmed: `agentfs-sdk` 0.6.0 works from crates.io (no git dep needed). KV, filesystem, tool tracking all validated. **New risk**: Turso docs (`agentfs = "0.1"`) don't match actual crate name (`agentfs-sdk`) or API surface (POSIX-level vs high-level). May need thin wrapper. Task 0.10 (fallback) cancelled. |
 | `turso` crate API differs from docs | Blocks all DB work | **Realized** | Spike 0.2 confirmed: `turso` 0.5.0-pre.8 lacks FTS (experimental flag not exposed). **Mitigated**: switched to `libsql` 0.9.29 which has native FTS5. Plan to re-evaluate `turso` when stable. |
-| DuckDB VSS extension doesn't work in Rust | Lose vector search in lake | Low | Phase 0 spike (0.5). Fallback: use Turso's `libsql_vector_idx` for vectors |
+| DuckDB VSS extension doesn't work in Rust | Lose vector search in lake | **Partially realized** | Spike 0.5 confirmed: VSS loads and works in-memory (HNSW + cosine similarity + hybrid search). **However**: HNSW persistence is experimental and causes SIGABRT on DB reopen (DuckDB 1.4 bug). **Mitigation**: Use in-memory HNSW only; store embeddings in Parquet on R2; rebuild HNSW at query time or use brute-force `array_cosine_similarity()` (acceptable for <100K symbols). Also: Parquet `FLOAT[384]` → `FLOAT[]` requires explicit cast back. |
 | fastembed model download fails or is slow | Blocks indexing pipeline | Low | Phase 0 spike (0.6). Fallback: skip embeddings, use FTS only |
-| DuckLake + MotherDuck requires features not in duckdb crate | Lose cloud lake | Medium | Phase 8 task. Local DuckDB works regardless. Cloud is enhancement |
+| DuckLake + MotherDuck requires features not in duckdb crate | Lose cloud lake | **Mitigated** | Spike 0.5 confirmed: DuckLake works on MotherDuck with R2 custom DATA_PATH (`s3://zenith/lake/`). Created `zenith` R2 bucket (us-east-1, same region as MotherDuck). Snapshots, ACID, schema evolution all work. **Gotcha**: DuckLake does NOT support `FLOAT[N]` (fixed-size arrays). Must use `FLOAT[]` for embeddings and cast to `FLOAT[384]` at query time. Fully managed mode also works (no R2 needed). |
 | Tree-sitter grammar incompatibility (local grammars for Astro/Gleam/Mojo/Markdown) | Lose 4 of 16 languages | Low | Focus on core languages (Rust, Python, TS, Go) first. Local grammars are Phase 3 stretch |
 | Turso Cloud sync is slow or unreliable | Poor wrap-up experience | Low | Sync is manual (wrap-up only), can retry. Local DB always works |
+| User has existing git hooks (husky, lefthook, pre-commit) | Zenith hooks fail to install or overwrite user's hooks | Medium | Spike 0.13 evaluates three installation strategies (`core.hooksPath`, symlink, chain-append). Detect existing hooks before installing. Support `--skip-hooks` flag. See [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md) |
+| `gix` adds significant compile time | Slower builds for all developers | Medium | `gix` isolated in `zen-hooks` crate — only rebuilds when hooks code changes. Spike 0.13 measures compile time delta and identifies minimal feature flags. |
+| `zen rebuild` too slow for post-checkout hook | Branch switches become sluggish | Low (< 5K ops) | Spike 0.13 measures rebuild at 100/1000/5000 ops. Threshold-based decision: auto below threshold, warn above. Configurable via `.zenith/config.toml`. |
+| `zen` binary not in PATH when hooks run | Hooks skip validation silently | Medium | Wrapper approach: graceful fallback with guidance message. Pre-commit skips validation rather than blocking commit. |
 
 ---
 
@@ -434,7 +469,7 @@ At each milestone, verify:
 | 2 | All 13 repos work, FTS search works, audit trail logs everything | `cargo test -p zen-db` |
 | 3 | Parse Rust/Python/TS files via ast-grep, extract symbols, embed, store in DuckDB | `cargo test -p zen-parser -p zen-embeddings -p zen-lake` |
 | 4 | Vector search returns relevant results, registry clients work | `cargo test -p zen-search -p zen-registry` |
-| **5 (MVP)** | **`zen init` → `zen install tokio` → `zen search "spawn"` returns results** | **Build binary, run e2e** |
+| **5 (MVP)** | **`zen init` → `zen install tokio` → `zen search "spawn"` returns results. Git hooks install correctly, pre-commit validates JSONL, post-checkout detects trail changes.** | **Build binary, run e2e** |
 | 6 | Full PRD lifecycle works across sessions | E2E test with sequential commands |
 | 7 | Package indexing uses isolated workspaces | `cargo test -p zen-cli` (workspace tests) |
 | 8 | Cloud sync works, indexed packages accessible from another machine | Manual test with Turso Cloud + MotherDuck |
@@ -493,3 +528,5 @@ Every command must return valid JSON. Every mutation must appear in the audit tr
 - CLI API design: [04-cli-api-design.md](./04-cli-api-design.md)
 - Crate designs: [05-crate-designs.md](./05-crate-designs.md)
 - PRD workflow: [06-prd-workflow.md](./06-prd-workflow.md)
+- Git hooks spike plan: [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md)
+- Git & JSONL strategy: [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md)

@@ -4,3 +4,6 @@
 //!
 //! Generates 384-dimensional vectors for text content (API symbols, doc chunks,
 //! search queries) without requiring any external API keys.
+
+#[cfg(test)]
+mod spike_fastembed;

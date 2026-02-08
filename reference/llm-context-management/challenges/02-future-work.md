@@ -633,6 +633,7 @@ Components:
 | 1 | **Learned compression** | Task-optimal compression | Curriculum Design validated |
 | 2 | **Theoretical framework** | Principled design guidelines | H-MEM index-based routing |
 | 3 | **Multi-agent sharing** | Scalable collaboration | G-Memory, SMART validated |
+| 3b | **Graph-based context extraction** | Dense KGs for retrieval | KGGen validated (+18pp vs GraphRAG) |
 | 4 | **Cross-trajectory learning** | Knowledge across attempts | Re-TRAC validated |
 | 5 | **Causal elongation analysis** | Eliminate side effects | ACE modular curation |
 | 6 | **Hardware-aware optimization** | Edge deployment | CASK validated, [PLENA](../hardware/01-plena-hardware.md) validated |
@@ -779,6 +780,7 @@ The year 2025 has witnessed explosive progress in context management, validating
 | Multi-agent sharing | G-Memory, SMART | +20.89% embodied action, +10.12% knowledge QA |
 | Cross-trajectory learning | Re-TRAC | 15-20% improvement on BrowseComp |
 | Structured compression | Re-TRAC, Curriculum | 4.5× token compression, resumable exploration |
+| Graph-based context extraction | KGGen | +18pp vs GraphRAG on MINE benchmark, dense KGs for retrieval |
 | Hardware-aware optimization | CASK, PLENA | CASK: 20% speedup; PLENA: 8.5× utilization, 2.24× A100 throughput |
 
 **Key Insight**: The field has moved from "whether to compress" to "how to compress intelligently" — with hierarchical, adaptive, and learned approaches now validated as superior to simple heuristics.

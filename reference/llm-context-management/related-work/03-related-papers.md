@@ -955,6 +955,102 @@ The 2025-2026 research landscape has significantly advanced context management:
 | **DBDI** | Two-pathway safety deconstruction | Safety-aware compression |
 | **Google ADK** | Tiered context (Working/Session/Memory/Artifact) | Production architecture validation |
 | **Anthropic Patterns** | Tool result clearing + compaction | Industrial validation of hybrid |
+| **KGGen** | LLM-based KG extraction with iterative clustering | Dense graph construction for Graph RAG context |
+
+## Knowledge Graph Extraction for Context Management (2025)
+
+### KGGen: Text-to-Knowledge-Graph with LLM-Based Clustering (Mo, Yu et al., 2025)
+
+**Paper**: "KGGen: Extracting Knowledge Graphs from Plain Text with Language Models" ([arXiv:2502.09956](https://arxiv.org/html/2502.09956v1))
+
+**Key Contribution**: An open-source Python package (`pip install kg-gen`) that uses LMs and iterative entity clustering to extract dense, well-connected KGs from plain text, along with **MINE** (Measure of Information in Nodes and Edges), the first benchmark for text-to-KG extraction.
+
+**Architecture**:
+```
+KGGen Multi-Stage Pipeline:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│ Stage 1: Entity & Relation Extraction ('generate')                  │
+│ ──────────────────────────────────────────────────                  │
+│ • 2-step LLM approach via DSPy:                                    │
+│   1. Extract entities (nouns, verbs, adjectives)                   │
+│   2. Extract subject-predicate-object triples given entities       │
+│ • JSON-formatted via DSPy signatures                               │
+│                                                                     │
+│ Stage 2: Aggregation ('aggregate')                                  │
+│ ──────────────────────────────────                                  │
+│ • Collect unique entities/edges across all source graphs           │
+│ • Normalize to lowercase                                            │
+│ • No LLM required                                                   │
+│                                                                     │
+│ Stage 3: Iterative LLM-Based Clustering ('cluster')                │
+│ ───────────────────────────────────────────────────                 │
+│ • Sequential single-cluster extraction from entity list            │
+│ • LLM-as-Judge validation for each cluster                         │
+│ • Label assignment for cluster representative                      │
+│ • Remaining entities checked against existing clusters             │
+│ • Same process repeated for edges                                   │
+│                                                                     │
+│ Result: Dense, deduplicated KG with meaningful node labels         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**The Entity Resolution Innovation**:
+
+KGGen's iterative clustering addresses the sparsity problem that makes raw extracted KGs unusable for embedding and retrieval:
+
+```
+Raw Extraction (Sparse, Redundant):
+┌─────────────────────────────────────────────────────────────────┐
+│ "vulnerabilities" ─── "are exploited by" ──→ "attackers"        │
+│ "vulnerable"      ─── (isolated node)                            │
+│ "weaknesses"      ─── "exist in" ──→ "systems"                  │
+│                                                                     │
+│ Problem: 3 nodes for 1 concept → sparse graph, poor embeddings  │
+└─────────────────────────────────────────────────────────────────────┘
+
+After KGGen Clustering (Dense, Connected):
+┌─────────────────────────────────────────────────────────────────┐
+│ "vulnerabilities" ─── "are exploited by" ──→ "attackers"        │
+│        │                                                         │
+│        └──────── "exist in" ──→ "systems"                       │
+│                                                                     │
+│ Result: 1 node, 2 edges → dense graph, functional embeddings   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Benchmark Results (MINE)**:
+| Method | Average Score | vs KGGen |
+|--------|:------------:|:--------:|
+| **KGGen** | **66.07%** | — |
+| GraphRAG | 47.80% | -18.27pp |
+| OpenIE | 29.84% | -36.23pp |
+
+**Key Findings**:
+- KGGen produces dense, coherent KGs with concise predicates that generalize well
+- GraphRAG generates minimal nodes/connections, omitting critical relationships
+- OpenIE produces incoherent, redundant nodes with meaningless high-connectivity nodes ("it", "are")
+- Iterative LLM-based clustering is more effective than one-shot deduplication
+
+**Connection to Context Management**:
+
+KGGen is directly relevant to context management for LLM agents in several ways:
+
+1. **Graph-based context retrieval**: KGGen addresses the quality bottleneck in Graph RAG pipelines. G-Memory and similar graph-based context management systems depend on well-connected KGs — KGGen's clustering ensures the extracted graphs are dense enough for meaningful embedding and retrieval, directly improving the semantic memory tier.
+
+2. **Entity resolution as context deduplication**: KGGen's iterative clustering (normalize tense, plurality, synonyms) parallels the deduplication problem in agent trajectories — where the same file, function, or concept appears in multiple observations with surface-level variation. The LLM-as-Judge validation pattern could be adapted for trajectory deduplication.
+
+3. **Structured knowledge compression**: Converting unstructured text to KG triples is itself a form of lossy compression. KGGen's approach — extract entities first, then relations — mirrors the two-phase pattern seen in HiAgent (detect subgoals, then summarize) and Re-TRAC (extract state, then compress). The 2-step extraction via DSPy ensures consistency between entities and relations, a pattern applicable to structured trajectory compression.
+
+4. **MINE benchmark methodology**: MINE's evaluation approach (extract facts → query KG → evaluate retrievability via LLM judge) provides a template for evaluating whether context compression preserves retrievable information — directly applicable to measuring information loss in observation masking and summarization.
+
+5. **Scalability limitation**: KGGen currently benchmarks on ~1,000-word articles, similar to the Complexity Trap's acknowledgment that evaluation on short contexts may not reflect long-horizon agent behavior. Both highlight the need for evaluation at scale.
+
+**Code**: [github.com/stair-lab/kg-gen](https://github.com/stair-lab/kg-gen)
+
+**Full Reference**: See [kggen_paper.md](../kggen_paper.md) for complete paper coverage including prompts, clustering algorithm details, and example articles.
+
+---
 
 ## Evaluation and Benchmarking Research (2025)
 

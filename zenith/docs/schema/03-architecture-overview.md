@@ -83,7 +83,8 @@ Next session:
 │  │ session      │  │ finding      │  │ onboard      │  │            │  │
 │  │ whats-next   │  │ hypothesis   │  │              │  │            │  │
 │  │ wrap-up      │  │ insight      │  │              │  │            │  │
-│  │ audit        │  │ task         │  │              │  │            │  │
+│  │ audit        │  │ study        │  │              │  │            │  │
+│  │              │  │ task         │  │              │  │            │  │
 │  │              │  │ compat       │  │              │  │            │  │
 │  │              │  │ link         │  │              │  │            │  │
 │  │              │  │ log          │  │              │  │            │  │
@@ -102,7 +103,16 @@ Next session:
 │  │  • Entity Links                 │  │  MotherDuck catalog        │    │
 │  │                                 │  │  R2 Parquet storage        │    │
 │  │  Sync: wrap-up only             │  │                            │    │
-│  └─────────────────────────────────┘  └────────────────────────────┘    │
+│  └────────────┬────────────────────┘  └────────────────────────────┘    │
+│               │                                                          │
+│               ▼                                                          │
+│  ┌─────────────────────────────────┐                                     │
+│  │    JSONL Trail (Git-tracked)    │                                     │
+│  │  • Per-session .jsonl files     │                                     │
+│  │  • Append-only operations       │                                     │
+│  │  • DB rebuildable: zen rebuild  │                                     │
+│  │  .zenith/trail/ses-xxx.jsonl    │                                     │
+│  └─────────────────────────────────┘                                     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -117,6 +127,7 @@ Next session:
 | **clap** | 4.x | CLI parsing with derive macros, subcommands |
 | **tokio** | 1.x | Async runtime for I/O, networking |
 | **libsql** | 0.9.x | libSQL database client (local, remote, embedded replicas, native FTS5) |
+| **serde-jsonlines** | 0.7.x | JSONL trail: append-only per-session files, batch read/write, DB rebuild |
 | **agentfs** | git | Workspace isolation, file-level audit, CoW cloning (from `tursodatabase/agentfs`) |
 | **duckdb** | 1.4.x | Analytical database (bundled) |
 | **fastembed** | 5.x | Local embedding generation (ONNX, 384-dim) |
@@ -353,6 +364,7 @@ All entity IDs use a type prefix + short hash:
 | Task | `tsk-` | `tsk-f3b7c1` |
 | Implementation Log | `imp-` | `imp-a8d3e2` |
 | Compatibility Check | `cmp-` | `cmp-c1f4b7` |
+| Study | `stu-` | `stu-a1b2c3` |
 | Entity Link | `lnk-` | `lnk-e5a2d9` |
 | Audit Entry | `aud-` | `aud-b3c8f1` |
 

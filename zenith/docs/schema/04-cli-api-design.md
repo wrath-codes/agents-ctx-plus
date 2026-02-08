@@ -23,8 +23,10 @@
 13. [Compatibility](#13-compatibility)
 14. [Entity Links](#14-entity-links)
 15. [Audit Trail](#15-audit-trail)
-16. [Workflow Commands](#16-workflow-commands)
-17. [Output Formats](#17-output-formats)
+16. [Studies (Structured Learning)](#16-studies-structured-learning)
+17. [Database & Trail Commands](#17-database--trail-commands)
+18. [Workflow Commands](#18-workflow-commands)
+19. [Output Formats](#19-output-formats)
 
 ---
 
@@ -50,6 +52,11 @@ zen
 │   └── list                      # List sessions
 ├── install <package>             # Clone, parse, index a package
 ├── search <query>                # Search indexed documentation
+├── grep <pattern> [path...]      # Regex search (package source or local files)
+├── cache
+│   ├── list                      # Show cached packages + sizes
+│   ├── clean [package]           # Remove cached source
+│   └── stats                     # Total cache size
 ├── research
 │   ├── create                    # Create a research item
 │   ├── update <id>               # Update a research item
@@ -91,6 +98,14 @@ zen
 │   └── get <id>                  # Get check details
 ├── link <src> <target> <rel>     # Create entity link
 ├── unlink <link-id>              # Remove entity link
+├── rebuild                        # Rebuild DB from JSONL trail files
+├── study
+│   ├── create                    # Create a structured learning study
+│   ├── assume <id>               # Add an assumption (hypothesis) to study
+│   ├── test <id>                 # Record test result against assumption
+│   ├── get <id>                  # Full study state with progress
+│   ├── conclude <id>             # Conclude the study
+│   └── list                      # List all studies
 ├── prd
 │   ├── create                    # Create a PRD (epic issue)
 │   ├── update <id>               # Update PRD content
@@ -369,6 +384,102 @@ zen search <query> [flags]
     "total_results": 15,
     "returned": 10,
     "search_mode": "hybrid"
+}
+```
+
+### `zen grep`
+
+Regex or literal text search over indexed package source or local project files. See [13-zen-grep-design.md](./13-zen-grep-design.md) for full design.
+
+```bash
+zen grep <pattern> [path...] [flags]
+```
+
+**Modes** (one required):
+
+```bash
+zen grep <pattern> --package <pkg>        # Search one indexed package
+zen grep <pattern> --all-packages         # Search all indexed packages
+zen grep <pattern> <path...>              # Search local project files
+```
+
+**Args:**
+
+| Arg | Description |
+|-----|-------------|
+| `<pattern>` | Regex pattern (or literal with `-F`) |
+| `[path...]` | Local paths to search (local mode only) |
+
+**Flags:**
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--package` | `-P` | Search cached source for this package (repeatable) | (none) |
+| `--ecosystem` | `-e` | Ecosystem filter (with `--package`) | auto-detect |
+| `--all-packages` | | Search all indexed packages | `false` |
+| `--fixed-strings` | `-F` | Treat pattern as literal, not regex | `false` |
+| `--ignore-case` | `-i` | Case-insensitive matching | `false` |
+| `--smart-case` | `-S` | Auto case-insensitive if all lowercase | `true` |
+| `--word-regexp` | `-w` | Whole word matching | `false` |
+| `--context` | `-C` | Lines of context around matches | `2` |
+| `--include` | | File glob to include (e.g., `"*.rs"`) | (all) |
+| `--exclude` | | File glob to exclude | (none) |
+| `--max-count` | `-m` | Max matches per file | (none) |
+| `--count` | `-c` | Only show match counts per file | `false` |
+| `--files-with-matches` | `-l` | Only show filenames with matches | `false` |
+| `--skip-tests` | | Skip test files/dirs | `false` |
+| `--no-symbols` | | Skip symbol correlation (package mode) | `false` |
+
+**Output:**
+
+```json
+{
+    "matches": [
+        {
+            "path": "tokio/src/runtime/blocking/pool.rs",
+            "line_number": 142,
+            "text": "    pub(crate) fn spawn_blocking(&self, func: ...) {",
+            "context_before": ["    /// Spawns a blocking task.", "    ///"],
+            "context_after": ["        let (task, handle) = ..."],
+            "symbol": {
+                "id": "abc123",
+                "kind": "function",
+                "name": "spawn_blocking",
+                "signature": "pub(crate) fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>"
+            }
+        }
+    ],
+    "stats": {
+        "files_searched": 284,
+        "files_matched": 12,
+        "matches_found": 37,
+        "matches_with_symbol": 28,
+        "elapsed_ms": 45
+    }
+}
+```
+
+### `zen cache`
+
+Manage cached source files stored in DuckDB for `zen grep` package mode.
+
+```bash
+zen cache list                    # Show cached packages + sizes
+zen cache clean                   # Remove all cached source
+zen cache clean <package>         # Remove one package's cached source
+zen cache stats                   # Total cache size, package count
+```
+
+**Output** (`zen cache list`):
+
+```json
+{
+    "packages": [
+        {"ecosystem": "rust", "name": "tokio", "version": "1.40.0", "file_count": 87, "size_bytes": 4200000},
+        {"ecosystem": "rust", "name": "serde", "version": "1.0.210", "file_count": 32, "size_bytes": 1100000}
+    ],
+    "total_size_bytes": 5300000,
+    "total_packages": 2
 }
 ```
 
@@ -792,7 +903,201 @@ zen audit [--limit 20] [--entity-type <type>] [--entity-id <id>] [--action <acti
 
 ---
 
-## 16. Workflow Commands
+## 16. Studies (Structured Learning)
+
+### `zen study create`
+
+Create a new structured learning study.
+
+```bash
+zen study create --topic <topic> [--library <lib>] [--methodology explore|test-driven|compare] [--research <id>]
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--topic` | What to learn about | Required |
+| `--library` | Library/framework being studied | None |
+| `--methodology` | `explore`, `test-driven`, `compare` | `explore` |
+| `--research` | Link to existing research item | Auto-created |
+
+**Output:**
+
+```json
+{
+    "study": {
+        "id": "stu-a1b2c3d4",
+        "topic": "How tokio::spawn works",
+        "library": "tokio",
+        "methodology": "explore",
+        "status": "active",
+        "research_id": "res-e5f6a7b8",
+        "session_id": "ses-c4e2d1"
+    }
+}
+```
+
+### `zen study assume <id>`
+
+Add an assumption (creates a hypothesis linked to the study).
+
+```bash
+zen study assume <study-id> --content <assumption>
+```
+
+**Output:**
+
+```json
+{
+    "assumption": {
+        "id": "hyp-d4e5f6a7",
+        "study_id": "stu-a1b2c3d4",
+        "content": "spawn requires Send + 'static bounds",
+        "status": "unverified"
+    }
+}
+```
+
+### `zen study test <id>`
+
+Record a test result against an assumption. Creates a finding tagged `test-result`, links it to the hypothesis, and updates hypothesis status.
+
+```bash
+zen study test <study-id> --assumption <hyp-id> --result validated|invalidated|inconclusive --evidence <text>
+```
+
+**Output:**
+
+```json
+{
+    "test_result": {
+        "finding_id": "fnd-b7c8d9e0",
+        "assumption_id": "hyp-d4e5f6a7",
+        "result": "validated",
+        "evidence": "Compile error E0277 proves Send + 'static is required",
+        "assumption_status": "confirmed"
+    }
+}
+```
+
+### `zen study get <id>`
+
+Get full study state including all assumptions, findings, and progress.
+
+```bash
+zen study get <id>
+```
+
+**Output:**
+
+```json
+{
+    "study": {
+        "id": "stu-a1b2c3d4",
+        "topic": "How tokio::spawn works",
+        "library": "tokio",
+        "methodology": "explore",
+        "status": "active"
+    },
+    "progress": {
+        "total": 3,
+        "confirmed": 2,
+        "debunked": 1,
+        "unverified": 0,
+        "analyzing": 0,
+        "inconclusive": 0
+    },
+    "assumptions": [
+        {"id": "hyp-d4e5f6a7", "content": "spawn requires Send + 'static", "status": "confirmed", "reason": "E0277 proves it"},
+        {"id": "hyp-e5f6a7b8", "content": "panic doesn't crash runtime", "status": "confirmed", "reason": "JoinHandle catches it"},
+        {"id": "hyp-f6a7b8c9", "content": "spawn is zero-cost", "status": "debunked", "reason": "Allocates ~200 bytes"}
+    ],
+    "findings": [
+        {"id": "fnd-b7c8d9e0", "content": "Test: non-Send type -> E0277", "tags": ["test-result"]}
+    ],
+    "conclusions": []
+}
+```
+
+### `zen study conclude <id>`
+
+Conclude the study. Sets status to `completed`, stores summary, creates an insight.
+
+```bash
+zen study conclude <id> --summary <text>
+```
+
+**Output:**
+
+```json
+{
+    "study": {
+        "id": "stu-a1b2c3d4",
+        "status": "completed",
+        "summary": "Tokio's spawn requires Send + 'static. NOT zero-cost (~200B). Panics caught via JoinHandle."
+    },
+    "insight": {
+        "id": "ins-c9d0e1f2",
+        "content": "Tokio's spawn requires Send + 'static..."
+    }
+}
+```
+
+### `zen study list`
+
+List all studies.
+
+```bash
+zen study list [--status active|concluding|completed|abandoned] [--library <lib>] [--limit 20]
+```
+
+---
+
+## 17. Database & Trail Commands
+
+### `zen rebuild`
+
+Rebuild the SQLite database from JSONL trail files. Deletes the existing DB and replays all operations from `.zenith/trail/*.jsonl`.
+
+```bash
+zen rebuild [--trail-dir <path>]
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--trail-dir` | Path to trail directory | `.zenith/trail/` |
+
+**Process:**
+1. Delete `zenith.db`, `zenith.db-wal`, `zenith.db-shm`
+2. Create fresh database with full schema (tables, FTS5, triggers, indexes)
+3. Read all `.jsonl` files from trail directory
+4. Sort all operations by timestamp across all files
+5. Replay each operation (INSERT/UPDATE/DELETE)
+6. FTS5 triggers fire automatically on INSERT
+
+**Output:**
+
+```json
+{
+    "rebuilt": true,
+    "trail_files": 3,
+    "operations_replayed": 247,
+    "entities_created": 42,
+    "duration_ms": 150
+}
+```
+
+**When to use:**
+- DB corruption: `rm .zenith/zenith.db && zen rebuild`
+- New machine: `git clone <repo> && zen rebuild`
+- Schema migration: update schema, rebuild from trail
+
+---
+
+## 18. Workflow Commands
 
 ### `zen whats-next`
 
@@ -881,7 +1186,7 @@ zen wrap-up [--auto-commit] [--message <msg>]
 
 ---
 
-## 17. Output Formats
+## 19. Output Formats
 
 All commands support three output formats via `--format`:
 
