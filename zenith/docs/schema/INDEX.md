@@ -1,6 +1,6 @@
 # Zenith Design Documents
 
-**Project**: Zenith (`zen` CLI)
+**Project**: Zenith (`znt` CLI)
 **Purpose**: Developer toolbox CLI that an LLM calls to manage project knowledge, index package documentation, and track research/findings/hypotheses/tasks
 **Language**: Rust
 **Created**: 2026-02-07
@@ -22,8 +22,9 @@
 | 9 | [09-studies-workflow.md](./09-studies-workflow.md) | Studies workflow: structured learning lifecycle, CLI commands, data flow, multi-session persistence |
 | 10 | [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md) | Git & JSONL strategy: JSONL as source of truth (beads pattern), per-session trail files, rebuild from JSONL, git hooks — **DONE**: Approach B selected, `serde-jsonlines` confirmed |
 | 11 | [11-git-hooks-spike-plan.md](./11-git-hooks-spike-plan.md) | Git hooks spike plan: hook implementation (shell vs Rust vs wrapper), installation strategy (`core.hooksPath` vs symlink vs chain), post-checkout rebuild (auto vs warn), `gix` validation, session-git integration — 22 tests |
-| 12 | [12-schema-spike-plan.md](./12-schema-spike-plan.md) | Schema spike plan (schemars + jsonschema) |
-| 13 | [13-zen-grep-design.md](./13-zen-grep-design.md) | `zen grep` feature design: two-engine hybrid grep (DuckDB for packages, `grep`+`ignore` crates for local), `source_files` table, symbol correlation, `zen cache` — **DONE**: spike 0.14 validated, 26/26 tests |
+| 12 | [12-schema-spike-plan.md](./12-schema-spike-plan.md) | Schema spike plan (schemars + jsonschema) — **DONE**: 22/22 tests, zen-schema crate validated |
+| 13 | [13-zen-grep-design.md](./13-zen-grep-design.md) | `znt grep` feature design: two-engine hybrid grep (DuckDB for packages, `grep`+`ignore` crates for local), `source_files` table, symbol correlation, `znt cache` — **DONE**: spike 0.14 validated, 26/26 tests |
+| 14 | [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md) | Trail versioning spike plan (Approach D hybrid) — `v` field, additive evolution, version-dispatch migration, `additionalProperties` convention — **DONE**: 10/10 tests |
 
 ---
 
@@ -31,7 +32,7 @@
 
 ```
 |NAME|zenith
-|CLI|zen
+|CLI|znt
 |LANGUAGE|rust
 |STORAGE_STATE|libsql (embedded replica, sync on wrap-up only via Turso Cloud)
 |STORAGE_LAKE|duckdb + ducklake + motherduck + cloudflare r2
@@ -52,7 +53,7 @@
 |TASK_STATES|open, in_progress, done, blocked
 |RESEARCH_STATES|open, in_progress, resolved, abandoned
 |SESSION_STATES|active, wrapped_up, abandoned
-|CRATES|zen-cli, zen-core, zen-db, zen-lake, zen-parser, zen-embeddings, zen-registry, zen-search, zen-config, zen-hooks
+|CRATES|zen-cli, zen-core, zen-db, zen-lake, zen-parser, zen-embeddings, zen-registry, zen-search, zen-config, zen-hooks, zen-schema
 |DB_CRATE|libsql 0.9.x (stable C SQLite fork; turso crate planned for future switch)
 ```
 

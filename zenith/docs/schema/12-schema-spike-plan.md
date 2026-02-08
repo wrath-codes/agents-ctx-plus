@@ -361,7 +361,7 @@ This is NOT added during the spike. The spike defines sample types locally. Phas
 ### If Spike Passes (Expected Path)
 
 1. **Phase 1 (task 1.1-1.2)**: Add `schemars.workspace = true` to zen-core deps. Add `#[derive(JsonSchema)]` to all entity structs and enums. Define `TrailOperation` and per-action audit detail types with `JsonSchema`.
-2. **Phase 1 (task 1.5)**: Add `#[derive(JsonSchema)]` to config structs. `zen init` exports `config.schema.json` to `.zenith/`.
+2. **Phase 1 (task 1.5)**: Add `#[derive(JsonSchema)]` to config structs. `znt init` exports `config.schema.json` to `.zenith/`.
 3. **Phase 2 (task 2.12)**: Validate audit `detail` payloads against per-action schemas on write.
 4. **Phase 2 (task 2.15)**: Trail writer validates `Operation.data` against per-entity data schema before appending (configurable: on by default, `--no-validate` to skip).
 5. **Phase 2 (task 2.16)**: Replayer validates each trail line when `--strict` flag is passed on `znt rebuild`.

@@ -35,7 +35,7 @@
 Zenith uses **Turso/libSQL** as the relational source of truth for all project state. Turso provides:
 
 - **Embedded replicas** for offline-first local operation
-- **Cloud sync** triggered only at `zen wrap-up` to avoid conflicts and data corruption
+- **Cloud sync** triggered only at `znt wrap-up` to avoid conflicts and data corruption
 - **FTS5** for full-text search across all knowledge entities
 - **libsql_vector_idx** available if needed for local vector search
 
@@ -95,7 +95,7 @@ Primary dependency: `libsql` crate (v0.9.29) from crates.io, which provides the 
 
 ### project_meta
 
-Stores key-value pairs for project-level configuration detected at `zen init` or `zen onboard`.
+Stores key-value pairs for project-level configuration detected at `znt init` or `znt onboard`.
 
 ```sql
 CREATE TABLE project_meta (
@@ -109,13 +109,13 @@ CREATE TABLE project_meta (
 
 | Key | Example Value | Set By |
 |-----|---------------|--------|
-| `name` | `my-web-app` | `zen init` |
-| `language` | `rust` | `zen init` (auto-detected) |
-| `ecosystem` | `rust` | `zen init` (auto-detected) |
-| `root_path` | `/home/user/projects/my-web-app` | `zen init` |
-| `vcs` | `git` | `zen init` (auto-detected) |
-| `initialized_at` | `2026-02-07T12:00:00Z` | `zen init` |
-| `zenith_version` | `0.1.0` | `zen init` |
+| `name` | `my-web-app` | `znt init` |
+| `language` | `rust` | `znt init` (auto-detected) |
+| `ecosystem` | `rust` | `znt init` (auto-detected) |
+| `root_path` | `/home/user/projects/my-web-app` | `znt init` |
+| `vcs` | `git` | `znt init` (auto-detected) |
+| `initialized_at` | `2026-02-07T12:00:00Z` | `znt init` |
+| `zenith_version` | `0.1.0` | `znt init` |
 
 ### project_dependencies
 
@@ -171,7 +171,7 @@ active → abandoned     (session ended without wrap-up)
 
 ### session_snapshots
 
-Point-in-time counts and summary generated at `zen wrap-up`. Enables fast `zen whats-next` without scanning the full database.
+Point-in-time counts and summary generated at `znt wrap-up`. Enables fast `znt whats-next` without scanning the full database.
 
 ```sql
 CREATE TABLE session_snapshots (
@@ -990,10 +990,10 @@ Zenith operates on an **embedded Turso replica** (`main.db`). All reads and writ
 
 ### Sync on Wrap-Up Only
 
-Cloud sync happens **exclusively** during `zen wrap-up`:
+Cloud sync happens **exclusively** during `znt wrap-up`:
 
 ```
-zen wrap-up
+znt wrap-up
   1. Generate session summary
   2. Create session snapshot
   3. Mark session as wrapped_up
@@ -1009,7 +1009,7 @@ This avoids:
 
 ### Recovery
 
-If a session is abandoned (crash, force quit), the next `zen init` or `zen session start` detects the orphaned active session, marks it as `abandoned`, and creates a new one.
+If a session is abandoned (crash, force quit), the next `znt init` or `znt session start` detects the orphaned active session, marks it as `abandoned`, and creates a new one.
 
 ---
 
@@ -1045,7 +1045,7 @@ Every mutation appends a single JSON line to `.zenith/trail/{session_id}.jsonl`:
 rm .zenith/zenith.db
 
 # Rebuild from all trail files
-zen rebuild
+znt rebuild
 # → Reads all .zenith/trail/*.jsonl files
 # → Sorts operations by timestamp
 # → Replays each operation (INSERT/UPDATE/DELETE)
@@ -1072,9 +1072,9 @@ Zenith uses **two storage layers** that complement each other:
 
 ### Where AgentFS Is Used
 
-**1. Package Indexing (`zen install`)**
+**1. Package Indexing (`znt install`)**
 
-Each `zen install` creates an AgentFS workspace for the clone → parse → index pipeline:
+Each `znt install` creates an AgentFS workspace for the clone → parse → index pipeline:
 
 ```
 create workspace "index-tokio-1.40.0"
@@ -1089,7 +1089,7 @@ Benefits: crash-safe (no orphaned temp files), parallel installs in isolated wor
 
 **2. Session Workspaces**
 
-Each `zen session start` creates an AgentFS workspace:
+Each `znt session start` creates an AgentFS workspace:
 
 ```
 create workspace "ses-a3f8b2c1"
@@ -1101,12 +1101,12 @@ Benefits: automatic file-level audit per session, clean separation from other se
 
 **3. File-Level Audit**
 
-AgentFS audit log tracks every file operation. Exposed via `zen audit --files`:
+AgentFS audit log tracks every file operation. Exposed via `znt audit --files`:
 
 ```bash
-zen audit --files --limit 10   # File operations (AgentFS)
-zen audit --limit 10           # Knowledge operations (Turso)
-zen audit --all --limit 10     # Combined
+znt audit --files --limit 10   # File operations (AgentFS)
+znt audit --limit 10           # Knowledge operations (Turso)
+znt audit --all --limit 10     # Combined
 ```
 
 ### AgentFS Dependency

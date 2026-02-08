@@ -30,7 +30,7 @@
 Zenith is a **developer toolbox CLI** that an LLM (any LLM, any chat interface) calls as a tool to manage project knowledge. The LLM is the brain; Zenith is the memory and the filing cabinet.
 
 **Zenith is:**
-- A Rust CLI binary (`zen`) with structured JSON input/output
+- A Rust CLI binary (`znt`) with structured JSON input/output
 - A state management system for research, findings, hypotheses, tasks, and audit trails
 - A package documentation indexer (clone, parse with ast-grep, embed with fastembed, store in DuckLake)
 - A search engine over indexed documentation (vector + FTS)
@@ -51,10 +51,10 @@ User talks to LLM
   → LLM calls another `zen <command>`
     → ...
 User says "wrap up"
-  → LLM calls `zen wrap-up`
+  → LLM calls `znt wrap-up`
     → Zenith syncs to cloud, generates summary
 Next session:
-  → LLM calls `zen whats-next`
+  → LLM calls `znt whats-next`
     → Zenith returns project state, pending work
   → Continues where it left off
 ```
@@ -68,12 +68,12 @@ Next session:
 │                           USER + LLM                                     │
 │                                                                          │
 │  Any chat interface (OpenCode, Cursor, Amp, Claude, ChatGPT, etc.)      │
-│  LLM calls `zen` commands as tools                                       │
+│  LLM calls `znt` commands as tools                                       │
 └──────────────────────────────┬───────────────────────────────────────────┘
                                │ CLI invocation (JSON in/out)
                                ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                          ZENITH CLI (zen)                                 │
+│                          ZENITH CLI (znt)                                 │
 │                                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
 │  │  Project Mgmt │  │  Knowledge   │  │  Doc Indexer │  │  Search    │  │
@@ -101,7 +101,7 @@ Next session:
 │  │  • Audit Trail                  │  │  • HNSW vector indexes     │    │
 │  │  • FTS5 search indexes          │  │                            │    │
 │  │  • Entity Links                 │  │  MotherDuck catalog        │    │
-│  │                                 │  │  R2 Parquet storage        │    │
+│  │                                 │  │  R2 Lance/Parquet storage  │    │
 │  │  Sync: wrap-up only             │  │                            │    │
 │  └────────────┬────────────────────┘  └────────────────────────────┘    │
 │               │                                                          │
@@ -110,7 +110,7 @@ Next session:
 │  │    JSONL Trail (Git-tracked)    │                                     │
 │  │  • Per-session .jsonl files     │                                     │
 │  │  • Append-only operations       │                                     │
-│  │  • DB rebuildable: zen rebuild  │                                     │
+│  │  • DB rebuildable: znt rebuild  │                                     │
 │  │  .zenith/trail/ses-xxx.jsonl    │                                     │
 │  └─────────────────────────────────┘                                     │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -201,7 +201,7 @@ Zig, Svelte, Astro, Gleam, Mojo, Markdown, TOML
 ### Project Initialization
 
 ```
-zen init
+znt init
   │
   ├─► Detect project type (Cargo.toml? package.json? go.mod?)
   ├─► Parse manifest → extract dependencies
@@ -215,7 +215,7 @@ zen init
 ### Package Indexing
 
 ```
-zen install <package> [--ecosystem rust]
+znt install <package> [--ecosystem rust]
   │
   ├─► Check indexed_packages in DuckLake (already indexed?)
   ├─► Resolve package → find repo URL via registry API
@@ -239,7 +239,7 @@ zen install <package> [--ecosystem rust]
 ### Search
 
 ```
-zen search <query> [--package tokio] [--kind function] [--limit 10]
+znt search <query> [--package tokio] [--kind function] [--limit 10]
   │
   ├─► Generate fastembed vector for query
   ├─► Query DuckDB:
@@ -252,7 +252,7 @@ zen search <query> [--package tokio] [--kind function] [--limit 10]
 ### Knowledge Tracking
 
 ```
-zen finding create --content "..." --tag deps-conflict [--research res-xxx]
+znt finding create --content "..." --tag deps-conflict [--research res-xxx]
   │
   ├─► Generate finding ID
   ├─► INSERT INTO findings
@@ -265,21 +265,21 @@ zen finding create --content "..." --tag deps-conflict [--research res-xxx]
 ### Session Lifecycle
 
 ```
-zen session start
+znt session start
   │
   ├─► Check for orphaned active sessions → mark abandoned
   ├─► Create new session
   ├─► INSERT INTO audit_trail (session_start)
   └─► Return: session ID
 
-zen whats-next [--limit 10]
+znt whats-next [--limit 10]
   │
   ├─► Find last wrapped_up session → read snapshot
   ├─► Query open tasks, pending hypotheses, recent findings
   ├─► Query last N audit trail entries
   └─► Return: structured project state summary + raw entries
 
-zen wrap-up
+znt wrap-up
   │
   ├─► Generate session summary (counts, key events)
   ├─► Create session_snapshot
@@ -296,7 +296,7 @@ zen wrap-up
 
 ### Project-Level (`.zenith/`)
 
-Created by `zen init` at the project root, alongside `.git/`:
+Created by `znt init` at the project root, alongside `.git/`:
 
 ```
 .zenith/
@@ -325,7 +325,9 @@ zenith/
 │   ├── zen-embeddings/    # fastembed integration
 │   ├── zen-registry/      # Package registry HTTP clients
 │   ├── zen-search/        # Search orchestration (vector + FTS)
-│   └── zen-config/        # Configuration (figment)
+│   ├── zen-config/        # Configuration (figment)
+│   ├── zen-hooks/         # Git hooks, gix integration, session-git
+│   └── zen-schema/        # JSON Schema generation and validation
 └── docs/
     └── schema/            # This documentation
 ```
@@ -337,7 +339,7 @@ zenith/
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | **Language** | Rust | Type safety, performance, single binary distribution, aligns with reference library |
-| **CLI name** | `zen` | Short, memorable, from "zenith" |
+| **CLI name** | `znt` | Short, from "zenith", avoids collision with zen-browser (spike 0.13) |
 | **No embedded LLM** | The user's LLM is the orchestrator | Zenith is a tool, not an agent. Any LLM can call it |
 | **Turso for state** | Embedded replicas + cloud sync | Offline-first, sync only at wrap-up to avoid conflicts |
 | **DuckDB for lake** | DuckLake + MotherDuck + R2 | Validated in aether project. Parquet native, vector search, cloud queryable |

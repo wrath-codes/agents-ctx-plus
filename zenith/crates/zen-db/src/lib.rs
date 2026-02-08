@@ -20,3 +20,6 @@ mod spike_studies;
 
 #[cfg(test)]
 mod spike_jsonl;
+
+#[cfg(test)]
+mod spike_clerk_auth;

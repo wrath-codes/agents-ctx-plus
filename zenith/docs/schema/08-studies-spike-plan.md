@@ -26,7 +26,7 @@ All 15 tests pass. The comparison data:
 - **Type safety**: `FROM studies WHERE ...` vs `WHERE title LIKE 'Study: %'` — convention-based filtering is fragile
 - **Purpose-built fields**: `topic`, `library`, `methodology`, `summary` are first-class columns, not stuffed into `description`
 - **Dedicated lifecycle**: `active → concluding → completed | abandoned` separate from research statuses
-- **CLI ergonomics**: `zen study create --topic "..." --library tokio` is clearer than `zen research create --title "Study: ..."`
+- **CLI ergonomics**: `znt study create --topic "..." --library tokio` is clearer than `znt research create --title "Study: ..."`
 - **The extra INSERTs are entity_links**, which are the same pattern used everywhere else — not additional complexity
 
 **Key finding from the spike**: Approach A's queries are simpler because hypotheses have a direct `research_id` FK, while Approach B routes through `entity_links`. However, Approach B's hypotheses can ALSO use `research_id` (since the study links to a research_item), giving us both the direct FK path AND the entity_links path. Best of both worlds.
@@ -175,24 +175,24 @@ A study is a `research_item` with conventions (like how PRDs are `issues` with t
 
 ```bash
 # Create study
-zen research create --title "Study: How tokio::spawn works" \
+znt research create --title "Study: How tokio::spawn works" \
     --description "## Plan\n1. What are the Send bounds?\n2. What happens on panic?"
 
 # Add assumption
-zen hypothesis create --content "spawn requires Send + 'static" --research res-xxx
+znt hypothesis create --content "spawn requires Send + 'static" --research res-xxx
 
 # Record test result
-zen finding create --content "Test: spawn non-Send -> E0277" \
+znt finding create --content "Test: spawn non-Send -> E0277" \
     --research res-xxx --tag test-result --confidence high
-zen link fnd-xxx hyp-xxx validates
+znt link fnd-xxx hyp-xxx validates
 
 # Validate assumption
-zen hypothesis update hyp-xxx --status confirmed --reason "E0277 proves Send required"
+znt hypothesis update hyp-xxx --status confirmed --reason "E0277 proves Send required"
 
 # Conclude
-zen insight create --content "## Study Conclusions\n### Confirmed\n- spawn requires Send..." \
+znt insight create --content "## Study Conclusions\n### Confirmed\n- spawn requires Send..." \
     --research res-xxx
-zen research update res-xxx --status resolved
+znt research update res-xxx --status resolved
 ```
 
 **Full state query** (SQL):
@@ -251,21 +251,21 @@ CREATE VIRTUAL TABLE studies_fts USING fts5(
 
 ```bash
 # Create study (dedicated command)
-zen study create --topic "How tokio::spawn works" --library tokio
+znt study create --topic "How tokio::spawn works" --library tokio
 
 # Add assumption (convenience wrapper)
-zen study assume stu-xxx --content "spawn requires Send + 'static"
+znt study assume stu-xxx --content "spawn requires Send + 'static"
 
 # Record test result (convenience wrapper)
-zen study test stu-xxx --assumption hyp-xxx \
+znt study test stu-xxx --assumption hyp-xxx \
     --result validated --evidence "E0277 proves Send required"
 
 # Check progress
-zen study get stu-xxx
+znt study get stu-xxx
 # -> { assumptions: { total: 3, validated: 2, invalidated: 0, untested: 1 }, ... }
 
 # Conclude
-zen study conclude stu-xxx --summary "Tokio's spawn is the fundamental..."
+znt study conclude stu-xxx --summary "Tokio's spawn is the fundamental..."
 ```
 
 **Full state query** (SQL):
@@ -358,7 +358,7 @@ Steps:
 | Criterion | Weight | How We Measure |
 |-----------|--------|---------------|
 | Query ergonomics | High | Lines of SQL for "get me the full study state" |
-| CLI naturalness | High | Does `zen study create` feel better than `zen research create --title "Study: ..."` for the LLM? |
+| CLI naturalness | High | Does `znt study create` feel better than `znt research create --title "Study: ..."` for the LLM? |
 | Data clarity | Medium | Can we distinguish studies from regular research at query time? |
 | Schema cost | Medium | 1 new table + FTS + triggers vs 0 changes |
 | Progress tracking | High | How easy is "3 assumptions, 2 validated, 1 untested"? |
@@ -397,14 +397,14 @@ Steps:
    - Document CLI usage patterns
    - Document the study lifecycle using existing entity statuses
    - No schema changes to `01-turso-data-model.md`
-2. Add `zen study` as convenience aliases in `04-cli-api-design.md` that map to existing commands
+2. Add `znt study` as convenience aliases in `04-cli-api-design.md` that map to existing commands
 3. Update `07-implementation-plan.md`: studies feature ships with Phase 5 (MVP) — no extra work
 
 ### If Approach B Wins (Hybrid)
 
 1. Write `08-studies-workflow.md` with full study lifecycle documentation
 2. Update `01-turso-data-model.md`: add `studies` table, `studies_fts`, triggers, indexes
-3. Update `04-cli-api-design.md`: add `zen study` command tree
+3. Update `04-cli-api-design.md`: add `znt study` command tree
 4. Update `03-architecture-overview.md`: add `stu-` prefix, study entity type
 5. Update `05-crate-designs.md`: add `StudyRepo` to zen-db
 6. Update `07-implementation-plan.md`:

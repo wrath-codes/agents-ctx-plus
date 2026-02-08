@@ -85,6 +85,13 @@ schemars = { version = "1", features = ["chrono04"] }
 grep = "0.4"
 ignore = "0.4"
 
+# Auth (spike 0.17 — Clerk CLI auth + Turso JWKS)
+clerk-rs = "0.4.2"
+open = "5"
+tiny_http = "0.12"
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+base64 = "0.22"
+
 # Internal crates
 zen-core = { path = "crates/zen-core" }
 zen-config = { path = "crates/zen-config" }

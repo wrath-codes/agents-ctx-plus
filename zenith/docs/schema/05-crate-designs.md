@@ -43,6 +43,8 @@ zenith/
 │   ├── zen-embeddings/        # fastembed integration
 │   ├── zen-registry/          # Package registry HTTP clients
 │   ├── zen-search/            # Search orchestration
+│   ├── zen-hooks/             # Git hooks, gix integration
+│   ├── zen-schema/            # JSON Schema generation and validation
 │   └── zen-cli/               # CLI binary (clap)
 └── docs/
 ```
@@ -1409,7 +1411,7 @@ impl RegistryClient {
 
 ## 10. zen-search
 
-**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), and zen-embeddings. Provides the unified `zen search` command backend.
+**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), and zen-embeddings. Provides the unified `znt search` command backend.
 
 ### Dependencies
 
@@ -1577,7 +1579,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [[bin]]
-name = "zen"
+name = "znt"
 path = "src/main.rs"
 ```
 
@@ -1589,23 +1591,23 @@ zen-cli/src/
 ├── cli.rs              # Clap derive structs (Cli, Commands, subcommands)
 ├── commands/
 │   ├── mod.rs
-│   ├── init.rs         # zen init
-│   ├── onboard.rs      # zen onboard
-│   ├── session.rs      # zen session {start,end,list}
-│   ├── install.rs      # zen install
-│   ├── search.rs       # zen search
-│   ├── research.rs     # zen research {create,update,list,get,registry}
-│   ├── finding.rs      # zen finding {create,update,list,get,tag,untag}
-│   ├── hypothesis.rs   # zen hypothesis {create,update,list,get}
-│   ├── insight.rs      # zen insight {create,update,list,get}
-│   ├── task.rs         # zen task {create,update,list,get,complete}
-│   ├── log.rs          # zen log
-│   ├── compat.rs       # zen compat {check,list,get}
-│   ├── study.rs        # zen study {create,assume,test,get,conclude,list}
-│   ├── link.rs         # zen link, zen unlink
-│   ├── audit.rs        # zen audit
-│   ├── whats_next.rs   # zen whats-next
-│   └── wrap_up.rs      # zen wrap-up
+│   ├── init.rs         # znt init
+│   ├── onboard.rs      # znt onboard
+│   ├── session.rs      # znt session {start,end,list}
+│   ├── install.rs      # znt install
+│   ├── search.rs       # znt search
+│   ├── research.rs     # znt research {create,update,list,get,registry}
+│   ├── finding.rs      # znt finding {create,update,list,get,tag,untag}
+│   ├── hypothesis.rs   # znt hypothesis {create,update,list,get}
+│   ├── insight.rs      # znt insight {create,update,list,get}
+│   ├── task.rs         # znt task {create,update,list,get,complete}
+│   ├── log.rs          # znt log
+│   ├── compat.rs       # znt compat {check,list,get}
+│   ├── study.rs        # znt study {create,assume,test,get,conclude,list}
+│   ├── link.rs         # znt link, znt unlink
+│   ├── audit.rs        # znt audit
+│   ├── whats_next.rs   # znt whats-next
+│   └── wrap_up.rs      # znt wrap-up
 └── output.rs           # JSON/table/raw formatting
 ```
 
@@ -1615,7 +1617,7 @@ zen-cli/src/
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "zen", about = "Zenith - developer knowledge toolbox")]
+#[command(name = "znt", about = "Zenith - developer knowledge toolbox")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -1816,7 +1818,7 @@ pub async fn handle_finding(
 
 ### Sprint 1: Foundation
 
-1. **zen-core** -- Types, IDs, errors. No external dependencies beyond serde/chrono/uuid/sha2
+1. **zen-core** -- Types, IDs, errors. No external dependencies beyond serde/chrono/thiserror
 2. **zen-config** -- Figment loading. Depends only on zen-core
 3. **zen-db** -- Turso schema + CRUD. Depends on zen-core, zen-config
 

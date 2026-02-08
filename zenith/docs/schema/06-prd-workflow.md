@@ -40,7 +40,7 @@ This is adapted from [ai-dev-tasks](https://github.com/snarktank/ai-dev-tasks) a
 | Checkboxes in markdown for progress | Task status in database (`open` → `in_progress` → `done`) |
 | No audit trail | Every status change, task creation, and completion logged in audit trail |
 | No linking to research/findings | Tasks and PRD can link to research items, findings, hypotheses, assumptions |
-| Manual file management | LLM calls `zen prd create`, `zen prd tasks`, `zen task complete` |
+| Manual file management | LLM calls `znt prd create`, `znt prd tasks`, `znt task complete` |
 
 ### What Stays The Same
 
@@ -58,27 +58,27 @@ This is adapted from [ai-dev-tasks](https://github.com/snarktank/ai-dev-tasks) a
 
 ```
 1. User describes a feature to the LLM
-2. LLM calls `zen prd create --title "Feature Name"`
+2. LLM calls `znt prd create --title "Feature Name"`
    → Zenith creates an epic issue and returns its ID
 3. LLM asks clarifying questions (3-5, numbered, with lettered options)
 4. User answers (e.g., "1A, 2C, 3B")
-5. LLM generates PRD content and calls `zen prd update <id> --content <prd-markdown>`
+5. LLM generates PRD content and calls `znt prd update <id> --content <prd-markdown>`
    → PRD stored as the epic's description
-6. LLM calls `zen prd tasks <id>`
+6. LLM calls `znt prd tasks <id>`
    → Zenith creates parent tasks (high-level) linked to the epic
    → Returns task list, pauses for confirmation
 7. User says "Go"
-8. LLM generates sub-tasks and calls `zen prd subtasks <id>`
+8. LLM generates sub-tasks and calls `znt prd subtasks <id>`
    → Zenith creates sub-tasks linked to their parent tasks
    → Identifies relevant files
 9. LLM works through tasks one at a time:
-   a. `zen task update <id> --status in_progress`
+   a. `znt task update <id> --status in_progress`
    b. Implements the task
-   c. `zen task complete <id>`
-   d. `zen log <file#lines> --task <id>` for each file changed
+   c. `znt task complete <id>`
+   d. `znt log <file#lines> --task <id>` for each file changed
    e. Moves to next task
 10. When all tasks done, LLM wraps up the PRD:
-    `zen prd complete <id>`
+    `znt prd complete <id>`
 ```
 
 ---
@@ -91,7 +91,7 @@ When the user asks to build a feature, the LLM follows this process:
 
 **Phase 1: Clarify**
 
-1. Create the PRD epic: `zen prd create --title "Feature Name"`
+1. Create the PRD epic: `znt prd create --title "Feature Name"`
 2. Ask 3-5 clarifying questions focusing on:
    - **Problem/Goal**: What problem does this solve?
    - **Core Functionality**: What are the key actions?
@@ -113,15 +113,15 @@ After receiving answers, generate the PRD with these sections:
 8. **Success Metrics** - How success is measured
 9. **Open Questions** - Remaining unknowns
 
-Save: `zen prd update <epic-id> --content "<prd-markdown>"`
+Save: `znt prd update <epic-id> --content "<prd-markdown>"`
 
 **Phase 3: Link**
 
 If this PRD relates to existing research, findings, or hypotheses:
 
 ```bash
-zen link <epic-id> <research-id> relates-to
-zen link <epic-id> <finding-id> derived-from
+znt link <epic-id> <research-id> relates-to
+znt link <epic-id> <finding-id> derived-from
 ```
 
 ---
@@ -134,12 +134,12 @@ The LLM analyzes the PRD and generates high-level parent tasks:
 
 ```bash
 # Create parent tasks linked to the epic
-zen task create --title "Create feature branch" --issue <epic-id> --description "git checkout -b feature/<name>"
-zen task create --title "Set up data models" --issue <epic-id>
-zen task create --title "Implement core logic" --issue <epic-id>
-zen task create --title "Build API endpoints" --issue <epic-id>
-zen task create --title "Add tests" --issue <epic-id>
-zen task create --title "Integration testing and cleanup" --issue <epic-id>
+znt task create --title "Create feature branch" --issue <epic-id> --description "git checkout -b feature/<name>"
+znt task create --title "Set up data models" --issue <epic-id>
+znt task create --title "Implement core logic" --issue <epic-id>
+znt task create --title "Build API endpoints" --issue <epic-id>
+znt task create --title "Add tests" --issue <epic-id>
+znt task create --title "Integration testing and cleanup" --issue <epic-id>
 ```
 
 The LLM presents these to the user and asks: "I've generated the high-level tasks. Ready to generate sub-tasks? Respond with 'Go'."
@@ -150,12 +150,12 @@ Break each parent task into actionable sub-tasks:
 
 ```bash
 # Sub-tasks for "Set up data models" (tsk-a2b3c4)
-zen task create --title "Define User schema" --issue <epic-id> --description "Parent: tsk-a2b3c4"
-zen task create --title "Add migrations" --issue <epic-id> --description "Parent: tsk-a2b3c4"
-zen task create --title "Create repository trait" --issue <epic-id> --description "Parent: tsk-a2b3c4"
+znt task create --title "Define User schema" --issue <epic-id> --description "Parent: tsk-a2b3c4"
+znt task create --title "Add migrations" --issue <epic-id> --description "Parent: tsk-a2b3c4"
+znt task create --title "Create repository trait" --issue <epic-id> --description "Parent: tsk-a2b3c4"
 
 # Link sub-tasks to parent
-zen link <subtask-id> <parent-task-id> depends-on
+znt link <subtask-id> <parent-task-id> depends-on
 ```
 
 ### Relevant Files
@@ -163,7 +163,7 @@ zen link <subtask-id> <parent-task-id> depends-on
 After generating tasks, the LLM creates findings for relevant files:
 
 ```bash
-zen finding create --content "Files to create/modify for this feature" \
+znt finding create --content "Files to create/modify for this feature" \
   --source "prd-analysis" \
   --tag "relevant-files" \
   --research <epic-id-or-research-id>
@@ -190,23 +190,23 @@ The LLM works through tasks sequentially:
 
 ```bash
 # 1. Start task
-zen task update <task-id> --status in_progress
+znt task update <task-id> --status in_progress
 
 # 2. Implement the task (LLM writes code)
 
 # 3. Log implementation locations
-zen log src/models/user.rs#1-45 --task <task-id> --description "User struct with validation"
-zen log src/models/user.rs#47-82 --task <task-id> --description "UserRepository trait implementation"
+znt log src/models/user.rs#1-45 --task <task-id> --description "User struct with validation"
+znt log src/models/user.rs#47-82 --task <task-id> --description "UserRepository trait implementation"
 
 # 4. Complete the task
-zen task complete <task-id>
+znt task complete <task-id>
 
 # 5. If findings discovered during implementation:
-zen finding create --content "User model needs email uniqueness constraint at DB level" \
+znt finding create --content "User model needs email uniqueness constraint at DB level" \
   --tag "needs-verification" --source "src/models/user.rs"
 
 # 6. If hypotheses to track:
-zen hypothesis create --content "Using CHECK constraint for email format may be slower than app-level validation"
+znt hypothesis create --content "Using CHECK constraint for email format may be slower than app-level validation"
 
 # 7. Move to next task
 ```
@@ -217,13 +217,13 @@ At any point the LLM can check progress:
 
 ```bash
 # See all tasks for this PRD
-zen task list --issue <epic-id>
+znt task list --issue <epic-id>
 
 # See what's next
-zen whats-next
+znt whats-next
 
 # See audit trail for this epic
-zen audit --entity-id <epic-id> --limit 20
+znt audit --entity-id <epic-id> --limit 20
 ```
 
 ### Completion
@@ -232,14 +232,14 @@ When all tasks are done:
 
 ```bash
 # Mark the epic as done
-zen issue update <epic-id> --status done
+znt issue update <epic-id> --status done
 
 # Create a summary insight
-zen insight create --content "Feature X implemented. 12 tasks completed. Key decisions: ..." \
+znt insight create --content "Feature X implemented. 12 tasks completed. Key decisions: ..." \
   --research <research-id-if-any>
 
 # Wrap up the session
-zen wrap-up
+znt wrap-up
 ```
 
 ---
@@ -275,12 +275,12 @@ The PRD workflow uses existing entities:
 
 ## 7. CLI Commands
 
-### `zen prd create`
+### `znt prd create`
 
 Create a new PRD (epic issue).
 
 ```bash
-zen prd create --title <title> [--description <initial-desc>]
+znt prd create --title <title> [--description <initial-desc>]
 ```
 
 **Implementation**: Creates an issue with `type = 'epic'` and returns its ID.
@@ -298,22 +298,22 @@ zen prd create --title <title> [--description <initial-desc>]
 }
 ```
 
-### `zen prd update`
+### `znt prd update`
 
 Update the PRD content (the generated PRD markdown goes into the description).
 
 ```bash
-zen prd update <id> --content <prd-markdown>
+znt prd update <id> --content <prd-markdown>
 ```
 
 **Implementation**: Updates the issue's `description` field.
 
-### `zen prd get`
+### `znt prd get`
 
 Get the full PRD with all linked tasks, findings, and progress.
 
 ```bash
-zen prd get <id>
+znt prd get <id>
 ```
 
 **Output:**
@@ -348,12 +348,12 @@ zen prd get <id>
 }
 ```
 
-### `zen prd tasks`
+### `znt prd tasks`
 
 Generate parent tasks for a PRD. Called by the LLM after writing the PRD.
 
 ```bash
-zen prd tasks <id> --tasks '["Create feature branch", "Set up data models", "Implement core logic", "Add tests"]'
+znt prd tasks <id> --tasks '["Create feature branch", "Set up data models", "Implement core logic", "Add tests"]'
 ```
 
 **Implementation**: Creates tasks linked to the epic, returns the list, and includes a message for the LLM to pause and ask the user to confirm before proceeding to sub-tasks.
@@ -372,32 +372,32 @@ zen prd tasks <id> --tasks '["Create feature branch", "Set up data models", "Imp
 }
 ```
 
-### `zen prd subtasks`
+### `znt prd subtasks`
 
 Generate sub-tasks for a parent task.
 
 ```bash
-zen prd subtasks <parent-task-id> --tasks '["Define User schema", "Add migrations", "Create repository trait"]'
+znt prd subtasks <parent-task-id> --tasks '["Define User schema", "Add migrations", "Create repository trait"]'
 ```
 
 **Implementation**: Creates tasks linked to the epic, creates `depends-on` links to the parent task.
 
-### `zen prd complete`
+### `znt prd complete`
 
 Mark a PRD as completed.
 
 ```bash
-zen prd complete <id>
+znt prd complete <id>
 ```
 
 **Implementation**: Sets the epic issue's status to `done`, creates a summary audit entry.
 
-### `zen prd list`
+### `znt prd list`
 
 List all PRDs (epic issues).
 
 ```bash
-zen prd list [--status open|in_progress|done] [--limit 20]
+znt prd list [--status open|in_progress|done] [--limit 20]
 ```
 
 ---
@@ -499,19 +499,19 @@ This template mirrors the ai-dev-tasks `generate-tasks.md` structure, adapted fo
 
 1. **Always task 0.0 first**: Create the feature branch unless explicitly told not to
 2. **One sub-task at a time**: Complete, verify, then move to next
-3. **Log every file change**: `zen log <file#lines> --task <id>` after each implementation
-4. **Mark completion immediately**: `zen task complete <id>` right after verifying
-5. **Capture discoveries**: If something unexpected is found, `zen finding create` before moving on
-6. **Track assumptions**: If an implementation choice is made based on an assumption, `zen hypothesis create`
-7. **Update status before starting**: `zen task update <id> --status in_progress` before working on a task
-8. **Link blocking relationships**: If task B can't start until task A is done, `zen link <B> <A> depends-on`
+3. **Log every file change**: `znt log <file#lines> --task <id>` after each implementation
+4. **Mark completion immediately**: `znt task complete <id>` right after verifying
+5. **Capture discoveries**: If something unexpected is found, `znt finding create` before moving on
+6. **Track assumptions**: If an implementation choice is made based on an assumption, `znt hypothesis create`
+7. **Update status before starting**: `znt task update <id> --status in_progress` before working on a task
+8. **Link blocking relationships**: If task B can't start until task A is done, `znt link <B> <A> depends-on`
 
 ### Relevant Files Convention
 
 After generating sub-tasks, identify relevant files as a finding:
 
 ```bash
-zen finding create \
+znt finding create \
   --content "Relevant files for [Feature]:
 - path/to/new_file.rs - [Why this file is needed]
 - path/to/new_file_test.rs - Unit tests
@@ -529,7 +529,7 @@ zen finding create \
 
 **1. Persistence across sessions**
 
-With ai-dev-tasks, task progress is tracked by checkboxes in a markdown file. If the chat session ends, the LLM has to re-read the file. With Zenith, task status is in the database. `zen whats-next` instantly tells the LLM where to continue.
+With ai-dev-tasks, task progress is tracked by checkboxes in a markdown file. If the chat session ends, the LLM has to re-read the file. With Zenith, task status is in the database. `znt whats-next` instantly tells the LLM where to continue.
 
 **2. Linking to knowledge graph**
 
@@ -545,11 +545,11 @@ A PRD can span multiple sessions. Each session picks up where the last one left 
 
 ```bash
 # Session 2: LLM checks where we are
-zen prd get <epic-id>
+znt prd get <epic-id>
 # → Shows 8/15 tasks done, 1 in progress, 6 open
 # → Shows recent findings and unresolved hypotheses
 
-zen whats-next
+znt whats-next
 # → "Last session completed tasks 1.0-2.3. Task 2.4 is in progress. 
 #    Hypothesis hyp-f6a8 about email validation is still unverified."
 ```
@@ -559,7 +559,7 @@ zen whats-next
 Unlike standalone markdown files that can get confusing, Zenith tracks multiple PRDs as separate epic issues. Each has its own task tree, findings, and audit trail.
 
 ```bash
-zen prd list --status in_progress
+znt prd list --status in_progress
 # → Shows all active PRDs with progress percentages
 ```
 
@@ -569,13 +569,13 @@ If a PRD requires a new library:
 
 ```bash
 # During task execution, LLM discovers need for a library
-zen install serde_json --ecosystem rust
+znt install serde_json --ecosystem rust
 # → Indexed, now searchable
 
-zen search "json serialization error handling" --package serde_json
+znt search "json serialization error handling" --package serde_json
 # → Returns relevant API docs to help with implementation
 
-zen finding create --content "Using serde_json::from_str for parsing. Returns Result<T, serde_json::Error>" \
+znt finding create --content "Using serde_json::from_str for parsing. Returns Result<T, serde_json::Error>" \
   --source "package:serde_json" --tag verified
 ```
 
@@ -585,12 +585,12 @@ A PRD can be created from research results:
 
 ```bash
 # Research identified reqwest as the best HTTP client
-zen research get res-c4e2d1
+znt research get res-c4e2d1
 # → Shows findings, confirmed hypotheses
 
 # Create a PRD to implement the HTTP client layer using reqwest
-zen prd create --title "HTTP Client Layer with reqwest"
-zen link <epic-id> <research-id> derived-from
+znt prd create --title "HTTP Client Layer with reqwest"
+znt link <epic-id> <research-id> derived-from
 # → PRD is now connected to the research that justified it
 ```
 

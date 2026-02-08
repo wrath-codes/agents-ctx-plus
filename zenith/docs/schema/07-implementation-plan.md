@@ -18,9 +18,10 @@
 8. [Phase 6: PRD Workflow](#8-phase-6-prd-workflow)
 9. [Phase 7: AgentFS Integration](#9-phase-7-agentfs-integration)
 10. [Phase 8: Cloud & Polish](#10-phase-8-cloud--polish)
-11. [Dependency Graph](#11-dependency-graph)
-12. [Risk Register](#12-risk-register)
-13. [Validation Checkpoints](#13-validation-checkpoints)
+11. [Phase 9: Team & Pro](#11-phase-9-team--pro)
+12. [Dependency Graph](#12-dependency-graph)
+13. [Risk Register](#13-risk-register)
+14. [Validation Checkpoints](#14-validation-checkpoints)
 
 ---
 
@@ -58,6 +59,8 @@
 | 0.14 | ~~Write zen grep spike: validate `grep` crate (ripgrep library), `ignore` crate (gitignore-aware walking), DuckDB `source_files` table, symbol correlation~~ | **DONE** — 26/26 tests pass. Validated: (1) `grep` 0.4 — `RegexMatcher` compiles patterns with flags (case-insensitive, word, literal, smart-case), `Searcher` + `UTF8` sink with line numbers, custom `Sink` for context lines, binary detection, `search_path` for files. (2) `ignore` 0.4 — `WalkBuilder` respects `.gitignore`, override globs for include/exclude, `filter_entry` for test file skipping, custom ignore filename (`.zenithignore`), hidden file skipping, combined grep+ignore workflow. (3) DuckDB `source_files` table — CRUD, Appender bulk insert, `regexp_matches()` with flags, `string_split()`+`unnest()` line-level grep with line numbers, language filtering, cache management (DELETE, stats). (4) Symbol correlation — `idx_symbols_file_lines` composite index, batch symbol lookup per file, binary search matches line→symbol range, `SymbolRef` population with all fields (id, kind, name, signature). (5) Combined pipeline — store source during indexing → grep with `RegexMatcher`+`Searcher` over stored content → correlate with `api_symbols` → `CorrelatedHit` with all fields validated. **Key findings**: (a) DuckDB fetch + Rust regex is faster than SQL-level line splitting; use DuckDB as compressed storage, Rust for line matching. (b) `grep` crate's `RegexMatcher` and DuckDB's RE2 are both linear-time; no semantic differences for common patterns. (c) `ignore` crate's `filter_entry` is evaluated before file I/O — test file skipping is free. (d) Appender bulk insert for source files adds negligible time to indexing. See [13-zen-grep-design.md](./13-zen-grep-design.md) | Phase 3 (3.16-3.18), Phase 4 (4.10-4.12), Phase 5 (5.19-5.20) |
 | 0.15 | ~~Write schema generation & validation spike: validate `schemars` 1.x + `jsonschema` 0.28 full integration, per-entity data dispatch, SchemaRegistry~~ | **DONE** — 22/22 tests pass. Validated: (1) `schemars` 1.x `#[derive(JsonSchema)]` works with all entity structs, serde attributes (`rename_all`, `Option`, `DateTime<Utc>`, `serde_json::Value`), and `chrono04` feature. (2) All 12 entity types + 8 enums generate correct schemas; roundtrip (serialize → validate → deserialize) passes for every entity. (3) Per-entity `data` dispatch works: correct entity data passes, wrong entity data fails with descriptive errors. (4) Trail envelope schema matches spike 0.13 hand-written schema; schemars-generated version is strictly superior (validates `data` sub-schemas). (5) Config schema generation works for all 6 sections. (6) Audit detail per-action schemas work (StatusChanged, Linked, Tagged, Indexed). (7) DuckDB metadata schemas for Rust/Python/TypeScript all generate correctly including nested `Option<Vec<String>>` and `HashMap<String,String>`. (8) SchemaRegistry prototype: 39 schemas, construction <50ms, validation sub-microsecond. (9) Both Draft 2020-12 (schemars default) and Draft 7 (via `SchemaSettings`) work with `jsonschema` 0.28. **Gotcha**: schemars does NOT add `additionalProperties: false` by default — convention decision needed. **Decision**: Use schemars-generated schemas everywhere; retire hand-written schema from spike 0.13. See [12-schema-spike-plan.md](./12-schema-spike-plan.md) | Phase 1 (entity structs get `#[derive(JsonSchema)]`), Phase 2 (trail + audit validation), Phase 5 (`znt schema` command, pre-commit uses generated schema) |
 | 0.16 | ~~Write JSONL trail schema versioning spike: validate Approach D (Hybrid) — `v` field with `#[serde(default)]`, additive evolution, version-dispatch migration, `additionalProperties` convention, `serde-jsonlines` roundtrip~~ | **DONE** — 10/10 tests pass. Validated: (1) `#[serde(default = "fn")]` on `v: u32` — old trails without `v` field deserialize as v1. schemars does NOT include `v` in `required` array. (2) Additive evolution — `Option<T>` and `#[serde(default)]` fields work for both serde deserialization AND schema validation (schemars excludes default fields from `required`). (3) `#[serde(alias)]` — serde deserialization works (old field names map to new), BUT schemars schema uses Rust field name only (schema validation rejects old names). (4) Version-dispatch migration — transform `serde_json::Value` in-place, validate against target schema, dispatch by `op.v`, reject unsupported versions. (5) `additionalProperties` convention confirmed — trail (no `deny_unknown_fields`) accepts unknowns; config (`#[serde(deny_unknown_fields)]`) generates `additionalProperties: false` and rejects unknowns. (6) `serde-jsonlines` roundtrip preserves `v` field; old-format files (no `v`) read back with `v == 1`; mixed old+new files work. **Decision**: Approach D adopted. Trail envelope gets `v: u32` with `#[serde(default)]`. Evolution rules: additive by default, version bump for breaking changes. `additionalProperties`: permissive for trails, strict for config. `serde(alias)` is serde-safe but schema-unsafe. See [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md) | Phase 2 (tasks 2.15-2.17 trail writer/replayer/versioning) |
+| 0.17 | ~~Write Clerk Auth + Turso JWKS spike: validate `clerk-rs` JWT validation, `tiny_http` browser callback, `keyring` token storage, Turso JWKS integration (Clerk JWT as libsql auth token), API key fallback~~ | **DONE** — 14/14 tests pass. Validated: (1) `clerk-rs` 0.4.2 `MemoryCacheJwksProvider` + `validate_jwt()` work standalone without web framework. (2) `tiny_http` localhost callback captures JWT from redirect URL. (3) `keyring` v3 store/retrieve/delete works on macOS Keychain. File fallback with 0600 permissions works. (4) JWT `exp` claim decoding and near-expiry detection (60s buffer) work. (5) **Turso JWKS accepts Clerk JWT**: `Builder::new_remote()` with Clerk JWT as auth token — `SELECT 1` succeeds. (6) **Embedded replicas work**: `Builder::new_remote_replica()` with Clerk JWT — sync, write, read all succeed. (7) **Write-forwarding**: replica 1 writes, syncs; replica 2 syncs, sees the data. (8) **Expired token behavior**: auth validated at builder time (not deferred) — `Sync("Unauthorized")` error immediately. (9) JWKS public endpoint returns 1 RSA key (RS256). **Key finding**: Turso JWKS = zero runtime token minting. Clerk JWT is the auth token. `open` crate opens browser on macOS. **Gotchas**: (a) Auth is validated at `Builder::new_remote_replica().build()` time — expired tokens fail immediately. (b) No hot-swapping auth tokens on embedded replicas — must recreate client. (c) Local reads continue working after token expiry. See [15-clerk-auth-turso-jwks-spike-plan.md](./15-clerk-auth-turso-jwks-spike-plan.md) | Phase 9 (zen-auth crate, Turso JWKS wiring, team DB) |
+| 0.18 | ~~Write R2 Lance Export spike: validate Lance format on R2 for shared team index — vector search, FTS, hybrid search, JSON metadata roundtrip, incremental export, manifest lifecycle~~ | **DONE** — 18/18 tests pass (13 Parquet + 5 Lance). Validated: (1) **Parquet export/read**: all 3 tables (api_symbols, doc_chunks, indexed_packages) export to R2 and read back correctly. `FLOAT[]` embeddings need `::FLOAT[384]` cast for `array_cosine_similarity()`. JSON metadata survives Parquet roundtrip (JSON operators work on Parquet-read data). DuckDB manifest returns Struct type — need `to_json()::VARCHAR`. (2) **Performance**: 10K symbols insert 769ms, export to R2 5.1s, vector search 3.0s, text filter 310ms. (3) **Incremental**: delta export by timestamp works, multi-file merge via `read_parquet([...])` works. (4) **Lance on R2**: `COPY TO (FORMAT lance)` works, `lance_vector_search()` with 384-dim returns correct nearest neighbors (distance=0.0 for self-match). `lance_fts()` BM25 works. `lance_hybrid_search()` combines vector + text (alpha=0.5). (5) **Lance vs Parquet**: at 100 rows Parquet is 2x faster (brute-force cheaper than Lance overhead). At scale, Lance's persistent indexes will dominate. **Decision**: Use Lance format for both shared team index and local index. Lance provides native vector search, BM25 FTS, and hybrid search without brute-force scan. **Gotchas**: (a) Lance uses AWS credential chain (not DuckDB secrets) — must set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL` env vars. (b) Lance FTS is term-exact, not stemmed. (c) Parquet `FLOAT[]` needs explicit cast to `FLOAT[384]` for cosine ops. See [16-r2-parquet-export-spike-plan.md](./16-r2-parquet-export-spike-plan.md) | Phase 9 (R2 Lance export, shared reader, `znt export`) |
 
 ### Milestone 0
 
@@ -416,7 +419,139 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 
 ---
 
-## 11. Dependency Graph
+## 11. Phase 9: Team & Pro
+
+**Goal**: Multi-user team collaboration via shared Turso DB + shared Lance index on R2, Clerk authentication, org-scoped data. No custom server — CLI authenticates directly with Clerk, Turso validates Clerk JWTs via JWKS.
+
+**Depends on**: Phase 8 (single-user cloud working), Spikes 0.17 + 0.18
+
+### Architecture
+
+```
+Team Admin (CLI)                         Team Member (CLI)
+     │                                        │
+     ├── znt auth login                       ├── znt auth login
+     │   (browser → Clerk → JWT)              │   (browser → Clerk → JWT)
+     │                                        │
+     ├── zen-db (Turso embedded replica)      ├── zen-db (Turso embedded replica)
+     │   authToken = Clerk JWT (JWKS)         │   authToken = Clerk JWT (JWKS)
+     │   ◄──── Turso Cloud (shared) ────►     │   org-scoped queries
+     │                                        │
+     ├── zen-lake (DuckLake writer)           └── zen-lake (local DuckDB + lance)
+     │   indexes packages → DuckLake               reads Lance datasets from R2
+     │   exports Lance to R2                       lance_vector_search + lance_fts
+     │                                             no MotherDuck account needed
+     └── R2: s3://zenith/packages/{org_id}/
+         ├── api_symbols.lance
+         ├── doc_chunks.lance
+         └── manifest.json
+```
+
+### New Crate: `zen-auth`
+
+```
+zen-auth/src/
+├── lib.rs              # Public API: login(), verify(), get_claims(), logout()
+├── claims.rs           # Claims struct (port from aether claims.rs)
+├── error.rs            # AuthError enum (port from aether error.rs)
+├── jwks.rs             # JwksValidator (clerk-rs JWKS validation)
+├── browser_flow.rs     # Localhost callback: tiny_http + open browser
+├── api_key.rs          # CI fallback: verify API key via Clerk Backend API
+├── token_store.rs      # keyring (OS keychain) + file fallback (~/.zenith/credentials)
+└── refresh.rs          # Token lifecycle: check expiry, recreate libsql client
+```
+
+### Tasks
+
+| ID | Task | Crate | Blocks |
+|----|------|-------|--------|
+| **Auth core** | | | |
+| 9.1 | Port `Claims` struct from aether (add `#[derive(JsonSchema)]`) | zen-auth | 9.2 |
+| 9.2 | Port `AuthError` enum from aether (replace `tonic::Status` with generic error handling) | zen-auth | 9.3 |
+| 9.3 | Port `JwksValidator` from aether (clerk-rs JWKS validation) | zen-auth | 9.5 |
+| 9.4 | Implement token store: `keyring` primary, `~/.zenith/credentials` fallback (0600), `ZENITH_AUTH__TOKEN` env var for CI | zen-auth | 9.5 |
+| 9.5 | Implement browser login flow: `tiny_http` on `127.0.0.1:0`, `open` browser to Clerk sign-in page, capture JWT from redirect, store token | zen-auth | 9.9 |
+| 9.6 | Implement API key fallback: read `ZENITH_AUTH__API_KEY` from config, verify via Clerk Backend API, extract claims | zen-auth | 9.9 |
+| 9.7 | Implement token refresh: decode JWT `exp`, detect near-expiry (60s buffer), trigger browser re-auth or fail with message. Recreate libsql client with fresh token. | zen-auth | 9.10 |
+| **DB changes** | | | |
+| 9.8 | Add `org_id` column to sessions, findings, hypotheses, insights, issues, tasks, studies, impl_logs, compat_checks, audit_log, entity_links. Migration `002_team.sql`. NULL = personal/local. | zen-db | 9.10 |
+| 9.9 | Implement `AuthContext` struct (user_id, org_id, org_role) populated from Claims. Thread through repo methods. | zen-auth + zen-db | 9.10 |
+| 9.10 | Update all repos to accept optional `AuthContext`. When present, scope queries with `WHERE org_id = ?`. When absent, scope to `WHERE org_id IS NULL`. | zen-db | 9.11 |
+| **Turso JWKS** | | | |
+| 9.11 | Update `ZenDb::open_synced()` to accept Clerk JWT as auth token (via JWKS, not Platform API minting). | zen-db | 9.12 |
+| 9.12 | Implement libsql client recreation on token expiry: detect `Sync("Unauthorized")` errors, get fresh Clerk token, rebuild client. | zen-db | 9.14 |
+| **R2 Lance export** | | | |
+| 9.13 | Implement `ZenLake::export_to_r2()`: export api_symbols + doc_chunks as Lance datasets to `s3://zenith/packages/{org_id}/`. Set AWS env vars from R2 config for Lance credential chain. | zen-lake | 9.14 |
+| 9.14 | Implement `ZenLake::open_shared_reader()`: local DuckDB + lance extension, reads Lance datasets from R2, supports `lance_vector_search()` + `lance_fts()` + `lance_hybrid_search()` | zen-lake | 9.15 |
+| 9.15 | Implement export manifest: `manifest.json` at R2 path, tracks packages/timestamps/schema version. Reader checks manifest before querying. | zen-lake | 9.16 |
+| 9.16 | Implement `znt export` command: triggers Lance export to R2 for current org | zen-cli | Done |
+| **CLI commands** | | | |
+| 9.17 | Implement `znt auth login` (browser flow → store token → print user/org) | zen-cli | 9.18 |
+| 9.18 | Implement `znt auth logout` (delete from keyring, clear credentials file) | zen-cli | 9.19 |
+| 9.19 | Implement `znt auth status` (show current user, org, token expiry, Turso connection state) | zen-cli | 9.20 |
+| 9.20 | Implement `znt auth switch-org` (re-authenticate with different Clerk org) | zen-cli | 9.21 |
+| 9.21 | Wire team mode into startup: if authenticated, use `open_synced()` with Clerk JWT + `open_shared_reader()` for lance. If not, local mode. | zen-cli | 9.22 |
+| 9.22 | Implement `znt team invite` / `znt team list` using clerk-rs organization APIs | zen-cli | Done |
+
+### Free vs Pro Boundary
+
+| Feature | Free (local) | Pro (team) |
+|---------|-------------|------------|
+| Local DB (SQLite) | Yes | Yes |
+| Local DuckDB + Lance | Yes | Yes |
+| Local embeddings | Yes | Yes |
+| `znt auth` commands | -- | Yes |
+| `znt team` commands | -- | Yes |
+| Turso Cloud sync (org-scoped) | -- | Yes |
+| Shared Lance index (R2) | -- | Yes |
+| `znt export` (publish index) | -- | Yes (admin only) |
+| Org-scoped knowledge | -- | Yes |
+
+Enforcement: No license checks. No credentials = local mode. Valid Clerk JWT + Turso JWKS configured = team mode. R2 + AWS env vars needed for Lance export/read.
+
+### Clerk JWT Template
+
+Name: `zenith_cli` | Lifetime: 7 days | Algorithm: RS256
+
+```json
+{
+  "p": {
+    "rw": {
+      "ns": ["{org_slug}.zenith-{env}"],
+      "tables": {
+        "all": {
+          "data_read": true, "data_add": true,
+          "data_update": true, "data_delete": true,
+          "schema_add": true, "schema_update": true, "schema_delete": true
+        }
+      }
+    }
+  }
+}
+```
+
+### Tests
+
+- Browser login mock (test localhost callback without real browser)
+- Token store: keyring write/read/delete, file fallback, env var override
+- Claims: extraction from Clerk JWT, org_id/role checks, expiry detection
+- Turso JWKS: connect with Clerk JWT, verify queries succeed
+- Org-scoped queries: user A's findings invisible to user B's org
+- R2 Lance export: DuckLake → Lance → R2, reader queries back with vector/FTS/hybrid
+- Migration: existing local DB upgrades cleanly (NULL org_id = personal)
+- Token refresh: detect expiry, recreate client, verify queries resume
+
+### Milestone 9
+
+- `znt auth login` → browser opens → user authenticates → JWT stored in keyring
+- `znt session start` creates org-scoped session in shared Turso DB
+- `znt export` writes Lance datasets to R2
+- Team members query shared index via `lance_vector_search()` / `lance_fts()`
+- `znt whats-next` shows team-wide project state
+
+---
+
+## 12. Dependency Graph
 
 ```
 Phase 0: Spikes (all parallel)
@@ -447,11 +582,12 @@ Parallel path: 0.13 → 5.18a-e (git hooks, can run alongside Phase 1-4)
 Parallel path: 0.14 → 3.16-3.18 → 4.10-4.12 → 5.19-5.20 (zen grep, can run alongside other Phase 3-5 tasks)
 Parallel path: 0.15 → 1.1-1.2 (zen-schema, entity structs get #[derive(JsonSchema)])
 Parallel path: 0.16 → 2.15-2.17 (trail versioning, envelope v field + migration dispatch)
+Parallel path: 0.17 + 0.18 → Phase 9 (team & pro, after Phase 8)
 ```
 
 ---
 
-## 12. Risk Register
+## 13. Risk Register
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|------------|
@@ -469,10 +605,17 @@ Parallel path: 0.16 → 2.15-2.17 (trail versioning, envelope v field + migratio
 | Figment silently ignores typo'd env var keys | Config appears loaded but values are defaults; hard to debug | Medium | **Confirmed** in zen-config spike. `ZENITH_TURSO__URLL` (typo) is silently ignored. Mitigation: `is_configured()` checks on every sub-config, `warn_unconfigured()` at CLI startup (task 5.21). Test `typo_env_var_silently_ignored` documents the behavior. |
 | schemars `additionalProperties` convention undecided | Validation strictness mismatch between generated and hand-written schemas | Medium | **Confirmed** in spike 0.15: schemars does NOT add `additionalProperties: false` by default. Must decide convention: strict (reject unknown fields) vs permissive (allow forward-compat). Recommend: permissive for trail operations (forward-compat), strict for config (catch typos). Decision needed before Phase 2 trail writer. |
 | JSONL trail schema versioning | Old trail files become unreplayable after entity shape changes | **Mitigated** | Spike 0.16 validated Approach D (Hybrid): `v: u32` field with `#[serde(default)]` in trail envelope, additive evolution by default, version-dispatch migration for breaking changes. 10/10 tests pass. **Gotcha**: `serde(alias)` is serde-safe but schema-unsafe (schemars uses Rust field name, not alias). Field renames should use alias for serde + skip schema validation for aliased fields. |
+| Clerk browser flow fails in SSH/containers | Can't authenticate headless | Medium | **Mitigated**: API key fallback (task 9.6), `ZENITH_AUTH__TOKEN` env var for CI |
+| Turso JWKS beta (Clerk + Auth0 only) | Locked to Clerk | Low | **Mitigated**: spike 0.17 validated. Fallback: Platform API minting (spike 0.3) |
+| Clerk JWT 60s default lifetime too short for CLI | Constant re-auth | **Mitigated** | Custom JWT template `zenith_cli` with 7-day TTL validated in spike 0.17 |
+| Embedded replica auth token expires mid-session | Sync/writes fail | Medium | Spike 0.17 confirmed: `Sync("Unauthorized")` error, local reads survive. Task 9.12: detect error, recreate client with fresh token. |
+| Lance AWS credential chain differs from DuckDB secrets | R2 access fails for Lance | **Mitigated** | Spike 0.18 validated: set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL` env vars from R2 config. Lance reads/writes work. |
+| `keyring` crate fails on headless Linux (no Secret Service) | Token storage fails | Medium | Spike 0.17 validated file fallback with 0600 permissions (task 9.4) |
+| Lance FTS is term-exact (no stemming) | "spawning" won't match "spawn" | Low | Vector search is primary signal. Lance FTS is boost only. libSQL FTS5 (porter stemming) remains for knowledge entity search. |
 
 ---
 
-## 13. Validation Checkpoints
+## 14. Validation Checkpoints
 
 At each milestone, verify:
 
@@ -487,6 +630,7 @@ At each milestone, verify:
 | 6 | Full PRD lifecycle works across sessions | E2E test with sequential commands |
 | 7 | Package indexing uses isolated workspaces | `cargo test -p zen-cli` (workspace tests) |
 | 8 | Cloud sync works, indexed packages accessible from another machine | Manual test with Turso Cloud + MotherDuck |
+| **9 (Team)** | **`znt auth login` → browser → JWT stored. `znt session start` creates org-scoped session. `znt export` writes Lance to R2. Team member queries shared index via `lance_vector_search()`.** | **E2E with two Clerk users** |
 
 ### MVP Acceptance Test (Milestone 5)
 
@@ -546,3 +690,5 @@ Every command must return valid JSON. Every mutation must appear in the audit tr
 - Git & JSONL strategy: [10-git-jsonl-strategy.md](./10-git-jsonl-strategy.md)
 - Schema spike plan: [12-schema-spike-plan.md](./12-schema-spike-plan.md)
 - Trail versioning spike plan: [14-trail-versioning-spike-plan.md](./14-trail-versioning-spike-plan.md)
+- Clerk Auth + Turso JWKS spike: [15-clerk-auth-turso-jwks-spike-plan.md](./15-clerk-auth-turso-jwks-spike-plan.md)
+- R2 Lance Export spike: [16-r2-parquet-export-spike-plan.md](./16-r2-parquet-export-spike-plan.md)

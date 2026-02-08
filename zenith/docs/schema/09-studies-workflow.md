@@ -48,7 +48,7 @@ When a developer says "I want to learn how tokio::spawn works," the LLM creates 
 
 ### Test Execution Model
 
-Zenith does NOT execute test code. The LLM uses its own host tools (bash, file I/O, etc.) to write and run test code, then records the results in Zenith via `zen study test`. Zenith is the knowledge store; the LLM's host environment handles execution. This preserves Zenith's "tool, not agent" philosophy.
+Zenith does NOT execute test code. The LLM uses its own host tools (bash, file I/O, etc.) to write and run test code, then records the results in Zenith via `znt study test`. Zenith is the knowledge store; the LLM's host environment handles execution. This preserves Zenith's "tool, not agent" philosophy.
 
 ---
 
@@ -56,22 +56,22 @@ Zenith does NOT execute test code. The LLM uses its own host tools (bash, file I
 
 ```
 1. User asks the LLM to learn about something
-2. LLM calls `zen study create --topic "How tokio::spawn works" --library tokio`
+2. LLM calls `znt study create --topic "How tokio::spawn works" --library tokio`
    -> Zenith creates a study + linked research item, returns study ID
 3. LLM forms assumptions about the topic
-   -> `zen study assume <id> --content "spawn requires Send + 'static"`
+   -> `znt study assume <id> --content "spawn requires Send + 'static"`
    -> Creates hypotheses linked to the study
 4. LLM explores: searches docs, reads source code
-   -> `zen search "spawn" --package tokio`
+   -> `znt search "spawn" --package tokio`
    -> Uses host tools to write and run test code
 5. LLM records test results
-   -> `zen study test <id> --assumption <hyp-id> --result validated --evidence "..."`
+   -> `znt study test <id> --assumption <hyp-id> --result validated --evidence "..."`
    -> Creates findings, links to hypotheses, updates statuses
 6. LLM checks progress
-   -> `zen study get <id>`
+   -> `znt study get <id>`
    -> Shows N validated, M invalidated, K untested
 7. LLM concludes the study
-   -> `zen study conclude <id> --summary "..."`
+   -> `znt study conclude <id> --summary "..."`
    -> Creates insight, marks study completed
 ```
 
@@ -83,7 +83,7 @@ When the user asks to learn about something, the LLM:
 
 **Phase 1: Identify Topic**
 
-1. Create the study: `zen study create --topic "How tokio::spawn works" --library tokio`
+1. Create the study: `znt study create --topic "How tokio::spawn works" --library tokio`
 2. Zenith auto-creates a research item linked to the study (unless `--research` provided)
 
 **Phase 2: Plan**
@@ -91,7 +91,7 @@ When the user asks to learn about something, the LLM:
 The LLM forms a study plan — what questions to answer, what to test. This is captured as the research item's description:
 
 ```bash
-zen research update <research-id> --description "## Study Plan
+znt research update <research-id> --description "## Study Plan
 
 ### Questions
 1. What are the Send + 'static requirements for spawn?
@@ -107,14 +107,14 @@ explore: read docs, write test code, validate assumptions"
 If the library is indexed, search for relevant documentation:
 
 ```bash
-zen search "spawn" --package tokio
-zen search "JoinHandle" --package tokio
+znt search "spawn" --package tokio
+znt search "JoinHandle" --package tokio
 ```
 
 If not indexed, install it first:
 
 ```bash
-zen install tokio --ecosystem rust
+znt install tokio --ecosystem rust
 ```
 
 ---
@@ -124,9 +124,9 @@ zen install tokio --ecosystem rust
 The LLM forms assumptions about the topic. Each assumption becomes a hypothesis linked to the study:
 
 ```bash
-zen study assume stu-xxx --content "spawn requires Send + 'static bounds on the future"
-zen study assume stu-xxx --content "spawned tasks can panic without crashing the runtime"
-zen study assume stu-xxx --content "spawn is zero-cost (no allocation at spawn time)"
+znt study assume stu-xxx --content "spawn requires Send + 'static bounds on the future"
+znt study assume stu-xxx --content "spawned tasks can panic without crashing the runtime"
+znt study assume stu-xxx --content "spawn is zero-cost (no allocation at spawn time)"
 ```
 
 Each call:
@@ -147,12 +147,12 @@ For each assumption, the LLM:
 
 ```bash
 # Validated assumption: compile error proves Send is required
-zen study test stu-xxx --assumption hyp-aaa \
+znt study test stu-xxx --assumption hyp-aaa \
     --result validated \
     --evidence "Compile error E0277: Rc<i32> cannot be sent between threads safely. Confirms Send bound is enforced at compile time."
 
 # Invalidated assumption: spawn DOES allocate
-zen study test stu-xxx --assumption hyp-ccc \
+znt study test stu-xxx --assumption hyp-ccc \
     --result invalidated \
     --evidence "spawn allocates ~200 bytes per task for JoinHandle + task harness on x86_64."
 ```
@@ -177,7 +177,7 @@ Each call:
 At any point, the LLM can check study progress:
 
 ```bash
-zen study get stu-xxx
+znt study get stu-xxx
 ```
 
 Returns:
@@ -201,7 +201,7 @@ Returns:
 When all assumptions are tested (or the LLM decides to stop):
 
 ```bash
-zen study conclude stu-xxx \
+znt study conclude stu-xxx \
     --summary "## Study Conclusions: How tokio::spawn works
 
 ### Confirmed
@@ -257,26 +257,26 @@ The studies workflow reuses existing entities for all content:
 
 ## 8. CLI Commands
 
-### `zen study create`
+### `znt study create`
 
 ```bash
-zen study create --topic <topic> [--library <lib>] [--methodology explore|test-driven|compare] [--research <id>]
+znt study create --topic <topic> [--library <lib>] [--methodology explore|test-driven|compare] [--research <id>]
 ```
 
 **Implementation**: Creates a `studies` row. If `--research` not provided, auto-creates a `research_items` row and links via `research_id`. Returns both IDs.
 
-### `zen study assume <study-id>`
+### `znt study assume <study-id>`
 
 ```bash
-zen study assume <study-id> --content <assumption>
+znt study assume <study-id> --content <assumption>
 ```
 
 **Implementation**: Creates a `hypotheses` row with `research_id` from the study's linked research item. Creates an `entity_links` row linking study -> hypothesis. Returns hypothesis ID.
 
-### `zen study test <study-id>`
+### `znt study test <study-id>`
 
 ```bash
-zen study test <study-id> --assumption <hyp-id> --result validated|invalidated|inconclusive --evidence <text>
+znt study test <study-id> --assumption <hyp-id> --result validated|invalidated|inconclusive --evidence <text>
 ```
 
 **Implementation**:
@@ -285,18 +285,18 @@ zen study test <study-id> --assumption <hyp-id> --result validated|invalidated|i
 3. Updates hypothesis status based on `--result`
 4. All in a transaction
 
-### `zen study get <study-id>`
+### `znt study get <study-id>`
 
 ```bash
-zen study get <study-id>
+znt study get <study-id>
 ```
 
 **Implementation**: Single query joining `studies` with linked hypotheses, findings, and insights via entity_links. Progress derived from hypothesis status counts.
 
-### `zen study conclude <study-id>`
+### `znt study conclude <study-id>`
 
 ```bash
-zen study conclude <study-id> --summary <text>
+znt study conclude <study-id> --summary <text>
 ```
 
 **Implementation**:
@@ -306,10 +306,10 @@ zen study conclude <study-id> --summary <text>
 4. Updates linked research_item to `status: resolved`
 5. All in a transaction
 
-### `zen study list`
+### `znt study list`
 
 ```bash
-zen study list [--status active|concluding|completed|abandoned] [--library <lib>] [--limit 20]
+znt study list [--status active|concluding|completed|abandoned] [--library <lib>] [--limit 20]
 ```
 
 ---
@@ -333,12 +333,12 @@ When the LLM creates a study, it generates a plan as the research item's descrip
 [explore | test-driven | compare]: [Brief description of approach]
 
 ### Initial Assumptions
-- [Assumption 1] (to be formally added via `zen study assume`)
+- [Assumption 1] (to be formally added via `znt study assume`)
 - [Assumption 2]
 - [Assumption 3]
 
 ### Resources
-- Indexed docs: `zen search "<query>" --package <lib>`
+- Indexed docs: `znt search "<query>" --package <lib>`
 - Source code: [relevant files if known]
 ```
 
@@ -348,17 +348,17 @@ When the LLM creates a study, it generates a plan as the research item's descrip
 
 ### Multi-Session Studies
 
-Studies persist across sessions. At session start, `zen whats-next` includes active studies:
+Studies persist across sessions. At session start, `znt whats-next` includes active studies:
 
 ```bash
-zen whats-next
+znt whats-next
 # -> "Active studies: stu-xxx 'How tokio::spawn works' (2/3 assumptions tested)"
 ```
 
 At session resume:
 
 ```bash
-zen study get stu-xxx
+znt study get stu-xxx
 # -> Full state: what's been validated, what remains
 ```
 
@@ -368,13 +368,13 @@ Studies naturally integrate with Zenith's documentation indexing:
 
 ```bash
 # Index the library being studied
-zen install tokio --ecosystem rust
+znt install tokio --ecosystem rust
 
 # Search indexed docs for relevant APIs
-zen search "spawn" --package tokio
+znt search "spawn" --package tokio
 
 # Record what you find as a finding
-zen finding create --content "spawn signature: pub fn spawn<F>(future: F) -> JoinHandle<F::Output>" \
+znt finding create --content "spawn signature: pub fn spawn<F>(future: F) -> JoinHandle<F::Output>" \
     --source "package:tokio" --research <research-id>
 ```
 
@@ -384,13 +384,13 @@ Studies can link to existing knowledge:
 
 ```bash
 # Study derived from a previous finding
-zen link stu-xxx fnd-yyy derived-from
+znt link stu-xxx fnd-yyy derived-from
 
 # Study relates to an existing research investigation
-zen link stu-xxx res-yyy relates-to
+znt link stu-xxx res-yyy relates-to
 
 # Study findings trigger new tasks
-zen link fnd-zzz tsk-www triggers
+znt link fnd-zzz tsk-www triggers
 ```
 
 ### Studies as PRD Input
@@ -399,11 +399,11 @@ Study conclusions can inform PRD creation:
 
 ```bash
 # Complete a study about a library
-zen study conclude stu-xxx --summary "..."
+znt study conclude stu-xxx --summary "..."
 
 # Create a PRD based on study findings
-zen prd create --title "Implement async task pool using tokio::spawn"
-zen link iss-xxx stu-xxx derived-from
+znt prd create --title "Implement async task pool using tokio::spawn"
+znt link iss-xxx stu-xxx derived-from
 ```
 
 ---

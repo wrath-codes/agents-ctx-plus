@@ -11,3 +11,6 @@ mod spike_duckdb;
 
 #[cfg(test)]
 mod spike_duckdb_vss;
+
+#[cfg(test)]
+mod spike_r2_parquet;

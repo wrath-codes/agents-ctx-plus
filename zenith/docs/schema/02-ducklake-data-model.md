@@ -22,7 +22,7 @@
 
 ## 1. Overview
 
-The DuckLake stores **indexed package documentation** -- tree-sitter-extracted API symbols and chunked documentation text with fastembed vector embeddings. This is what powers `zen search`.
+The DuckLake stores **indexed package documentation** -- tree-sitter-extracted API symbols and chunked documentation text with fastembed vector embeddings. This is what powers `znt search`.
 
 ### Design Principles
 
@@ -35,7 +35,7 @@ The DuckLake stores **indexed package documentation** -- tree-sitter-extracted A
 
 ### What Gets Indexed
 
-When a user runs `zen install <package>`:
+When a user runs `znt install <package>`:
 
 1. Clone the package repository to a temp directory
 2. Parse source files with tree-sitter (16 supported languages)
@@ -51,9 +51,9 @@ When a user runs `zen install <package>`:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Zenith CLI (zen)                            │
+│                         Zenith CLI (znt)                            │
 │                                                                     │
-│  zen install <pkg>    zen search <query>    zen onboard             │
+│  znt install <pkg>    znt search <query>    znt onboard             │
 └──────────┬────────────────────┬────────────────────┬────────────────┘
            │                    │                    │
            ▼                    ▼                    ▼
@@ -163,7 +163,7 @@ CREATE TABLE indexed_packages (
 | `downloads` | Download count at time of indexing (for relevance ranking) |
 | `file_count` | Number of source files parsed |
 | `symbol_count` | Total API symbols extracted |
-| `source_cached` | Whether source files are stored in `source_files` table for `zen grep` |
+| `source_cached` | Whether source files are stored in `source_files` table for `znt grep` |
 
 ### api_symbols
 
@@ -313,7 +313,7 @@ CREATE TABLE doc_chunks (
 
 ### source_files
 
-Source file contents stored for `zen grep` package-mode search. Populated during the indexing pipeline (step 6.5). Content is FSST-compressed by DuckDB automatically (~2-3x compression for source code). See [13-zen-grep-design.md](./13-zen-grep-design.md).
+Source file contents stored for `znt grep` package-mode search. Populated during the indexing pipeline (step 6.5). Content is FSST-compressed by DuckDB automatically (~2-3x compression for source code). See [13-zen-grep-design.md](./13-zen-grep-design.md).
 
 ```sql
 CREATE TABLE source_files (
@@ -360,11 +360,11 @@ CREATE INDEX idx_symbols_visibility ON api_symbols(visibility);
 CREATE INDEX idx_chunks_pkg ON doc_chunks(ecosystem, package, version);
 CREATE INDEX idx_chunks_source ON doc_chunks(source_file);
 
--- Source file indexes (for zen grep)
+-- Source file indexes (for znt grep)
 CREATE INDEX idx_source_pkg ON source_files(ecosystem, package, version);
 CREATE INDEX idx_source_lang ON source_files(ecosystem, package, version, language);
 
--- Symbol correlation index (for zen grep: match grep results to enclosing symbols)
+-- Symbol correlation index (for znt grep: match grep results to enclosing symbols)
 CREATE INDEX idx_symbols_file_lines ON api_symbols(ecosystem, package, version, file_path, line_start, line_end);
 ```
 
@@ -430,7 +430,7 @@ LIMIT 10;
    INSERT INTO doc_chunks ...
    INSERT INTO indexed_packages ...
 
-6.5 Store Source Files (for zen grep)
+6.5 Store Source Files (for znt grep)
     For each source file walked in step 2 (content already in memory from step 3):
       INSERT INTO source_files (ecosystem, package, version, file_path, content, language, size_bytes, line_count)
     UPDATE indexed_packages SET source_cached = TRUE WHERE ecosystem = ... AND name = ...
@@ -452,7 +452,7 @@ When a new version is available:
 
 ### Batch Indexing (Onboard)
 
-`zen onboard` reads the project manifest and indexes all dependencies:
+`znt onboard` reads the project manifest and indexes all dependencies:
 
 ```
 1. Detect project type (Cargo.toml, package.json, etc.)

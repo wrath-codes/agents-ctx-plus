@@ -1,4 +1,4 @@
-# Zenith: `zen grep` Feature Design
+# Zenith: `znt grep` Feature Design
 
 **Version**: 2026-02-08
 **Status**: Design Document
@@ -27,7 +27,7 @@
 
 ## 1. Overview
 
-`zen grep` adds regex/literal text search to Zenith. Two engines, two modes:
+`znt grep` adds regex/literal text search to Zenith. Two engines, two modes:
 
 | Mode | Trigger | Engine | Data Source |
 |------|---------|--------|-------------|
@@ -36,7 +36,7 @@
 
 **Why two engines**: Package source is already in DuckDB (compressed, no file sprawl). Local project files must be searched on the live filesystem. Each engine is optimal for its domain.
 
-**Relationship to `rg`**: `zen grep` is additive, not a replacement. It provides structured JSON output for LLM consumption and Zenith-aware filtering (`.zenithignore`, test file skipping, symbol correlation). For human-interactive ad-hoc search, users should still use `rg` directly.
+**Relationship to `rg`**: `znt grep` is additive, not a replacement. It provides structured JSON output for LLM consumption and Zenith-aware filtering (`.zenithignore`, test file skipping, symbol correlation). For human-interactive ad-hoc search, users should still use `rg` directly.
 
 ---
 
@@ -47,9 +47,9 @@
 | Package source storage | New `source_files` table in DuckDB lake | No file sprawl, FSST compressed (~2-3x), single `.duckdb` file, correlates with `api_symbols` via SQL JOIN |
 | Package grep engine | DuckDB fetch + Rust `regex` crate for line matching | DuckDB handles compressed storage + filtering; Rust regex handles line splitting + matching (faster than doing it all in SQL) |
 | Local grep engine | `grep` 0.4 + `ignore` 0.4 crates | ripgrep-quality speed (~10-50ms), `.gitignore` aware, mature ecosystem |
-| Default behavior (no flags) | **Error** — must provide `--package`, `--all-packages`, or `[path...]` | `rg` already handles ad-hoc local search well; `zen grep` should be explicit about scope |
+| Default behavior (no flags) | **Error** — must provide `--package`, `--all-packages`, or `[path...]` | `rg` already handles ad-hoc local search well; `znt grep` should be explicit about scope |
 | `--all-packages` | Supported | User option to search across all cached packages |
-| Test file caching | Cache all source, filter at grep time | Faster `zen install` (no test-detection overhead at cache time), no re-install needed to grep tests later, `ignore` crate's `filter_entry` skips files before any I/O |
+| Test file caching | Cache all source, filter at grep time | Faster `znt install` (no test-detection overhead at cache time), no re-install needed to grep tests later, `ignore` crate's `filter_entry` skips files before any I/O |
 | Symbol correlation | Package mode only, via batch query + binary search | Local project files aren't indexed in `api_symbols` |
 | File retention on disk | **None** — source lives inside DuckDB | Avoids thousands of files in `.zenith/cache/sources/`, cleaner than raw file retention |
 
@@ -112,7 +112,7 @@ Step 8 remains: `rm -rf /tmp/zenith-index/<pkg>` — source is in DuckDB, temp c
 ## 5. CLI Specification
 
 ```
-zen grep <pattern> [path...] [flags]
+znt grep <pattern> [path...] [flags]
 
 REQUIRED: one of --package, --all-packages, or [path...] must be provided.
 ```
@@ -120,10 +120,10 @@ REQUIRED: one of --package, --all-packages, or [path...] must be provided.
 **Modes:**
 
 ```bash
-zen grep <pattern> --package <pkg>        # Search one indexed package's source
-zen grep <pattern> -P tokio -P serde      # Search multiple packages
-zen grep <pattern> --all-packages         # Search all indexed packages
-zen grep <pattern> <path...>              # Search local project files
+znt grep <pattern> --package <pkg>        # Search one indexed package's source
+znt grep <pattern> -P tokio -P serde      # Search multiple packages
+znt grep <pattern> --all-packages         # Search all indexed packages
+znt grep <pattern> <path...>              # Search local project files
 ```
 
 **Flags:**
@@ -255,7 +255,7 @@ CREATE INDEX idx_symbols_file_lines
 ### Package Mode Flow
 
 ```
-zen grep "pattern" --package tokio
+znt grep "pattern" --package tokio
   │
   ├── Build regex from pattern + flags (case_insensitive, word, etc.)
   ├── Query DuckDB: SELECT file_path, content FROM source_files WHERE ...
@@ -272,7 +272,7 @@ zen grep "pattern" --package tokio
 ### Local Mode Flow
 
 ```
-zen grep "pattern" src/
+znt grep "pattern" src/
   │
   ├── Build RegexMatcher (grep-regex crate)
   ├── Build WalkBuilder (ignore crate):
@@ -298,8 +298,8 @@ zen-search/src/
 └── walk.rs           # NEW: File walker factory (ignore crate integration)
 
 zen-cli/src/commands/
-├── grep.rs           # NEW: CLI handler for zen grep
-├── cache.rs          # NEW: CLI handler for zen cache
+├── grep.rs           # NEW: CLI handler for znt grep
+├── cache.rs          # NEW: CLI handler for znt cache
 └── ...existing...
 ```
 
@@ -361,7 +361,7 @@ pub struct GrepStats {
 
 ## 9. Walker Factory
 
-Shared between `zen grep` local mode and the indexing pipeline (Phase 3, task 3.14).
+Shared between `znt grep` local mode and the indexing pipeline (Phase 3, task 3.14).
 
 ```rust
 // zen-search/src/walk.rs
@@ -393,10 +393,10 @@ pub fn build_walker(
 
 ## 10. Cache Management
 
-New `zen cache` command for managing stored source in DuckDB:
+New `znt cache` command for managing stored source in DuckDB:
 
 ```
-zen cache
+znt cache
 ├── list                    # Show packages with cached source + sizes
 ├── clean                   # Remove all cached source
 ├── clean <package>         # Remove one package's cached source
@@ -458,8 +458,8 @@ ignore = "0.4"
 | 4.10 | Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation | zen-search | 4 | 5.19 |
 | 4.11 | Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink` | zen-search | 4 | 5.19 |
 | 4.12 | Add `idx_symbols_file_lines` index to `api_symbols` | zen-lake | 4 | 4.10 |
-| 5.19 | Implement `zen grep` CLI command (both modes, all flags) | zen-cli | 5 | Done |
-| 5.20 | Implement `zen cache` CLI command (list, clean, stats) | zen-cli | 5 | Done |
+| 5.19 | Implement `znt grep` CLI command (both modes, all flags) | zen-cli | 5 | Done |
+| 5.20 | Implement `znt cache` CLI command (list, clean, stats) | zen-cli | 5 | Done |
 
 **Critical path**: 0.14 → 3.16 → 3.17 → 4.10 → 5.19
 
@@ -470,9 +470,9 @@ ignore = "0.4"
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|------------|
 | DuckDB `string_split`+`unnest` too slow for large packages | Grep latency >500ms | Low | Fetch content from DuckDB, do line splitting + regex in Rust. DuckDB is just compressed storage. |
-| `source_files` doubles lake file size | Disk concern for users with many indexed packages | Medium | `zen cache clean` command. Can add `--no-cache-source` flag to `zen install` if needed. |
+| `source_files` doubles lake file size | Disk concern for users with many indexed packages | Medium | `znt cache clean` command. Can add `--no-cache-source` flag to `znt install` if needed. |
 | Regex semantics differ between DuckDB (RE2) and grep crate (Rust `regex`) | Pattern works in one mode but not the other | Low | Both are RE2-compatible (linear time, no backtracking). Document minor differences. |
-| Package indexed before grep feature has no `source_files` data | `zen grep --package <pkg>` fails | Medium | Check `source_cached` flag, return clear error with `zen install <pkg> --force` guidance. |
+| Package indexed before grep feature has no `source_files` data | `znt grep --package <pkg>` fails | Medium | Check `source_cached` flag, return clear error with `znt install <pkg> --force` guidance. |
 | `grep` crate API changes | Breaks local mode | Very low | v0.4 is stable, BurntSushi actively maintains it. |
 
 ---
