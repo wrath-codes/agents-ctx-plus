@@ -32,7 +32,7 @@ Zenith is a **developer toolbox CLI** that an LLM (any LLM, any chat interface) 
 **Zenith is:**
 - A Rust CLI binary (`znt`) with structured JSON input/output
 - A state management system for research, findings, hypotheses, tasks, and audit trails
-- A package documentation indexer (clone, parse with ast-grep, embed with fastembed, store in DuckLake)
+- A package documentation indexer (clone, parse with ast-grep, embed with fastembed, store as Lance on R2 via lancedb, catalog in Turso)
 - A search engine over indexed documentation (vector + FTS)
 - A session tracker that lets the LLM pick up where it left off
 
@@ -92,17 +92,18 @@ Next session:
 │         │                 │                 │                 │          │
 │         ▼                 ▼                 ▼                 ▼          │
 │  ┌─────────────────────────────────┐  ┌────────────────────────────┐    │
-│  │       Turso / libSQL            │  │   DuckDB + DuckLake        │    │
-│  │       (Relational State)        │  │   (Documentation Lake)     │    │
+│  │       Turso / libSQL            │  │   Lance on R2              │    │
+│  │       (State + Catalog)         │  │   (Documentation Lake)     │    │
 │  │                                 │  │                            │    │
 │  │  • Research, Findings, Tasks    │  │  • API symbols (ast-grep)  │    │
 │  │  • Hypotheses, Insights         │  │  • Doc chunks (markdown)   │    │
 │  │  • Implementation Log           │  │  • Embeddings (fastembed)  │    │
-│  │  • Audit Trail                  │  │  • HNSW vector indexes     │    │
+│  │  • Audit Trail, Entity Links    │  │  • Vector/FTS indexes      │    │
 │  │  • FTS5 search indexes          │  │                            │    │
-│  │  • Entity Links                 │  │  MotherDuck catalog        │    │
-│  │                                 │  │  R2 Lance/Parquet storage  │    │
-│  │  Sync: wrap-up only             │  │                            │    │
+│  │  • DuckLake-inspired catalog    │  │  Written by: lancedb crate │    │
+│  │    (dl_data_file, dl_snapshot)  │  │  Read by: DuckDB lance ext │    │
+│  │  • Visibility (pub/team/priv)   │  │                            │    │
+│  │  Sync: wrap-up (embedded repl)  │  │  Clerk JWT auth (JWKS)     │    │
 │  └────────────┬────────────────────┘  └────────────────────────────┘    │
 │               │                                                          │
 │               ▼                                                          │
@@ -217,7 +218,7 @@ znt init
 ```
 znt install <package> [--ecosystem rust]
   │
-  ├─► Check indexed_packages in DuckLake (already indexed?)
+  ├─► Check Turso catalog (already indexed? crowdsource dedup)
   ├─► Resolve package → find repo URL via registry API
   ├─► git clone --depth 1 → temp directory
   ├─► Walk source files
@@ -228,8 +229,8 @@ znt install <package> [--ecosystem rust]
   │     └─► Extract doc comments, attributes, metadata
   ├─► Chunk documentation files (README, docs/*)
   ├─► Generate fastembed vectors (batch)
-  ├─► Write to DuckLake (api_symbols.parquet, doc_chunks.parquet)
-  ├─► Register in indexed_packages
+  ├─► Write Lance to R2 via lancedb (serde_arrow → RecordBatch → lance)
+  ├─► Register in Turso catalog (dl_data_file + dl_snapshot)
   ├─► Update project_dependencies (indexed = TRUE)
   ├─► Write audit trail entry
   ├─► Cleanup temp directory
@@ -320,7 +321,8 @@ zenith/
 │   ├── zen-cli/           # CLI binary (clap)
 │   ├── zen-core/          # Core types, ID generation, error types
 │   ├── zen-db/            # Turso/libSQL operations
-│   ├── zen-lake/          # DuckDB/DuckLake operations
+│   ├── zen-lake/          # Lance writes (lancedb) + DuckDB query engine
+│   ├── zen-auth/          # Clerk auth, JWKS validation, token management
 │   ├── zen-parser/        # ast-grep-based parsing + extraction
 │   ├── zen-embeddings/    # fastembed integration
 │   ├── zen-registry/      # Package registry HTTP clients
@@ -342,11 +344,12 @@ zenith/
 | **CLI name** | `znt` | Short, from "zenith", avoids collision with zen-browser (spike 0.13) |
 | **No embedded LLM** | The user's LLM is the orchestrator | Zenith is a tool, not an agent. Any LLM can call it |
 | **Turso for state** | Embedded replicas + cloud sync | Offline-first, sync only at wrap-up to avoid conflicts |
-| **DuckDB for lake** | DuckLake + MotherDuck + R2 | Validated in aether project. Parquet native, vector search, cloud queryable |
+| **Lance on R2** | Turso catalog + lancedb writes + DuckDB lance ext reads | Validated in spikes 0.18-0.20. Native vector/FTS/hybrid search. Crowdsourced. MotherDuck removed. |
+| **Clerk auth** | clerk-rs JWKS + org claims for visibility | No custom RBAC. JWT sub/org_id drive public/team/private scoping. |
 | **fastembed** | Local ONNX embeddings | No API keys needed. 384-dim vectors. Fast batch generation |
 | **ast-grep** | Pattern-based AST matching (wraps tree-sitter) | Code-like patterns, composable matchers, jQuery-like traversal, 26 built-in languages. 12k+ stars, actively maintained |
 | **FTS5 in Turso** | Porter stemming search | Fast full-text search over findings, tasks, audit trail without vector overhead |
-| **HNSW in DuckDB** | Vector similarity search | Semantic search over documentation and API symbols |
+| **Lance search** | lance_vector_search + lance_fts + lance_hybrid_search | Persistent indexes, BM25 FTS, hybrid search. Replaces HNSW (crashes on persistence) |
 | **JSONL audit trail** | Append-only in git | Git-friendly merge format (from beads pattern), complete history |
 | **JSON I/O** | Structured CLI responses | LLM can parse structured data. No natural language parsing needed |
 | **IDs** | SHA256-based short hashes | Deterministic for lake data, collision-resistant for state data, human-readable prefixes |
@@ -525,7 +528,7 @@ Zenith skips test files and test directories by default during indexing (configu
 ## Cross-References
 
 - Turso data model: [01-turso-data-model.md](./01-turso-data-model.md)
-- DuckLake data model: [02-ducklake-data-model.md](./02-ducklake-data-model.md)
+- Data architecture: [02-data-architecture.md](./02-data-architecture.md) (supersedes 02-ducklake-data-model.md)
 - CLI API design: [04-cli-api-design.md](./04-cli-api-design.md)
 - Original plan: `workflow-tool-plan/` directory
 - Aether storage validation: `~/projects/aether/crates/aether-storage/`

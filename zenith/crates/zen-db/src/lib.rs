@@ -23,3 +23,6 @@ mod spike_jsonl;
 
 #[cfg(test)]
 mod spike_clerk_auth;
+
+#[cfg(test)]
+mod spike_catalog_visibility;

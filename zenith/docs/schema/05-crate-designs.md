@@ -38,7 +38,8 @@ zenith/
 │   ├── zen-core/              # Types, IDs, errors
 │   ├── zen-config/            # Configuration (figment)
 │   ├── zen-db/                # Turso/libSQL operations
-│   ├── zen-lake/              # DuckDB/DuckLake operations
+│   ├── zen-lake/              # Lance writes (lancedb) + DuckDB query engine + catalog
+│   ├── zen-auth/              # Clerk auth, JWKS validation, token management
 │   ├── zen-parser/            # ast-grep-based parsing + extraction
 │   ├── zen-embeddings/        # fastembed integration
 │   ├── zen-registry/          # Package registry HTTP clients
@@ -450,7 +451,7 @@ zen-config/src/
 ├── lib.rs              # ZenConfig struct, load(), load_with_dotenv(), figment()
 ├── error.rs            # ConfigError (wraps figment::Error + NotConfigured + InvalidValue)
 ├── turso.rs            # TursoConfig (url, auth_token, platform_api_key, org_slug, sync, replica)
-├── motherduck.rs       # MotherDuckConfig (access_token, db_name, connection_string())
+├── motherduck.rs       # ~~MotherDuckConfig~~ (RETIRED — MotherDuck removed from architecture)
 ├── r2.rs               # R2Config (account_id, keys, bucket, endpoint_url(), create_secret_sql())
 ├── clerk.rs            # ClerkConfig (publishable_key, secret_key, jwks_url, backend/frontend)
 ├── axiom.rs            # AxiomConfig (token, dataset, endpoint, is_valid_token())
@@ -745,9 +746,9 @@ The SQL file is embedded via `include_str!` from `crates/zen-db/migrations/001_i
 
 ## 6. zen-lake
 
-**Purpose**: DuckDB/DuckLake operations -- package indexing storage, vector queries, parquet management.
+**Purpose**: Package index storage — Lance writes (lancedb + serde_arrow), DuckDB query engine (lance extension reads), Turso catalog integration. MotherDuck/DuckLake removed from architecture.
 
-**Validated in**: aether `aether-storage/src/bin/test_r2_ducklake.rs` (DuckDB + R2 + DuckLake + MotherDuck full spike)
+**Validated in**: Spikes 0.18 (18/18), 0.19 (10/10), 0.20 (9/9). Production write path: Rust structs → serde_arrow → arrow-57 RecordBatch → lancedb → Lance on R2. Read path: Turso catalog → Lance paths → DuckDB lance extension.
 
 ### Dependencies
 
@@ -756,8 +757,11 @@ The SQL file is embedded via `include_str!` from `crates/zen-db/migrations/001_i
 zen-core.workspace = true
 zen-config.workspace = true
 zen-embeddings.workspace = true
-duckdb.workspace = true
-object_store.workspace = true
+duckdb.workspace = true          # Read-only query engine (lance extension)
+lancedb.workspace = true         # Write path (native Lance writes to R2)
+arrow-array.workspace = true     # arrow-57 (lancedb's version)
+arrow-schema.workspace = true
+serde_arrow.workspace = true     # Rust structs → RecordBatch
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
@@ -771,86 +775,162 @@ tokio.workspace = true
 
 ```
 zen-lake/src/
-├── lib.rs              # ZenLake struct, connection modes
-├── setup.rs            # Extension loading, DuckLake init, R2 secret creation
-├── indexing.rs          # Write api_symbols + doc_chunks to DuckLake
-├── queries.rs           # Vector search, filtered queries, cross-package
-└── packages.rs          # indexed_packages CRUD
+├── lib.rs              # ZenLake struct, writer + reader modes
+├── writer.rs           # lancedb writes: serde_arrow → RecordBatch → Lance on R2
+├── reader.rs           # DuckDB lance extension: search queries
+├── catalog.rs          # Turso catalog integration: register, discover, dedup
+├── schemas.rs          # ApiSymbol, DocChunk structs with serde + serde_arrow
+└── source_files.rs     # Local DuckDB source_files for znt grep
 ```
 
 ### Key Patterns
 
-#### Connection Modes
+#### Writer (lancedb + serde_arrow — Production Path)
 
-**Validated in**: aether storage spike (three modes tested)
+**Validated in**: spike 0.19 test M1 (10/10 pass)
+
+```rust
+use lancedb;
+use arrow_array::RecordBatchIterator;
+use arrow_schema::{DataType, Field, FieldRef};
+use serde_arrow::schema::{SchemaLike, TracingOptions};
+use zen_core::arrow_serde;
+
+/// Write symbols to Lance on R2 (production path)
+pub async fn write_symbols_to_r2(
+    symbols: &[ApiSymbol],
+    r2_path: &str,
+    r2_config: &R2Config,
+) -> Result<(), LakeError> {
+    // 1. serde_arrow: trace schema + override embedding to FixedSizeList(384)
+    let mut fields = Vec::<FieldRef>::from_type::<ApiSymbol>(
+        TracingOptions::default()
+    )?;
+    fields = fields.into_iter().map(|f| {
+        if f.name() == "embedding" {
+            Arc::new(Field::new("embedding",
+                DataType::FixedSizeList(
+                    Arc::new(Field::new("item", DataType::Float32, true)), 384),
+                false))
+        } else { f }
+    }).collect();
+
+    // 2. Serialize to RecordBatch (arrow-57)
+    let batch = serde_arrow::to_record_batch(&fields, symbols)?;
+    let schema = batch.schema();
+
+    // 3. Write via lancedb to R2
+    let db = lancedb::connect(r2_path)
+        .storage_option("aws_access_key_id", &r2_config.access_key_id)
+        .storage_option("aws_secret_access_key", &r2_config.secret_access_key)
+        .storage_option("aws_endpoint", &r2_config.endpoint())
+        .storage_option("aws_region", "auto")
+        .storage_option("aws_virtual_hosted_style_request", "false")
+        .execute().await?;
+
+    let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
+    let tbl = db.create_table("symbols", Box::new(batches)).execute().await?;
+
+    // 4. Create search indexes (PQ needs >= 256 rows)
+    if symbols.len() >= 256 {
+        tbl.create_index(&["embedding"], lancedb::index::Index::Auto)
+            .execute().await?;
+    }
+    tbl.create_index(&["doc_comment"],
+        lancedb::index::Index::FTS(lancedb::index::scalar::FtsIndexBuilder::default()))
+        .execute().await?;
+
+    Ok(())
+}
+```
+
+#### Reader (DuckDB lance extension — Read-Only)
+
+**Validated in**: spikes 0.18 + 0.19 + 0.20
 
 ```rust
 use duckdb::Connection;
 
-pub struct ZenLake {
+pub struct LakeReader {
     conn: Connection,
-    mode: LakeMode,
 }
 
-pub enum LakeMode {
-    /// Local DuckDB file, no cloud
-    Local,
-    /// MotherDuck catalog + R2 storage
-    Cloud {
-        motherduck_token: String,
-        r2_config: R2Config,
-    },
-}
-
-impl ZenLake {
-    pub fn open_local(path: &str) -> Result<Self, LakeError> {
-        let conn = Connection::open(path)?;
-        let lake = Self { conn, mode: LakeMode::Local };
-        lake.load_extensions()?;
-        lake.create_tables()?;
-        Ok(lake)
-    }
-
-    pub fn open_cloud(config: &ZenConfig) -> Result<Self, LakeError> {
-        let md = config.motherduck.as_ref()
-            .ok_or(LakeError::MissingConfig("motherduck"))?;
-        let conn_str = format!("md:?motherduck_token={}", md.access_token.as_ref().unwrap());
-        let conn = Connection::open(&conn_str)?;
-
-        let lake = Self {
-            conn,
-            mode: LakeMode::Cloud {
-                motherduck_token: md.access_token.clone().unwrap(),
-                r2_config: config.r2.clone().unwrap(),
-            },
-        };
-        lake.load_extensions()?;
-        lake.setup_r2_secret()?;
-        lake.setup_ducklake()?;
-        Ok(lake)
-    }
-
-    fn load_extensions(&self) -> Result<(), LakeError> {
-        self.conn.execute_batch("
-            INSTALL vss; LOAD vss;
+impl LakeReader {
+    pub fn new(r2_config: &R2Config) -> Result<Self, LakeError> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("
+            INSTALL lance FROM community; LOAD lance;
             INSTALL httpfs; LOAD httpfs;
         ")?;
-        Ok(())
+        conn.execute_batch(&format!("
+            CREATE SECRET r2 (
+                TYPE s3,
+                KEY_ID '{}',
+                SECRET '{}',
+                ENDPOINT '{}.r2.cloudflarestorage.com',
+                URL_STYLE 'path'
+            )", r2_config.access_key_id, r2_config.secret_access_key,
+                r2_config.account_id))?;
+        Ok(Self { conn })
     }
 
-    fn setup_r2_secret(&self) -> Result<(), LakeError> {
-        // Pattern from aether test_r2_ducklake.rs
-        if let LakeMode::Cloud { r2_config, .. } = &self.mode {
-            self.conn.execute(&format!("
-                CREATE SECRET IF NOT EXISTS r2_zenith IN MOTHERDUCK (
-                    TYPE s3,
-                    KEY_ID '{}',
-                    SECRET '{}',
-                    ENDPOINT '{}.r2.cloudflarestorage.com',
-                    URL_STYLE 'path'
-                )", r2_config.access_key_id, r2_config.secret_access_key, r2_config.account_id))?;
-        }
-        Ok(())
+    /// Search a Lance dataset by vector similarity
+    pub fn vector_search(&self, lance_path: &str, query_emb: &[f32], k: usize)
+        -> Result<Vec<SearchResult>, LakeError>
+    {
+        let emb_sql = format!("[{}]", query_emb.iter()
+            .map(|x| format!("{x}")).collect::<Vec<_>>().join(", "));
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT name, kind, signature, doc_comment, _distance
+             FROM lance_vector_search('{lance_path}', 'embedding',
+                 {emb_sql}::FLOAT[384], k={k})
+             ORDER BY _distance ASC"
+        ))?;
+        // ... collect results
+    }
+}
+```
+
+#### Catalog Integration (Turso — DuckLake-inspired)
+
+**Validated in**: spike 0.20 (9/9 pass)
+
+```rust
+/// Discover Lance paths from Turso catalog, scoped by visibility
+pub async fn discover_paths(
+    conn: &libsql::Connection,
+    ecosystem: &str,
+    packages: &[&str],
+    user_id: &str,
+    org_id: Option<&str>,
+) -> Result<Vec<CatalogEntry>, LakeError> {
+    let mut rows = conn.query(
+        "SELECT path, package, version, record_count, visibility FROM dl_data_file
+         WHERE ecosystem = ?1
+           AND package IN (SELECT value FROM json_each(?2))
+           AND (visibility = 'public'
+                OR (visibility = 'team' AND team_id = ?3)
+                OR (visibility = 'private' AND owner_id = ?4))",
+        libsql::params![ecosystem, serde_json::to_string(packages)?,
+            org_id.unwrap_or(""), user_id],
+    ).await?;
+    // ... collect entries
+}
+
+/// Register a new Lance dataset in the catalog (crowdsource dedup)
+pub async fn register_in_catalog(
+    conn: &libsql::Connection,
+    entry: &CatalogEntry,
+) -> Result<bool, LakeError> {
+    match conn.execute(
+        "INSERT INTO dl_data_file (table_name, snapshot_id, path, record_count,
+         ecosystem, package, version, visibility, owner_id, team_id, indexed_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        entry.to_params(),
+    ).await {
+        Ok(_) => Ok(true),  // First writer wins
+        Err(e) if e.to_string().contains("SQLITE_CONSTRAINT") => Ok(false), // Already indexed
+        Err(e) => Err(e.into()),
     }
 }
 ```
@@ -1854,7 +1934,9 @@ zen-core ──► zen-config ──► zen-db ───────────
 ## Cross-References
 
 - Turso data model: [01-turso-data-model.md](./01-turso-data-model.md)
-- DuckLake data model: [02-ducklake-data-model.md](./02-ducklake-data-model.md)
+- Data architecture: [02-data-architecture.md](./02-data-architecture.md) (supersedes 02-ducklake-data-model.md)
+- Native lancedb spike: [17-native-lance-spike-plan.md](./17-native-lance-spike-plan.md)
+- Catalog visibility spike: [18-catalog-visibility-spike-plan.md](./18-catalog-visibility-spike-plan.md)
 - Architecture overview: [03-architecture-overview.md](./03-architecture-overview.md)
 - CLI API design: [04-cli-api-design.md](./04-cli-api-design.md)
 - klaw-effect-tracker source: `~/projects/klaw/.agents/skills/klaw-effect-tracker/`

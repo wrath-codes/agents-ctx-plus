@@ -14,3 +14,6 @@ mod spike_duckdb_vss;
 
 #[cfg(test)]
 mod spike_r2_parquet;
+
+#[cfg(test)]
+mod spike_native_lance;

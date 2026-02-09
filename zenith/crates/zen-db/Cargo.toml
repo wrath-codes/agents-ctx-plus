@@ -30,6 +30,12 @@ open.workspace = true
 tiny_http.workspace = true
 keyring.workspace = true
 base64.workspace = true
+# Spike 0.20: catalog → lance search E2E
+lancedb.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+serde_arrow.workspace = true
+duckdb.workspace = true
 
 [lints]
 workspace = true

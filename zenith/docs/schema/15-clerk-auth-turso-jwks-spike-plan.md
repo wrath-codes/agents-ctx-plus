@@ -256,10 +256,29 @@ turso org jwks save clerk https://ruling-doe-21.clerk.accounts.dev/.well-known/j
 
 - **Full browser flow end-to-end** (real Clerk sign-in page + redirect) -- requires manual testing with a browser. The spike tests the callback server and browser-open separately.
 - **Token refresh automation** -- the spike detects expiry but doesn't implement automatic re-auth. That's Phase 9 task 9.7.
-- **org_id scoped queries** -- the spike connects to Turso with a Clerk JWT but doesn't test org-scoped SQL. That's Phase 9 task 9.10.
-- **Multi-user isolation** -- testing that user A can't see user B's data. Requires two Clerk users and two JWT templates.
+- **org_id scoped queries** -- **NOW VALIDATED** in spike 0.20 (J3, K1, K2). Clerk JWT `org_id` drives visibility scoping.
+- **Multi-user isolation** -- **NOW VALIDATED** in spike 0.20 (K2). Private code indexing only visible to owner.
 - **Clerk organization management** -- `znt team invite` / `znt team list`. That's Phase 9 task 9.22.
-- **JWT template creation** -- must be done manually in Clerk Dashboard before running D-tests.
+- **JWT template creation** -- must be done via Clerk Dashboard or Backend API. Template updated in spike 0.20 to include `org_id`, `org_slug`, `org_role`, `org_permissions: []`.
+- **Programmatic JWT generation** -- **NOW VALIDATED** in spike 0.20 (J0). `POST /v1/sessions` + `POST /v1/sessions/{id}/tokens/zenith_cli` = org-scoped JWT without browser.
+
+### Post-Spike Update (from spike 0.20)
+
+The `zenith_cli` JWT template was updated to include org claims:
+
+```json
+{
+  "org_id": "{{org.id}}",
+  "org_slug": "{{org.slug}}",
+  "org_role": "{{org.role}}",
+  "org_permissions": [],
+  "p": { "rw": { "ns": ["wrath-codes.zenith-dev"], ... } }
+}
+```
+
+**Critical gotcha**: `org_permissions` must be `[]` (static empty array), NOT `{{org.permissions}}` (shortcode doesn't resolve in custom templates). Without the correct `org_permissions`, `clerk-rs`'s `ActiveOrganization` deserialization fails silently and `org_id` gets consumed and lost.
+
+Clerk org created: `org_39PSbEI9mVoLgBQWuASKeltV7S9` (zenith-dev), user `zenith_dev` is admin.
 
 ---
 

@@ -6,3 +6,6 @@
 //! - Entity types (`SymbolKind`, `Visibility`, `ParsedItem`, etc.)
 //! - ID generation with type-prefixed short hashes
 //! - Common error types
+//! - Arrow serialization adapters for chrono types
+
+pub mod arrow_serde;

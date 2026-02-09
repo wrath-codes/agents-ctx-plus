@@ -43,7 +43,7 @@ clap = { version = "4.5", features = ["derive"] }
 figment = { version = "0.10", features = ["toml", "env", "test"] }
 
 # Object storage
-object_store = { version = "0.13", features = ["aws"] }
+object_store = { version = "0.12", features = ["aws"] }
 
 # Error handling
 thiserror = "2.0"
@@ -91,6 +91,15 @@ open = "5"
 tiny_http = "0.12"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 base64 = "0.22"
+
+# Lance (spike 0.19 — native lancedb writes to R2)
+lancedb = { version = "0.26", features = ["aws"] }
+arrow-array = "57"
+arrow-schema = "57"
+arrow-ipc = "57"
+
+# Arrow serialization (Rust structs ↔ Arrow RecordBatch, production bridge)
+serde_arrow = { version = "0.13", features = ["arrow-57"] }
 
 # Internal crates
 zen-core = { path = "crates/zen-core" }
