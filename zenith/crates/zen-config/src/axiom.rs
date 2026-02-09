@@ -34,11 +34,13 @@ impl Default for AxiomConfig {
 
 impl AxiomConfig {
     /// Check if the Axiom config has the minimum required fields.
+    #[must_use]
     pub fn is_configured(&self) -> bool {
         !self.token.is_empty() && !self.dataset.is_empty() && self.is_valid_token()
     }
 
     /// Axiom tokens must start with `xaat-`.
+    #[must_use]
     pub fn is_valid_token(&self) -> bool {
         self.token.starts_with("xaat-")
     }

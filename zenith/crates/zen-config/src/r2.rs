@@ -44,7 +44,8 @@ impl Default for R2Config {
 
 impl R2Config {
     /// Check if the R2 config has the minimum required fields.
-    pub fn is_configured(&self) -> bool {
+    #[must_use]
+    pub const fn is_configured(&self) -> bool {
         !self.account_id.is_empty()
             && !self.access_key_id.is_empty()
             && !self.secret_access_key.is_empty()
@@ -54,6 +55,7 @@ impl R2Config {
     /// Build the R2 endpoint URL.
     ///
     /// Returns the custom `endpoint` if set, otherwise builds from `account_id`.
+    #[must_use]
     pub fn endpoint_url(&self) -> String {
         if self.endpoint.is_empty() {
             format!("https://{}.r2.cloudflarestorage.com", self.account_id)
@@ -62,11 +64,12 @@ impl R2Config {
         }
     }
 
-    /// Generate the DuckDB SQL to create an R2 secret.
+    /// Generate the `DuckDB` SQL to create an R2 secret.
     ///
-    /// This produces a `CREATE SECRET` statement that DuckDB uses to access R2
+    /// This produces a `CREATE SECRET` statement that `DuckDB` uses to access R2
     /// via the httpfs extension. The `secret_name` parameter allows creating
     /// distinct secrets (e.g., `r2_zenith`, `r2_spike`).
+    #[must_use]
     pub fn create_secret_sql(&self, secret_name: &str) -> String {
         format!(
             "CREATE SECRET IF NOT EXISTS {secret_name} (
@@ -83,10 +86,11 @@ impl R2Config {
         )
     }
 
-    /// Generate the DuckDB SQL to create an R2 secret stored in MotherDuck.
+    /// Generate the `DuckDB` SQL to create an R2 secret stored in `MotherDuck`.
     ///
-    /// When using MotherDuck as the catalog, secrets must be created `IN MOTHERDUCK`
+    /// When using `MotherDuck` as the catalog, secrets must be created `IN MOTHERDUCK`
     /// so they persist across sessions.
+    #[must_use]
     pub fn create_secret_sql_motherduck(&self, secret_name: &str) -> String {
         format!(
             "CREATE SECRET IF NOT EXISTS {secret_name} IN MOTHERDUCK (
@@ -105,7 +109,7 @@ impl R2Config {
 
     /// The R2-specific endpoint (without `https://` prefix).
     ///
-    /// DuckDB `CREATE SECRET` expects just `account_id.r2.cloudflarestorage.com`.
+    /// `DuckDB` `CREATE SECRET` expects just `account_id.r2.cloudflarestorage.com`.
     fn r2_endpoint(&self) -> String {
         format!("{}.r2.cloudflarestorage.com", self.account_id)
     }

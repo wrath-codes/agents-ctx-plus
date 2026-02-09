@@ -78,15 +78,27 @@ impl ZenConfig {
     /// 2. `.zenith/config.toml` (project-local)
     /// 3. `~/.config/zenith/config.toml` (user-global)
     /// 4. Default values
-    pub fn load() -> Result<Self, ConfigError> {
-        Self::figment().extract().map_err(ConfigError::from)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if figment extraction fails (e.g. malformed
+    /// TOML or environment variables that cannot be deserialized).
+    pub fn load() -> Result<Self, Box<ConfigError>> {
+        Self::figment()
+            .extract()
+            .map_err(|e| Box::new(ConfigError::from(e)))
     }
 
     /// Load configuration with `.env` file support.
     ///
     /// Calls `dotenvy` to load the `.env` file from the workspace root before
     /// building the figment. This is the typical entry point for CLI and tests.
-    pub fn load_with_dotenv() -> Result<Self, ConfigError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if figment extraction fails (e.g. malformed
+    /// TOML or environment variables that cannot be deserialized).
+    pub fn load_with_dotenv() -> Result<Self, Box<ConfigError>> {
         Self::load_dotenv_from_workspace();
         Self::load()
     }
@@ -95,14 +107,15 @@ impl ZenConfig {
     ///
     /// This is public so tests can inspect the figment directly or add
     /// additional providers on top.
+    #[must_use]
     pub fn figment() -> Figment {
         let mut figment = Figment::from(Serialized::defaults(Self::default()));
 
         // Layer 1: User-global config
-        if let Some(global_path) = Self::global_config_path() {
-            if global_path.exists() {
-                figment = figment.merge(Toml::file(global_path));
-            }
+        if let Some(global_path) = Self::global_config_path()
+            && global_path.exists()
+        {
+            figment = figment.merge(Toml::file(global_path));
         }
 
         // Layer 2: Project-local config

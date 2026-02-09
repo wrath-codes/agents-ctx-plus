@@ -36,7 +36,8 @@ const UNIX_EPOCH_DATE: NaiveDate = match NaiveDate::from_ymd_opt(1970, 1, 1) {
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::wildcard_imports
+    clippy::wildcard_imports,
+    clippy::missing_errors_doc
 )]
 pub mod date32 {
     #[allow(clippy::wildcard_imports)]
@@ -66,7 +67,8 @@ pub mod date32 {
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::wildcard_imports
+    clippy::wildcard_imports,
+    clippy::missing_errors_doc
 )]
 pub mod date32_option {
     #[allow(clippy::wildcard_imports)]
@@ -104,7 +106,7 @@ pub mod date32_option {
 
 /// Serialize `DateTime<Utc>` as i64 microseconds since Unix epoch.
 /// Compatible with Arrow `Timestamp(Microsecond, Some("UTC"))` type.
-#[allow(clippy::wildcard_imports)]
+#[allow(clippy::wildcard_imports, clippy::missing_errors_doc)]
 pub mod timestamp_micros_utc {
     use super::*;
 
@@ -122,7 +124,7 @@ pub mod timestamp_micros_utc {
 
 /// Serialize `Option<DateTime<Utc>>` as `Option<i64>` microseconds.
 /// Compatible with nullable Arrow `Timestamp(Microsecond, Some("UTC"))` type.
-#[allow(clippy::wildcard_imports)]
+#[allow(clippy::wildcard_imports, clippy::missing_errors_doc)]
 pub mod timestamp_micros_utc_option {
     use super::*;
 

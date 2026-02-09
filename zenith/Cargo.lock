@@ -11512,8 +11512,11 @@ dependencies = [
 name = "zen-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
+ "jsonschema",
  "pretty_assertions",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -11649,6 +11652,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+ "zen-core",
 ]
 
 [[package]]

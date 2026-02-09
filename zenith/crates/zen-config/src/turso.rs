@@ -60,17 +60,20 @@ impl Default for TursoConfig {
 
 impl TursoConfig {
     /// Check if the Turso config has the minimum required fields for remote access.
-    pub fn is_configured(&self) -> bool {
+    #[must_use]
+    pub const fn is_configured(&self) -> bool {
         !self.url.is_empty() && !self.auth_token.is_empty()
     }
 
     /// Check if embedded replica mode is enabled.
-    pub fn has_local_replica(&self) -> bool {
+    #[must_use]
+    pub const fn has_local_replica(&self) -> bool {
         !self.local_replica_path.is_empty()
     }
 
     /// Check if the platform API key is available for token minting.
-    pub fn can_mint_tokens(&self) -> bool {
+    #[must_use]
+    pub const fn can_mint_tokens(&self) -> bool {
         !self.platform_api_key.is_empty() && !self.org_slug.is_empty() && !self.url.is_empty()
     }
 
@@ -78,6 +81,7 @@ impl TursoConfig {
     ///
     /// URL format: `libsql://{db_name}-{org_slug}.{region}.turso.io`
     /// Returns the `{db_name}` portion, or `None` if the URL doesn't match.
+    #[must_use]
     pub fn db_name(&self) -> Option<&str> {
         let hostname = self.url.strip_prefix("libsql://")?;
         let org_suffix = format!("-{}.", self.org_slug);

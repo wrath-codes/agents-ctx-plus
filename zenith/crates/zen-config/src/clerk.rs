@@ -27,7 +27,8 @@ pub struct ClerkConfig {
 
 impl ClerkConfig {
     /// Check if the Clerk config has the minimum required fields.
-    pub fn is_configured(&self) -> bool {
+    #[must_use]
+    pub const fn is_configured(&self) -> bool {
         !self.publishable_key.is_empty() && !self.secret_key.is_empty()
     }
 }
