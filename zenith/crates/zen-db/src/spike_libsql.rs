@@ -1891,22 +1891,6 @@ async fn spike_concurrent_same_session_file_append() {
 /// making format! interpolation safe when the input is EntityType.
 #[tokio::test]
 async fn spike_entity_type_table_mapping_is_exhaustive() {
-    // Every EntityType variant must map to a known table name
-    let valid_tables = [
-        "sessions",
-        "research_items",
-        "findings",
-        "hypotheses",
-        "insights",
-        "issues",
-        "tasks",
-        "implementation_log",
-        "compatibility_checks",
-        "studies",
-        "entity_links",
-        "audit_trail",
-    ];
-
     // Simulate the entity_type_to_table function from the plan
     fn entity_type_to_table(entity: &zen_core::enums::EntityType) -> &'static str {
         match entity {
@@ -1920,10 +1904,27 @@ async fn spike_entity_type_table_mapping_is_exhaustive() {
             zen_core::enums::EntityType::ImplLog => "implementation_log",
             zen_core::enums::EntityType::Compat => "compatibility_checks",
             zen_core::enums::EntityType::Study => "studies",
+            zen_core::enums::EntityType::Decision => "decisions",
             zen_core::enums::EntityType::EntityLink => "entity_links",
             zen_core::enums::EntityType::Audit => "audit_trail",
         }
     }
+
+    let valid_tables = [
+        "sessions",
+        "research_items",
+        "findings",
+        "hypotheses",
+        "insights",
+        "issues",
+        "tasks",
+        "implementation_log",
+        "compatibility_checks",
+        "studies",
+        "decisions",
+        "entity_links",
+        "audit_trail",
+    ];
 
     // Verify all variants map to known tables
     use zen_core::enums::EntityType;
@@ -1938,6 +1939,7 @@ async fn spike_entity_type_table_mapping_is_exhaustive() {
         EntityType::ImplLog,
         EntityType::Compat,
         EntityType::Study,
+        EntityType::Decision,
         EntityType::EntityLink,
         EntityType::Audit,
     ];

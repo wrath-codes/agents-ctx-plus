@@ -95,6 +95,9 @@ mod spike_clerk_auth;
 #[cfg(test)]
 mod spike_catalog_visibility;
 
+#[cfg(test)]
+mod spike_decision_traces;
+
 // Production tests
 #[cfg(test)]
 mod tests {

@@ -372,6 +372,7 @@ All entity IDs use a type prefix + short hash:
 | Study | `stu-` | `stu-a1b2c3` |
 | Entity Link | `lnk-` | `lnk-e5a2d9` |
 | Audit Entry | `aud-` | `aud-b3c8f1` |
+| Decision | `dec-` | `dec-a1b2c3` |
 
 ---
 

@@ -4,7 +4,7 @@
 //! 8-character hex strings. The Rust layer adds a type prefix: `"fnd-a3f8b2c1"`.
 //!
 //! This module provides:
-//! - Prefix constants for all 12 entity types
+//! - Prefix constants for all 13 entity types
 //! - `format_id()` to combine a prefix with a random part
 //! - `gen_id_sql()` to produce a SQL expression for use inside `INSERT` statements
 
@@ -38,6 +38,9 @@ pub const PREFIX_COMPAT: &str = "cmp";
 /// Study prefix.
 pub const PREFIX_STUDY: &str = "stu";
 
+/// Decision prefix.
+pub const PREFIX_DECISION: &str = "dec";
+
 /// Entity link prefix.
 pub const PREFIX_LINK: &str = "lnk";
 
@@ -56,6 +59,7 @@ pub const ALL_PREFIXES: &[&str] = &[
     PREFIX_IMPL_LOG,
     PREFIX_COMPAT,
     PREFIX_STUDY,
+    PREFIX_DECISION,
     PREFIX_LINK,
     PREFIX_AUDIT,
 ];
@@ -134,6 +138,6 @@ mod tests {
 
     #[test]
     fn all_prefixes_count() {
-        assert_eq!(ALL_PREFIXES.len(), 12);
+        assert_eq!(ALL_PREFIXES.len(), 13);
     }
 }

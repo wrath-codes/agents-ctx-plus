@@ -22,6 +22,7 @@ tracing.workspace = true
 pretty_assertions.workspace = true
 tempfile.workspace = true
 rstest.workspace = true
+rustworkx-core.workspace = true
 dotenvy.workspace = true
 serde-jsonlines.workspace = true
 reqwest.workspace = true

@@ -28,6 +28,7 @@ duckdb.workspace = true
 ast-grep-core.workspace = true
 ast-grep-language.workspace = true
 tree-sitter.workspace = true
+rustworkx-core.workspace = true
 
 [lints]
 workspace = true

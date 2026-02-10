@@ -2755,6 +2755,18 @@ Note: 9 remote Turso/Clerk spike tests require network access and may fail local
 
 ---
 
+### 11.5 Forward Reference: Decision Traces (Post-Phase 2)
+
+Spike 0.22 (54/54 tests) validated decisions as first-class entities with a 4-table schema (`decisions`, `decision_options`, `decision_option_evidence`, `decision_outcomes`), two new relations (`FollowsPrecedent`, `OverridesPolicy`), and graph algorithms via `rustworkx-core`. Integration into the production codebase is planned for later phases:
+
+- **Phase 2 follow-up**: `002_decisions.sql` migration, `DecisionRepo` in `repos/decision.rs`, composite trail replay handler for `decision_create` ops
+- **Phase 4**: Graph assembly + precedent search engine in zen-search (`graph.rs`)
+- **Phase 5**: `znt decision create/get/list/graph/precedents` commands, `znt whats-next --precedents`
+
+The existing 13 repo modules and JSONL trail infrastructure are not affected. Decision support is additive. See [22-decision-graph-rustworkx-spike-plan.md](./22-decision-graph-rustworkx-spike-plan.md) for full spike results.
+
+---
+
 ## Cross-References
 
 - Entity SQL schemas: [01-turso-data-model.md](./01-turso-data-model.md)

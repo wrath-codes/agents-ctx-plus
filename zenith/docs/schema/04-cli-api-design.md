@@ -1135,7 +1135,7 @@ znt rebuild [--trail-dir <path>]
 
 ### `znt whats-next`
 
-Returns current project state and suggested next actions. Reads the last session snapshot, open tasks, pending hypotheses, and recent audit entries.
+Returns current project state and suggested next actions. Reads the last session snapshot, open tasks, pending hypotheses, and recent audit entries. Enhanced with precedent retrieval from decision traces (spike 0.22): open tasks and pending hypotheses include relevant prior decisions with similar subjects/evidence.
 
 ```bash
 znt whats-next [--limit 10] [--format json|table|raw]
@@ -1160,13 +1160,13 @@ znt whats-next [--limit 10] [--format json|table|raw]
         "open_research": 1
     },
     "open_tasks": [
-        {"id": "tsk-f3b7c1", "title": "Test reqwest + tower integration", "status": "in_progress"},
-        {"id": "tsk-a2b3c4", "title": "Benchmark reqwest vs hyper", "status": "open"},
-        {"id": "tsk-d4e5f6", "title": "Write error handling middleware", "status": "open"}
+        {"id": "tsk-f3b7c1", "title": "Test reqwest + tower integration", "status": "in_progress", "precedents": []},
+        {"id": "tsk-a2b3c4", "title": "Benchmark reqwest vs hyper", "status": "open", "precedents": [{"decision_id": "dec-a1b2c3", "question": "HTTP client choice", "outcome_summary": "reqwest selected for tower compat"}]},
+        {"id": "tsk-d4e5f6", "title": "Write error handling middleware", "status": "open", "precedents": []}
     ],
     "pending_hypotheses": [
-        {"id": "hyp-g7h8i9", "content": "hyper is faster than reqwest for streaming", "status": "unverified"},
-        {"id": "hyp-j1k2l3", "content": "tower-http provides built-in retry", "status": "analyzing"}
+        {"id": "hyp-g7h8i9", "content": "hyper is faster than reqwest for streaming", "status": "unverified", "precedents": []},
+        {"id": "hyp-j1k2l3", "content": "tower-http provides built-in retry", "status": "analyzing", "precedents": [{"decision_id": "dec-d4e5f6", "question": "tower-http retry strategy", "outcome_summary": "built-in retry confirmed via ServiceBuilder"}]}
     ],
     "recent_audit": [
         {"action": "status_changed", "entity_type": "hypothesis", "entity_id": "hyp-e1c4b2", "detail": {"to": "confirmed"}, "created_at": "2026-02-06T17:45:00Z"},

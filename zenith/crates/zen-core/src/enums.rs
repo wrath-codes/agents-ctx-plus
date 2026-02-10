@@ -523,6 +523,7 @@ pub enum EntityType {
     ImplLog,
     Compat,
     Study,
+    Decision,
     EntityLink,
     Audit,
 }
@@ -541,6 +542,7 @@ impl EntityType {
             Self::ImplLog => "impl_log",
             Self::Compat => "compat",
             Self::Study => "study",
+            Self::Decision => "decision",
             Self::EntityLink => "entity_link",
             Self::Audit => "audit",
         }
@@ -570,6 +572,8 @@ pub enum Relation {
     Triggers,
     Supersedes,
     DependsOn,
+    FollowsPrecedent,
+    OverridesPolicy,
 }
 
 impl Relation {
@@ -585,6 +589,8 @@ impl Relation {
             Self::Triggers => "triggers",
             Self::Supersedes => "supersedes",
             Self::DependsOn => "depends_on",
+            Self::FollowsPrecedent => "follows_precedent",
+            Self::OverridesPolicy => "overrides_policy",
         }
     }
 }

@@ -76,6 +76,7 @@ SELECT lower(hex(randomblob(4)));  -- returns e.g., "a3f8b2c1"
 | Study | `stu-` | `stu-a1b2c3d4` |
 | Entity Link | `lnk-` | `lnk-b3c8f1d6` |
 | Audit Entry | `aud-` | `aud-d7e2a4c8` |
+| Decision | `dec-` | `dec-a1b2c3d4` |
 
 ### Database Crate
 
@@ -531,7 +532,7 @@ CREATE TABLE entity_links (
 );
 ```
 
-**Entity types:** `research`, `finding`, `hypothesis`, `task`, `issue`, `insight`, `impl_log`, `compatibility_check`, `session`, `study`
+**Entity types:** `research`, `finding`, `hypothesis`, `task`, `issue`, `insight`, `impl_log`, `compatibility_check`, `session`, `study`, `decision`
 
 **Relation types:**
 
@@ -546,6 +547,8 @@ CREATE TABLE entity_links (
 | `triggers` | Source caused target to be created | Finding triggers Hypothesis |
 | `supersedes` | Source replaces target | Finding supersedes Finding |
 | `depends-on` | Source depends on target | Task depends-on Task |
+| `follows_precedent` | Source follows approach of prior decision | Decision follows Decision |
+| `overrides_policy` | Source explicitly overrides a policy | Decision overrides Insight |
 
 ---
 

@@ -91,7 +91,7 @@ anyhow.workspace = true      # for CoreError::Other
 
 ### A2. `src/ids.rs` — ID Prefix Constants + Helpers
 
-12 prefix constants and 2 helper functions.
+13 prefix constants and 2 helper functions.
 
 ```rust
 pub const PREFIX_SESSION: &str = "ses";
@@ -106,6 +106,7 @@ pub const PREFIX_COMPAT: &str = "cmp";
 pub const PREFIX_STUDY: &str = "stu";
 pub const PREFIX_LINK: &str = "lnk";
 pub const PREFIX_AUDIT: &str = "aud";
+pub const PREFIX_DECISION: &str = "dec";
 
 /// Format a prefixed ID. Called after DB generates the random part.
 pub fn format_id(prefix: &str, random: &str) -> String;
@@ -134,8 +135,8 @@ All use: `#[serde(rename_all = "snake_case")]`
 | `StudyMethodology` | Explore, TestDriven, Compare | |
 | `CompatStatus` | Compatible, Incompatible, Conditional, Unknown | |
 | `AuditAction` | Created, Updated, StatusChanged, Linked, Unlinked, Tagged, Untagged, Indexed, SessionStart, SessionEnd, WrapUp | |
-| `EntityType` | Session, Research, Finding, Hypothesis, Insight, Issue, Task, ImplLog, Compat, Study, EntityLink, Audit | |
-| `Relation` | Blocks, Validates, Debunks, Implements, RelatesTo, DerivedFrom, Triggers, Supersedes, DependsOn | |
+| `EntityType` | Session, Research, Finding, Hypothesis, Insight, Issue, Task, ImplLog, Compat, Study, EntityLink, Audit, Decision | |
+| `Relation` | Blocks, Validates, Debunks, Implements, RelatesTo, DerivedFrom, Triggers, Supersedes, DependsOn, FollowsPrecedent, OverridesPolicy | |
 | `TrailOp` | Create, Update, Delete, Link, Unlink, Tag, Untag, Transition | 8 variants (broad set) |
 
 Status enums with state machines get `allowed_next_states(&self) -> &[Self]` implementing the transitions documented in `01-turso-data-model.md`. All enums get `as_str(&self) -> &str` for SQL storage.

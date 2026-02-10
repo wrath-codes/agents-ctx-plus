@@ -81,6 +81,9 @@ jsonschema = "0.28"
 # JSON Schema generation from Rust types (spike 0.14 — schemars + jsonschema full integration)
 schemars = { version = "1", features = ["chrono04"] }
 
+# Graph algorithms (spike 0.22 — decision graph analytics)
+rustworkx-core = "0.17"
+
 # Grep (ripgrep library — spike 0.14 zen grep feature)
 grep = "0.4"
 ignore = "0.4"

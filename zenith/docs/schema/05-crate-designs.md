@@ -245,6 +245,7 @@ pub const PREFIX_COMPAT: &str = "cmp";
 pub const PREFIX_STUDY: &str = "stu";
 pub const PREFIX_LINK: &str = "lnk";
 pub const PREFIX_AUDIT: &str = "aud";
+pub const PREFIX_DECISION: &str = "dec";
 
 /// Format a prefixed ID. Called after Turso generates the random part.
 pub fn format_id(prefix: &str, random: &str) -> String {
@@ -1491,7 +1492,7 @@ impl RegistryClient {
 
 ## 10. zen-search
 
-**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), zen-embeddings, and recursive context query workflows (RLM-style symbolic recursion). Provides the unified `znt search` command backend.
+**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), zen-embeddings, recursive context query workflows (RLM-style symbolic recursion), and graph analytics (rustworkx-core). Provides the unified `znt search` command backend and decision graph engine.
 
 ### Dependencies
 
@@ -1510,6 +1511,9 @@ tokio.workspace = true
 # Grep feature — local project search (ripgrep library)
 grep.workspace = true        # RegexMatcher, Searcher, Sink, Printer
 ignore.workspace = true      # gitignore-aware file walking
+
+# Graph analytics — decision context graph (spike 0.22)
+rustworkx-core.workspace = true  # toposort, centrality, shortest path, connected components
 ```
 
 ### Module Structure
@@ -1523,7 +1527,8 @@ zen-search/src/
 ├── recursive.rs        # RecursiveQueryEngine (metadata-only root + budgeted symbolic sub-queries)
 ├── ref_graph.rs        # Reference graph model (symbol_refs, ref_edges, categories, signature refs)
 ├── grep.rs             # GrepEngine: package mode (DuckDB) + local mode (grep crate)
-└── walk.rs             # File walker factory (ignore crate, WalkMode, test skip)
+├── walk.rs             # File walker factory (ignore crate, WalkMode, test skip)
+└── graph.rs            # Decision context graph: build from entity_links, toposort, centrality, shortest path, budget caps (rustworkx-core)
 ```
 
 ### Key Types
@@ -1556,6 +1561,7 @@ pub enum SearchMode {
     Fts,
     Hybrid,
     Recursive,
+    Graph,
 }
 
 impl SearchEngine {
