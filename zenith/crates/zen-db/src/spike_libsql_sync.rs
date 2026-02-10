@@ -79,12 +79,9 @@ async fn turso_credentials() -> Option<(String, String)> {
 
     // Extract database name from URL: libsql://{db_name}-{org_slug}.{region}.turso.io
     // e.g. libsql://zenith-dev-wrath-codes.aws-us-east-1.turso.io -> zenith-dev
-    let hostname = url
-        .strip_prefix("libsql://")?;
+    let hostname = url.strip_prefix("libsql://")?;
     let org_suffix = format!("-{org}.");
-    let db_name = hostname
-        .split_once(&org_suffix)
-        .map(|(name, _)| name)?;
+    let db_name = hostname.split_once(&org_suffix).map(|(name, _)| name)?;
 
     if db_name.is_empty() {
         eprintln!("SKIP: Could not extract database name from URL: {url}");
@@ -168,7 +165,9 @@ fn unique_table_name(prefix: &str) -> String {
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_sync_replica_connects() {
     let Some((url, token)) = turso_credentials().await else {
-        eprintln!("SKIP: Turso credentials not available (set ZENITH_TURSO__PLATFORM_API_KEY, ZENITH_TURSO__ORG_SLUG, ZENITH_TURSO__URL)");
+        eprintln!(
+            "SKIP: Turso credentials not available (set ZENITH_TURSO__PLATFORM_API_KEY, ZENITH_TURSO__ORG_SLUG, ZENITH_TURSO__URL)"
+        );
         return;
     };
 
@@ -244,12 +243,13 @@ async fn spike_sync_write_and_read() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("expected the inserted row");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("expected the inserted row");
     assert_eq!(row.get::<String>(0).unwrap(), "spike-001");
-    assert_eq!(
-        row.get::<String>(1).unwrap(),
-        "embedded replica write test"
-    );
+    assert_eq!(row.get::<String>(1).unwrap(), "embedded replica write test");
 
     // Clean up: drop the test table
     conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
@@ -304,7 +304,9 @@ async fn spike_sync_two_replicas() {
         .unwrap();
 
     // Sync replica A → cloud
-    db_a.sync().await.expect("replica_a sync after write failed");
+    db_a.sync()
+        .await
+        .expect("replica_a sync after write failed");
 
     // Create replica B (separate local file, same cloud DB)
     let db_b = sync_replica(dir_b.path().join("replica_b.db"), &url, &token).await;
@@ -337,7 +339,9 @@ async fn spike_sync_two_replicas() {
         )
         .await
         .unwrap();
-    db_b.sync().await.expect("replica_b sync after write failed");
+    db_b.sync()
+        .await
+        .expect("replica_b sync after write failed");
 
     // Sync replica A again — should now see B's write
     db_a.sync().await.expect("replica_a re-sync failed");
@@ -428,9 +432,21 @@ async fn spike_sync_schema_and_fts() {
 
     // Insert test findings through the replica
     let test_data: &[(&str, &str, &str)] = &[
-        ("fnd-s01", "Tokio spawning tasks uses spawn() and spawn_blocking()", "high"),
-        ("fnd-s02", "Connection pooling reduces database overhead significantly", "medium"),
-        ("fnd-s03", "Spawned tasks run concurrently on the tokio executor", "high"),
+        (
+            "fnd-s01",
+            "Tokio spawning tasks uses spawn() and spawn_blocking()",
+            "high",
+        ),
+        (
+            "fnd-s02",
+            "Connection pooling reduces database overhead significantly",
+            "medium",
+        ),
+        (
+            "fnd-s03",
+            "Spawned tasks run concurrently on the tokio executor",
+            "high",
+        ),
     ];
 
     for (id, content, confidence) in test_data {
@@ -546,22 +562,19 @@ async fn spike_sync_deferred_batch() {
 
     // Verify all 10 rows are present locally
     let mut rows = conn
-        .query(
-            &format!("SELECT count(*) FROM {table}"),
-            (),
-        )
+        .query(&format!("SELECT count(*) FROM {table}"), ())
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     let count = row.get::<i64>(0).unwrap();
-    assert_eq!(count, 10, "all 10 deferred writes should be present after sync");
+    assert_eq!(
+        count, 10,
+        "all 10 deferred writes should be present after sync"
+    );
 
     // Verify ordering is preserved
     let mut rows = conn
-        .query(
-            &format!("SELECT id, seq FROM {table} ORDER BY seq"),
-            (),
-        )
+        .query(&format!("SELECT id, seq FROM {table} ORDER BY seq"), ())
         .await
         .unwrap();
     for i in 0..10 {
@@ -635,10 +648,7 @@ async fn spike_sync_transactions() {
 
     // Verify: only committed transaction's data exists
     let mut rows = conn
-        .query(
-            &format!("SELECT id, value FROM {table} ORDER BY id"),
-            (),
-        )
+        .query(&format!("SELECT id, value FROM {table} ORDER BY id"), ())
         .await
         .unwrap();
 

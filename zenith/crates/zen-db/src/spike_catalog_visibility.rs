@@ -52,14 +52,18 @@ fn load_env() {
 fn clerk_test_token() -> Option<String> {
     load_env();
     let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
-    if token.is_empty() { return None; }
+    if token.is_empty() {
+        return None;
+    }
     Some(token)
 }
 
 fn turso_url() -> Option<String> {
     load_env();
     let url = std::env::var("ZENITH_TURSO__URL").ok()?;
-    if url.is_empty() { return None; }
+    if url.is_empty() {
+        return None;
+    }
     Some(url)
 }
 
@@ -68,18 +72,19 @@ fn turso_url() -> Option<String> {
 async fn validate_clerk_token(token: &str) -> Option<ClerkClaims> {
     load_env();
     let secret_key = std::env::var("ZENITH_CLERK__SECRET_KEY").ok()?;
-    if secret_key.is_empty() || !secret_key.starts_with("sk_") { return None; }
+    if secret_key.is_empty() || !secret_key.starts_with("sk_") {
+        return None;
+    }
 
-    let config = clerk_rs::ClerkConfiguration::new(
-        None, None, Some(secret_key), None,
-    );
+    let config = clerk_rs::ClerkConfiguration::new(None, None, Some(secret_key), None);
     let clerk = clerk_rs::clerk::Clerk::new(config);
     let jwks_provider = std::sync::Arc::new(
         clerk_rs::validators::jwks::MemoryCacheJwksProvider::new(clerk),
     );
 
     let jwt = clerk_rs::validators::authorizer::validate_jwt(token, jwks_provider)
-        .await.ok()?;
+        .await
+        .ok()?;
 
     Some(ClerkClaims {
         sub: jwt.sub,
@@ -110,16 +115,23 @@ async fn turso_platform_token(db_name: &str) -> Option<String> {
     load_env();
     let api_key = std::env::var("ZENITH_TURSO__PLATFORM_API_KEY").ok()?;
     let org = std::env::var("ZENITH_TURSO__ORG_SLUG").ok()?;
-    if api_key.is_empty() || org.is_empty() { return None; }
+    if api_key.is_empty() || org.is_empty() {
+        return None;
+    }
 
     let client = reqwest::Client::new();
     let url = format!(
         "https://api.turso.tech/v1/organizations/{org}/databases/{db_name}/auth/tokens?expiration=1h&authorization=full-access"
     );
-    let resp = client.post(&url)
+    let resp = client
+        .post(&url)
         .header("Authorization", format!("Bearer {api_key}"))
-        .send().await.ok()?;
-    if !resp.status().is_success() { return None; }
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
     let body: serde_json::Value = resp.json().await.ok()?;
     body["jwt"].as_str().map(|s| s.to_string())
 }
@@ -130,7 +142,9 @@ fn extract_db_name(url: &str) -> Option<String> {
     let org = std::env::var("ZENITH_TURSO__ORG_SLUG").ok()?;
     let hostname = url.strip_prefix("libsql://")?;
     let org_suffix = format!("-{org}.");
-    hostname.split_once(&org_suffix).map(|(name, _)| name.to_string())
+    hostname
+        .split_once(&org_suffix)
+        .map(|(name, _)| name.to_string())
 }
 
 /// Create a temporary Turso DB via Platform API. Returns (url, db_name).
@@ -138,22 +152,29 @@ async fn create_temp_turso_db(name_prefix: &str) -> Option<(String, String)> {
     load_env();
     let api_key = std::env::var("ZENITH_TURSO__PLATFORM_API_KEY").ok()?;
     let org = std::env::var("ZENITH_TURSO__ORG_SLUG").ok()?;
-    if api_key.is_empty() || org.is_empty() { return None; }
+    if api_key.is_empty() || org.is_empty() {
+        return None;
+    }
 
     let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
     let db_name = format!("{name_prefix}-{ts}");
 
     let client = reqwest::Client::new();
-    let resp = client.post(
-        &format!("https://api.turso.tech/v1/organizations/{org}/databases"),
-    )
-    .header("Authorization", format!("Bearer {api_key}"))
-    .json(&serde_json::json!({
-        "name": db_name,
-        "group": "default"
-    }))
-    .send().await.ok()?;
+    let resp = client
+        .post(&format!(
+            "https://api.turso.tech/v1/organizations/{org}/databases"
+        ))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&serde_json::json!({
+            "name": db_name,
+            "group": "default"
+        }))
+        .send()
+        .await
+        .ok()?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -163,7 +184,8 @@ async fn create_temp_turso_db(name_prefix: &str) -> Option<(String, String)> {
     }
 
     let body: serde_json::Value = resp.json().await.ok()?;
-    let hostname = body["database"]["Hostname"].as_str()
+    let hostname = body["database"]["Hostname"]
+        .as_str()
         .or_else(|| body["database"]["hostname"].as_str())?;
     let url = format!("libsql://{hostname}");
 
@@ -176,21 +198,27 @@ async fn delete_turso_db(db_name: &str) {
     load_env();
     let api_key = std::env::var("ZENITH_TURSO__PLATFORM_API_KEY").unwrap_or_default();
     let org = std::env::var("ZENITH_TURSO__ORG_SLUG").unwrap_or_default();
-    if api_key.is_empty() || org.is_empty() { return; }
+    if api_key.is_empty() || org.is_empty() {
+        return;
+    }
 
     let client = reqwest::Client::new();
-    let _ = client.delete(
-        &format!("https://api.turso.tech/v1/organizations/{org}/databases/{db_name}"),
-    )
-    .header("Authorization", format!("Bearer {api_key}"))
-    .send().await;
+    let _ = client
+        .delete(&format!(
+            "https://api.turso.tech/v1/organizations/{org}/databases/{db_name}"
+        ))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .send()
+        .await;
     eprintln!("  Deleted temp DB: {db_name}");
 }
 
 /// Unique table name to avoid collisions between test runs.
 fn unique_table(prefix: &str) -> String {
     let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
     format!("{prefix}_{ts}")
 }
 
@@ -237,18 +265,24 @@ async fn spike_programmatic_org_jwt() {
     load_env();
     let secret_key = match std::env::var("ZENITH_CLERK__SECRET_KEY") {
         Ok(k) if k.starts_with("sk_") => k,
-        _ => { eprintln!("SKIP: ZENITH_CLERK__SECRET_KEY not set"); return; }
+        _ => {
+            eprintln!("SKIP: ZENITH_CLERK__SECRET_KEY not set");
+            return;
+        }
     };
 
     let client = reqwest::Client::new();
 
     // 1. Create a session for the test user
-    let resp = client.post("https://api.clerk.com/v1/sessions")
+    let resp = client
+        .post("https://api.clerk.com/v1/sessions")
         .header("Authorization", format!("Bearer {secret_key}"))
         .json(&serde_json::json!({
             "user_id": "user_39PB2iMuMcpYGrHobrukpqZ8UjE"
         }))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     if !resp.status().is_success() {
         eprintln!("SKIP: Failed to create session: {}", resp.status());
@@ -262,11 +296,14 @@ async fn spike_programmatic_org_jwt() {
     eprintln!("  Active org: {org_id_from_session:?}");
 
     // 2. Generate JWT from zenith_cli template
-    let resp = client.post(
-        &format!("https://api.clerk.com/v1/sessions/{session_id}/tokens/zenith_cli")
-    )
-    .header("Authorization", format!("Bearer {secret_key}"))
-    .send().await.unwrap();
+    let resp = client
+        .post(&format!(
+            "https://api.clerk.com/v1/sessions/{session_id}/tokens/zenith_cli"
+        ))
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .send()
+        .await
+        .unwrap();
 
     if !resp.status().is_success() {
         eprintln!("SKIP: Failed to get JWT: {}", resp.status());
@@ -278,9 +315,7 @@ async fn spike_programmatic_org_jwt() {
     eprintln!("  JWT length: {}", jwt.len());
 
     // 3. Validate with clerk-rs (JWKS)
-    let config = clerk_rs::ClerkConfiguration::new(
-        None, None, Some(secret_key.clone()), None,
-    );
+    let config = clerk_rs::ClerkConfiguration::new(None, None, Some(secret_key.clone()), None);
     let clerk = clerk_rs::clerk::Clerk::new(config);
     let jwks_provider = std::sync::Arc::new(
         clerk_rs::validators::jwks::MemoryCacheJwksProvider::new(clerk),
@@ -297,19 +332,34 @@ async fn spike_programmatic_org_jwt() {
     // Custom JWT templates put org_id/org_slug/org_role as top-level claims,
     // which clerk-rs's flatten should pick up into ActiveOrganization.
     eprintln!("  org field: {:?}", clerk_jwt.org);
-    eprintln!("  other keys: {:?}", clerk_jwt.other.keys().collect::<Vec<_>>());
+    eprintln!(
+        "  other keys: {:?}",
+        clerk_jwt.other.keys().collect::<Vec<_>>()
+    );
 
     // Try org field first, fall back to other map
     let (org_id, org_slug, org_role) = if let Some(ref org) = clerk_jwt.org {
         (org.id.clone(), org.slug.clone(), org.role.clone())
     } else {
         // Custom templates may put these as top-level claims in `other`
-        let oid = clerk_jwt.other.get("org_id")
-            .and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let oslug = clerk_jwt.other.get("org_slug")
-            .and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let orole = clerk_jwt.other.get("org_role")
-            .and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let oid = clerk_jwt
+            .other
+            .get("org_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let oslug = clerk_jwt
+            .other
+            .get("org_slug")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let orole = clerk_jwt
+            .other
+            .get("org_role")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         (oid, oslug, orole)
     };
 
@@ -323,10 +373,15 @@ async fn spike_programmatic_org_jwt() {
     assert_eq!(org_role, "org:admin", "Test user should be org admin");
 
     // Verify Turso permissions are also present
-    let turso_p = clerk_jwt.other.get("p").expect("JWT should have Turso 'p' claim");
+    let turso_p = clerk_jwt
+        .other
+        .get("p")
+        .expect("JWT should have Turso 'p' claim");
     assert!(turso_p.get("rw").is_some(), "Should have rw permissions");
 
-    eprintln!("  PASS: programmatic org-scoped JWT — session → template → clerk-rs validates → org claims extracted");
+    eprintln!(
+        "  PASS: programmatic org-scoped JWT — session → template → clerk-rs validates → org claims extracted"
+    );
 }
 
 /// J1: Create indexed_packages in Turso with visibility columns. INSERT + SELECT.
@@ -339,7 +394,10 @@ async fn spike_turso_indexed_packages_schema() {
 
     let db = match Builder::new_remote(url.clone(), token).build().await {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = db.connect().unwrap();
 
@@ -347,7 +405,9 @@ async fn spike_turso_indexed_packages_schema() {
     eprintln!("  Creating table: {table}");
 
     // Create schema
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
 
     // Insert public, team, and private rows
     conn.execute(
@@ -362,13 +422,18 @@ async fn spike_turso_indexed_packages_schema() {
              's3://zenith/lance/rust/my-app/0.1.0', 200, 'user_aaa', '2026-02-08T00:00:00Z')"
         ),
         (),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
     // Query: public only (anonymous user)
-    let mut rows = conn.query(
-        &format!("SELECT package FROM {table} WHERE visibility = 'public' ORDER BY package"),
-        (),
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            &format!("SELECT package FROM {table} WHERE visibility = 'public' ORDER BY package"),
+            (),
+        )
+        .await
+        .unwrap();
     let mut public_pkgs = vec![];
     while let Some(row) = rows.next().await.unwrap() {
         public_pkgs.push(row.get::<String>(0).unwrap());
@@ -377,15 +442,18 @@ async fn spike_turso_indexed_packages_schema() {
     eprintln!("  Public only: {public_pkgs:?}");
 
     // Query: team member of org_acme (sees public + team)
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'team' AND team_id = 'org_acme')
              ORDER BY package"
-        ),
-        (),
-    ).await.unwrap();
+            ),
+            (),
+        )
+        .await
+        .unwrap();
     let mut team_pkgs = vec![];
     while let Some(row) = rows.next().await.unwrap() {
         team_pkgs.push(row.get::<String>(0).unwrap());
@@ -394,15 +462,18 @@ async fn spike_turso_indexed_packages_schema() {
     eprintln!("  Team (org_acme): {team_pkgs:?}");
 
     // Query: user_aaa (sees public + own private)
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'private' AND owner_id = 'user_aaa')
              ORDER BY package"
-        ),
-        (),
-    ).await.unwrap();
+            ),
+            (),
+        )
+        .await
+        .unwrap();
     let mut owner_pkgs = vec![];
     while let Some(row) = rows.next().await.unwrap() {
         owner_pkgs.push(row.get::<String>(0).unwrap());
@@ -411,7 +482,9 @@ async fn spike_turso_indexed_packages_schema() {
     eprintln!("  Owner (user_aaa): {owner_pkgs:?}");
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     eprintln!("  PASS: indexed_packages schema + visibility scoping works in Turso");
 }
 
@@ -426,12 +499,20 @@ async fn spike_turso_catalog_embedded_replica() {
     let table = unique_table("idx_repl");
 
     // Write via remote connection
-    let db = match Builder::new_remote(url.clone(), token.clone()).build().await {
+    let db = match Builder::new_remote(url.clone(), token.clone())
+        .build()
+        .await
+    {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = db.connect().unwrap();
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
     conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility,
@@ -440,29 +521,42 @@ async fn spike_turso_catalog_embedded_replica() {
              's3://zenith/lance/rust/serde/1.0.0', 800, 'user_test', '2026-02-08T00:00:00Z')"
         ),
         (),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
     drop(conn);
     drop(db);
     eprintln!("  Wrote catalog row via remote connection");
 
     // Read via embedded replica
     let tmp = TempDir::new().unwrap();
-    let local_path = tmp.path().join("replica_j2.db").to_string_lossy().to_string();
+    let local_path = tmp
+        .path()
+        .join("replica_j2.db")
+        .to_string_lossy()
+        .to_string();
 
     let replica_db = match Builder::new_remote_replica(local_path, url.clone(), token)
         .read_your_writes(true)
-        .build().await
+        .build()
+        .await
     {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Embedded replica creation failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Embedded replica creation failed: {e}");
+            return;
+        }
     };
     replica_db.sync().await.unwrap();
 
     let conn = replica_db.connect().unwrap();
-    let mut rows = conn.query(
-        &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
-        (),
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().expect("Should find serde row");
     let pkg: String = row.get(0).unwrap();
     let count: i64 = row.get(1).unwrap();
@@ -470,7 +564,9 @@ async fn spike_turso_catalog_embedded_replica() {
     assert_eq!(count, 800);
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     replica_db.sync().await.unwrap();
     eprintln!("  PASS: embedded replica syncs catalog — found serde with {count} symbols");
 }
@@ -506,7 +602,10 @@ async fn spike_clerk_jwt_visibility_scoping() {
     // Validate JWT via Clerk JWKS and extract typed claims (aether pattern)
     let claims = match validate_clerk_token(&token).await {
         Some(c) => c,
-        None => { eprintln!("SKIP: Clerk JWT validation failed"); return; }
+        None => {
+            eprintln!("SKIP: Clerk JWT validation failed");
+            return;
+        }
     };
     let user_id = &claims.sub;
     let org_id = claims.org_id.as_deref().unwrap_or("none");
@@ -516,17 +615,24 @@ async fn spike_clerk_jwt_visibility_scoping() {
 
     if org_id == "none" {
         eprintln!("  WARNING: JWT has no org_id — team visibility tests will use hardcoded values");
-        eprintln!("  To fix: update zenith_cli JWT template with org claims and regenerate test token");
+        eprintln!(
+            "  To fix: update zenith_cli JWT template with org claims and regenerate test token"
+        );
     }
 
     let db = match Builder::new_remote(url.clone(), token).build().await {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = db.connect().unwrap();
 
     let table = unique_table("idx_vis");
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
 
     // Insert: public + team (owned by user's org) + private (owned by user) + private (other)
     conn.execute(
@@ -549,30 +655,48 @@ async fn spike_clerk_jwt_visibility_scoping() {
 
     // Full visibility query using ALL claims from JWT (sub + org_id)
     // This is the exact query `znt search` will run in production
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'team' AND team_id = ?1)
              OR (visibility = 'private' AND owner_id = ?2)
              ORDER BY package"
-        ),
-        libsql::params![org_id.to_string(), user_id.to_string()],
-    ).await.unwrap();
+            ),
+            libsql::params![org_id.to_string(), user_id.to_string()],
+        )
+        .await
+        .unwrap();
 
     let mut visible = vec![];
     while let Some(row) = rows.next().await.unwrap() {
         visible.push(row.get::<String>(0).unwrap());
     }
 
-    assert!(visible.contains(&"tokio".to_string()), "Should see public package");
-    assert!(visible.contains(&"my-code".to_string()), "Should see own private package");
-    assert!(!visible.contains(&"other-code".to_string()), "Should NOT see other's private package");
-    assert!(!visible.contains(&"other-team".to_string()), "Should NOT see other team's package");
+    assert!(
+        visible.contains(&"tokio".to_string()),
+        "Should see public package"
+    );
+    assert!(
+        visible.contains(&"my-code".to_string()),
+        "Should see own private package"
+    );
+    assert!(
+        !visible.contains(&"other-code".to_string()),
+        "Should NOT see other's private package"
+    );
+    assert!(
+        !visible.contains(&"other-team".to_string()),
+        "Should NOT see other team's package"
+    );
 
     // Team visibility only works if JWT has org_id
     if org_id != "none" {
-        assert!(visible.contains(&"team-sdk".to_string()), "Should see own team's package");
+        assert!(
+            visible.contains(&"team-sdk".to_string()),
+            "Should see own team's package"
+        );
         eprintln!("  Team visibility verified with real org_id={org_id}");
     } else {
         eprintln!("  Team visibility skipped (no org_id in JWT)");
@@ -581,7 +705,9 @@ async fn spike_clerk_jwt_visibility_scoping() {
     eprintln!("  Visible to {user_id}: {visible:?}");
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     eprintln!("  PASS: Clerk JWT sub claim drives visibility — no custom RBAC needed");
 }
 
@@ -593,9 +719,9 @@ async fn spike_catalog_to_lance_search_e2e() {
         return;
     };
 
-    use arrow_array::{RecordBatchIterator, RecordBatch as RecordBatch57};
     use arrow_array::types::Float32Type;
-    use arrow_array::{StringArray, FixedSizeListArray};
+    use arrow_array::{FixedSizeListArray, StringArray};
+    use arrow_array::{RecordBatch as RecordBatch57, RecordBatchIterator};
     use arrow_schema::{DataType, Field, Schema};
     use std::sync::Arc;
 
@@ -607,13 +733,17 @@ async fn spike_catalog_to_lance_search_e2e() {
     let schema = Arc::new(Schema::new(vec![
         Field::new("name", DataType::Utf8, false),
         Field::new("doc_comment", DataType::Utf8, true),
-        Field::new("embedding", DataType::FixedSizeList(
-            Arc::new(Field::new("item", DataType::Float32, true)), 384,
-        ), false),
+        Field::new(
+            "embedding",
+            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 384),
+            false,
+        ),
     ]));
 
     fn synth_emb(seed: u32) -> Vec<f32> {
-        (0..384).map(|i| ((seed as f32) / 100.0 + (i as f32) / 384.0).sin()).collect()
+        (0..384)
+            .map(|i| ((seed as f32) / 100.0 + (i as f32) / 384.0).sin())
+            .collect()
     }
 
     let names = StringArray::from(vec!["spawn", "sleep", "block_on"]);
@@ -627,28 +757,40 @@ async fn spike_catalog_to_lance_search_e2e() {
         .collect();
     let emb_array = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(embeddings, 384);
 
-    let batch = RecordBatch57::try_new(schema.clone(), vec![
-        Arc::new(names),
-        Arc::new(docs),
-        Arc::new(emb_array),
-    ]).unwrap();
+    let batch = RecordBatch57::try_new(
+        schema.clone(),
+        vec![Arc::new(names), Arc::new(docs), Arc::new(emb_array)],
+    )
+    .unwrap();
 
     let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
     let lance_db = lancedb::connect(lance_uri).execute().await.unwrap();
-    lance_db.create_table("symbols", Box::new(batches)).execute().await.unwrap();
+    lance_db
+        .create_table("symbols", Box::new(batches))
+        .execute()
+        .await
+        .unwrap();
 
-    let dataset_path = lance_dir.join("symbols.lance").to_string_lossy().to_string();
+    let dataset_path = lance_dir
+        .join("symbols.lance")
+        .to_string_lossy()
+        .to_string();
     eprintln!("  Wrote Lance dataset: {dataset_path}");
 
     // 2. Insert catalog row into Turso
     let turso_db = match Builder::new_remote(url.clone(), token).build().await {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = turso_db.connect().unwrap();
 
     let table = unique_table("idx_e2e");
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
     conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility,
@@ -656,13 +798,18 @@ async fn spike_catalog_to_lance_search_e2e() {
             ('rust', 'tokio', '1.49.0', 'public', ?1, 3, 'test', '2026-02-08T00:00:00Z')"
         ),
         [dataset_path.as_str()],
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
     // 3. Query Turso to get lance path
-    let mut rows = conn.query(
-        &format!("SELECT r2_lance_path FROM {table} WHERE package = 'tokio'"),
-        (),
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            &format!("SELECT r2_lance_path FROM {table} WHERE package = 'tokio'"),
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().expect("Should find tokio");
     let lance_path: String = row.get(0).unwrap();
 
@@ -670,17 +817,27 @@ async fn spike_catalog_to_lance_search_e2e() {
 
     // 4. DuckDB: search the Lance dataset
     let duckdb_conn = duckdb::Connection::open_in_memory().unwrap();
-    duckdb_conn.execute_batch("INSTALL lance FROM community; LOAD lance;").unwrap();
+    duckdb_conn
+        .execute_batch("INSTALL lance FROM community; LOAD lance;")
+        .unwrap();
 
     let query_emb = synth_emb(0); // should match "spawn"
-    let query_sql: String = format!("[{}]",
-        query_emb.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(", "));
+    let query_sql: String = format!(
+        "[{}]",
+        query_emb
+            .iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
-    let mut stmt = duckdb_conn.prepare(&format!(
-        "SELECT name, _distance
+    let mut stmt = duckdb_conn
+        .prepare(&format!(
+            "SELECT name, _distance
          FROM lance_vector_search('{lance_path}', 'embedding', {query_sql}::FLOAT[384], k=3)
          ORDER BY _distance ASC"
-    )).unwrap();
+        ))
+        .unwrap();
 
     let results: Vec<(String, f64)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -692,10 +849,15 @@ async fn spike_catalog_to_lance_search_e2e() {
     assert_eq!(results[0].0, "spawn", "Nearest should be 'spawn'");
     assert!(results[0].1 < 0.01);
 
-    eprintln!("  DuckDB search: {} → distance={:.6}", results[0].0, results[0].1);
+    eprintln!(
+        "  DuckDB search: {} → distance={:.6}",
+        results[0].0, results[0].1
+    );
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     eprintln!("  PASS: Turso catalog → Lance path → DuckDB search — full E2E works");
 }
 
@@ -711,23 +873,27 @@ async fn spike_three_tier_search() {
         return;
     };
 
-    use arrow_array::{RecordBatchIterator, RecordBatch as RecordBatch57};
     use arrow_array::types::Float32Type;
-    use arrow_array::{StringArray, FixedSizeListArray};
+    use arrow_array::{FixedSizeListArray, StringArray};
+    use arrow_array::{RecordBatch as RecordBatch57, RecordBatchIterator};
     use arrow_schema::{DataType, Field, Schema};
     use std::sync::Arc;
 
     fn synth_emb(seed: u32) -> Vec<f32> {
-        (0..384).map(|i| ((seed as f32) / 100.0 + (i as f32) / 384.0).sin()).collect()
+        (0..384)
+            .map(|i| ((seed as f32) / 100.0 + (i as f32) / 384.0).sin())
+            .collect()
     }
 
     let tmp = TempDir::new().unwrap();
 
     let schema = Arc::new(Schema::new(vec![
         Field::new("name", DataType::Utf8, false),
-        Field::new("embedding", DataType::FixedSizeList(
-            Arc::new(Field::new("item", DataType::Float32, true)), 384,
-        ), false),
+        Field::new(
+            "embedding",
+            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 384),
+            false,
+        ),
     ]));
 
     // Write 3 Lance datasets: public, team, private
@@ -745,13 +911,16 @@ async fn spike_three_tier_search() {
             .map(|i| Some(synth_emb(seed_base + i).into_iter().map(Some).collect()))
             .collect();
         let emb_arr = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(embs, 384);
-        let batch = RecordBatch57::try_new(schema.clone(), vec![
-            Arc::new(name_arr), Arc::new(emb_arr),
-        ]).unwrap();
+        let batch =
+            RecordBatch57::try_new(schema.clone(), vec![Arc::new(name_arr), Arc::new(emb_arr)])
+                .unwrap();
 
         let batches = RecordBatchIterator::new(vec![Ok(batch)], schema.clone());
         let db = lancedb::connect(uri).execute().await.unwrap();
-        db.create_table("symbols", Box::new(batches)).execute().await.unwrap();
+        db.create_table("symbols", Box::new(batches))
+            .execute()
+            .await
+            .unwrap();
         lance_paths.push(dir.join("symbols.lance").to_string_lossy().to_string());
     }
 
@@ -760,12 +929,17 @@ async fn spike_three_tier_search() {
     // Insert catalog rows
     let turso_db = match Builder::new_remote(url.clone(), token).build().await {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = turso_db.connect().unwrap();
 
     let table = unique_table("idx_3tier");
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
     conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility, team_id, owner_id,
@@ -778,15 +952,18 @@ async fn spike_three_tier_search() {
     ).await.unwrap();
 
     // Query as team member of org_acme → should see public + team (NOT private)
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package, r2_lance_path FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package, r2_lance_path FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'team' AND team_id = 'org_acme')
              ORDER BY package"
-        ),
-        (),
-    ).await.unwrap();
+            ),
+            (),
+        )
+        .await
+        .unwrap();
 
     let mut team_paths = vec![];
     while let Some(row) = rows.next().await.unwrap() {
@@ -802,19 +979,29 @@ async fn spike_three_tier_search() {
 
     // Search across visible Lance datasets
     let duckdb_conn = duckdb::Connection::open_in_memory().unwrap();
-    duckdb_conn.execute_batch("INSTALL lance FROM community; LOAD lance;").unwrap();
+    duckdb_conn
+        .execute_batch("INSTALL lance FROM community; LOAD lance;")
+        .unwrap();
 
     let query_emb = synth_emb(0); // matches pub_func_a
-    let query_sql: String = format!("[{}]",
-        query_emb.iter().map(|x| format!("{x}")).collect::<Vec<_>>().join(", "));
+    let query_sql: String = format!(
+        "[{}]",
+        query_emb
+            .iter()
+            .map(|x| format!("{x}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     let mut all_results: Vec<(String, f64)> = vec![];
     for (pkg, path) in &team_paths {
-        let mut stmt = duckdb_conn.prepare(&format!(
-            "SELECT name, _distance
+        let mut stmt = duckdb_conn
+            .prepare(&format!(
+                "SELECT name, _distance
              FROM lance_vector_search('{path}', 'embedding', {query_sql}::FLOAT[384], k=2)
              ORDER BY _distance ASC"
-        )).unwrap();
+            ))
+            .unwrap();
         let results: Vec<(String, f64)> = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap()
@@ -829,10 +1016,15 @@ async fn spike_three_tier_search() {
     // Sort merged results by distance
     all_results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     assert!(!all_results.is_empty());
-    assert_eq!(all_results[0].0, "pub_func_a", "Best match should be pub_func_a");
+    assert_eq!(
+        all_results[0].0, "pub_func_a",
+        "Best match should be pub_func_a"
+    );
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     eprintln!("  PASS: three-tier search — team member sees public + team, results merged");
 }
 
@@ -846,18 +1038,26 @@ async fn spike_private_code_indexing() {
 
     let claims = match validate_clerk_token(&token).await {
         Some(c) => c,
-        None => { eprintln!("SKIP: Clerk JWT validation failed"); return; }
+        None => {
+            eprintln!("SKIP: Clerk JWT validation failed");
+            return;
+        }
     };
     let user_id = &claims.sub;
 
     let db = match Builder::new_remote(url.clone(), token).build().await {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = db.connect().unwrap();
 
     let table = unique_table("idx_priv");
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
 
     // Insert private package owned by the JWT user
     conn.execute(
@@ -868,37 +1068,51 @@ async fn spike_private_code_indexing() {
              '/tmp/fake/path.lance', '{user_id}', '2026-02-08T00:00:00Z')"
         ),
         (),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
     // Owner query: should find it
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'private' AND owner_id = ?1)"
-        ),
-        [user_id.as_str()],
-    ).await.unwrap();
-    let row = rows.next().await.unwrap().expect("Owner should see private package");
+            ),
+            [user_id.as_str()],
+        )
+        .await
+        .unwrap();
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("Owner should see private package");
     let pkg: String = row.get(0).unwrap();
     assert_eq!(pkg, "my-secret-app");
     eprintln!("  Owner ({user_id}) sees: {pkg}");
 
     // Non-owner query: should NOT find it
-    let mut rows = conn.query(
-        &format!(
-            "SELECT package FROM {table} WHERE
+    let mut rows = conn
+        .query(
+            &format!(
+                "SELECT package FROM {table} WHERE
              visibility = 'public'
              OR (visibility = 'private' AND owner_id = 'user_impostor')"
-        ),
-        (),
-    ).await.unwrap();
+            ),
+            (),
+        )
+        .await
+        .unwrap();
     let none = rows.next().await.unwrap();
     assert!(none.is_none(), "Non-owner should NOT see private package");
     eprintln!("  Non-owner (user_impostor) sees: nothing");
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
     eprintln!("  PASS: private code indexing — only owner can discover");
 }
 
@@ -923,14 +1137,22 @@ async fn spike_concurrent_index_turso_lock() {
         return;
     };
 
-    let db = match Builder::new_remote(url.clone(), token.clone()).build().await {
+    let db = match Builder::new_remote(url.clone(), token.clone())
+        .build()
+        .await
+    {
         Ok(db) => db,
-        Err(e) => { eprintln!("SKIP: Turso connection failed: {e}"); return; }
+        Err(e) => {
+            eprintln!("SKIP: Turso connection failed: {e}");
+            return;
+        }
     };
     let conn = db.connect().unwrap();
 
     let table = unique_table("idx_lock");
-    conn.execute(&indexed_packages_ddl(&table), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table), ())
+        .await
+        .unwrap();
 
     // First insert succeeds
     conn.execute(
@@ -941,21 +1163,28 @@ async fn spike_concurrent_index_turso_lock() {
              's3://zenith/lance/rust/tokio/1.49.0', 'user_first', '2026-02-08T00:00:00Z')"
         ),
         (),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
     eprintln!("  First INSERT succeeded");
 
     // Second insert with same PK should fail
-    let result = conn.execute(
-        &format!(
-            "INSERT INTO {table} (ecosystem, package, version, visibility,
+    let result = conn
+        .execute(
+            &format!(
+                "INSERT INTO {table} (ecosystem, package, version, visibility,
              r2_lance_path, indexed_by, indexed_at) VALUES
             ('rust', 'tokio', '1.49.0', 'public',
              's3://zenith/lance/rust/tokio/1.49.0', 'user_second', '2026-02-08T00:00:00Z')"
-        ),
-        (),
-    ).await;
+            ),
+            (),
+        )
+        .await;
 
-    assert!(result.is_err(), "Duplicate INSERT should fail with PK constraint");
+    assert!(
+        result.is_err(),
+        "Duplicate INSERT should fail with PK constraint"
+    );
     let err_msg = format!("{}", result.unwrap_err());
     eprintln!("  Second INSERT correctly failed: {err_msg}");
 
@@ -972,7 +1201,9 @@ async fn spike_concurrent_index_turso_lock() {
 
     // Now test actual concurrent writes from two separate connections
     let table2 = unique_table("idx_race");
-    conn.execute(&indexed_packages_ddl(&table2), ()).await.unwrap();
+    conn.execute(&indexed_packages_ddl(&table2), ())
+        .await
+        .unwrap();
 
     let url2 = url.clone();
     let token2 = token.clone();
@@ -995,7 +1226,8 @@ async fn spike_concurrent_index_turso_lock() {
                      's3://a', 'user_task_a', '2026-02-08T00:00:00Z')"
                 ),
                 (),
-            ).await
+            )
+            .await
         }
     });
 
@@ -1015,7 +1247,8 @@ async fn spike_concurrent_index_turso_lock() {
                      's3://b', 'user_task_b', '2026-02-08T00:00:00Z')"
                 ),
                 (),
-            ).await
+            )
+            .await
         }
     });
 
@@ -1035,10 +1268,13 @@ async fn spike_concurrent_index_turso_lock() {
     eprintln!("  Concurrent race: {winner} won, other got UNIQUE constraint error");
 
     // Verify only one row exists
-    let mut rows = conn.query(
-        &format!("SELECT indexed_by FROM {table2} WHERE package = 'contested-pkg'"),
-        (),
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            &format!("SELECT indexed_by FROM {table2} WHERE package = 'contested-pkg'"),
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     let who: String = row.get(0).unwrap();
     let second = rows.next().await.unwrap();
@@ -1046,9 +1282,15 @@ async fn spike_concurrent_index_turso_lock() {
     eprintln!("  Winner: {who}");
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ()).await.unwrap();
-    conn.execute(&format!("DROP TABLE {table2}"), ()).await.unwrap();
-    eprintln!("  PASS: PRIMARY KEY prevents duplicate indexing — first writer wins, concurrent race resolved");
+    conn.execute(&format!("DROP TABLE {table}"), ())
+        .await
+        .unwrap();
+    conn.execute(&format!("DROP TABLE {table2}"), ())
+        .await
+        .unwrap();
+    eprintln!(
+        "  PASS: PRIMARY KEY prevents duplicate indexing — first writer wins, concurrent race resolved"
+    );
 }
 
 /// L3: Two embedded replicas (different DBs) coexist in same process.
@@ -1087,10 +1329,15 @@ async fn spike_two_turso_replicas_same_process() {
     let tmp = TempDir::new().unwrap();
 
     // Open replica A
-    let path_a = tmp.path().join("replica_a.db").to_string_lossy().to_string();
+    let path_a = tmp
+        .path()
+        .join("replica_a.db")
+        .to_string_lossy()
+        .to_string();
     let replica_a = match Builder::new_remote_replica(path_a, url_a, token_a)
         .read_your_writes(true)
-        .build().await
+        .build()
+        .await
     {
         Ok(db) => db,
         Err(e) => {
@@ -1101,10 +1348,15 @@ async fn spike_two_turso_replicas_same_process() {
     };
 
     // Open replica B
-    let path_b = tmp.path().join("replica_b.db").to_string_lossy().to_string();
+    let path_b = tmp
+        .path()
+        .join("replica_b.db")
+        .to_string_lossy()
+        .to_string();
     let replica_b = match Builder::new_remote_replica(path_b, url_b, token_b)
         .read_your_writes(true)
-        .build().await
+        .build()
+        .await
     {
         Ok(db) => db,
         Err(e) => {
@@ -1120,50 +1372,81 @@ async fn spike_two_turso_replicas_same_process() {
 
     // Write to A
     let conn_a = replica_a.connect().unwrap();
-    conn_a.execute(
-        "CREATE TABLE IF NOT EXISTS test_a (id INTEGER PRIMARY KEY, val TEXT)", ()
-    ).await.unwrap();
-    conn_a.execute("INSERT OR REPLACE INTO test_a VALUES (1, 'from_a')", ()).await.unwrap();
+    conn_a
+        .execute(
+            "CREATE TABLE IF NOT EXISTS test_a (id INTEGER PRIMARY KEY, val TEXT)",
+            (),
+        )
+        .await
+        .unwrap();
+    conn_a
+        .execute("INSERT OR REPLACE INTO test_a VALUES (1, 'from_a')", ())
+        .await
+        .unwrap();
 
     // Write to B
     let conn_b = replica_b.connect().unwrap();
-    conn_b.execute(
-        "CREATE TABLE IF NOT EXISTS test_b (id INTEGER PRIMARY KEY, val TEXT)", ()
-    ).await.unwrap();
-    conn_b.execute("INSERT OR REPLACE INTO test_b VALUES (1, 'from_b')", ()).await.unwrap();
+    conn_b
+        .execute(
+            "CREATE TABLE IF NOT EXISTS test_b (id INTEGER PRIMARY KEY, val TEXT)",
+            (),
+        )
+        .await
+        .unwrap();
+    conn_b
+        .execute("INSERT OR REPLACE INTO test_b VALUES (1, 'from_b')", ())
+        .await
+        .unwrap();
 
     // Sync both
     replica_a.sync().await.unwrap();
     replica_b.sync().await.unwrap();
 
     // Query A — should NOT see test_b
-    let mut rows = conn_a.query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'", ()
-    ).await.unwrap();
+    let mut rows = conn_a
+        .query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'",
+            (),
+        )
+        .await
+        .unwrap();
     let has_test_b = rows.next().await.unwrap().is_some();
     assert!(!has_test_b, "DB A should NOT have test_b table");
 
     // Query B — should NOT see test_a
-    let mut rows = conn_b.query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'", ()
-    ).await.unwrap();
+    let mut rows = conn_b
+        .query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'",
+            (),
+        )
+        .await
+        .unwrap();
     let has_test_a = rows.next().await.unwrap().is_some();
     assert!(!has_test_a, "DB B should NOT have test_a table");
 
     // Query A — should see its own data
-    let mut rows = conn_a.query("SELECT val FROM test_a WHERE id = 1", ()).await.unwrap();
+    let mut rows = conn_a
+        .query("SELECT val FROM test_a WHERE id = 1", ())
+        .await
+        .unwrap();
     let val_a: String = rows.next().await.unwrap().unwrap().get(0).unwrap();
     assert_eq!(val_a, "from_a");
 
     // Query B — should see its own data
-    let mut rows = conn_b.query("SELECT val FROM test_b WHERE id = 1", ()).await.unwrap();
+    let mut rows = conn_b
+        .query("SELECT val FROM test_b WHERE id = 1", ())
+        .await
+        .unwrap();
     let val_b: String = rows.next().await.unwrap().unwrap().get(0).unwrap();
     assert_eq!(val_b, "from_b");
 
     eprintln!("  Both replicas coexist — isolated data, no interference");
 
     // Cleanup
-    conn_a.execute("DROP TABLE IF EXISTS test_a", ()).await.unwrap();
+    conn_a
+        .execute("DROP TABLE IF EXISTS test_a", ())
+        .await
+        .unwrap();
     replica_a.sync().await.unwrap();
     delete_turso_db(&db_b_name).await;
 

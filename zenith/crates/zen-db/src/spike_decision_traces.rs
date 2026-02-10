@@ -455,7 +455,14 @@ async fn create_test_decision(
     tx.commit().await.unwrap();
 }
 
-fn make_verdict_decision(session_id: &str) -> (DecisionFixture, Vec<OptionFixture>, Vec<OutcomeFixture>, Vec<LinkFixture>) {
+fn make_verdict_decision(
+    session_id: &str,
+) -> (
+    DecisionFixture,
+    Vec<OptionFixture>,
+    Vec<OutcomeFixture>,
+    Vec<LinkFixture>,
+) {
     let dec = DecisionFixture {
         id: "dec-00000001".into(),
         session_id: session_id.into(),
@@ -556,8 +563,14 @@ async fn spike_decision_create_roundtrip() {
     assert_eq!(row.get::<String>(2).unwrap(), "verdict");
     assert_eq!(row.get::<String>(3).unwrap(), "hypothesis");
     assert_eq!(row.get::<String>(4).unwrap(), "hyp-001");
-    assert_eq!(row.get::<String>(5).unwrap(), "Should we confirm that tokio::spawn requires Send + 'static?");
-    assert_eq!(row.get::<String>(6).unwrap(), "3 independent code tests prove Send + 'static is required");
+    assert_eq!(
+        row.get::<String>(5).unwrap(),
+        "Should we confirm that tokio::spawn requires Send + 'static?"
+    );
+    assert_eq!(
+        row.get::<String>(6).unwrap(),
+        "3 independent code tests prove Send + 'static is required"
+    );
     assert_eq!(row.get::<String>(7).unwrap(), "hypothesis confirmed");
     assert!(matches!(row.get_value(8).unwrap(), libsql::Value::Null));
     assert!(matches!(row.get_value(9).unwrap(), libsql::Value::Null));
@@ -758,7 +771,10 @@ async fn spike_decision_search_text_built_correctly() {
     create_test_decision(&conn, &dec, &opts, &outcomes, &links).await;
 
     let mut rows = conn
-        .query("SELECT search_text FROM decisions WHERE id = ?", ["dec-00000001"])
+        .query(
+            "SELECT search_text FROM decisions WHERE id = ?",
+            ["dec-00000001"],
+        )
         .await
         .unwrap();
 
@@ -796,7 +812,11 @@ async fn spike_decision_fts_matches_question() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("FTS should match question keywords");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should match question keywords");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-00000001");
 }
 
@@ -818,7 +838,11 @@ async fn spike_decision_fts_matches_because() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("FTS should match because keywords");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should match because keywords");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-00000001");
 }
 
@@ -840,7 +864,11 @@ async fn spike_decision_fts_matches_option_label() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("FTS should match option label");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should match option label");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-00000001");
 }
 
@@ -896,7 +924,10 @@ async fn spike_decision_unique_chosen_constraint() {
         )
         .await;
 
-    assert!(result.is_err(), "second chosen option should violate unique constraint");
+    assert!(
+        result.is_err(),
+        "second chosen option should violate unique constraint"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -962,17 +993,34 @@ async fn spike_decision_nullable_fields_correct() {
 // Replay helpers
 // ---------------------------------------------------------------------------
 
-async fn replay_decision_create(conn: &libsql::Connection, data: &serde_json::Value) -> Result<(), String> {
+async fn replay_decision_create(
+    conn: &libsql::Connection,
+    data: &serde_json::Value,
+) -> Result<(), String> {
     let decision = data.get("decision").ok_or("missing 'decision' field")?;
 
     let id = decision["id"].as_str().ok_or("missing decision.id")?;
-    let session_id = decision["session_id"].as_str().ok_or("missing decision.session_id")?;
-    let category = decision["category"].as_str().ok_or("missing decision.category")?;
-    let subject_type = decision["subject_type"].as_str().ok_or("missing decision.subject_type")?;
-    let subject_id = decision["subject_id"].as_str().ok_or("missing decision.subject_id")?;
-    let question = decision["question"].as_str().ok_or("missing decision.question")?;
-    let because = decision["because"].as_str().ok_or("missing decision.because")?;
-    let confidence = decision["confidence"].as_str().ok_or("missing decision.confidence")?;
+    let session_id = decision["session_id"]
+        .as_str()
+        .ok_or("missing decision.session_id")?;
+    let category = decision["category"]
+        .as_str()
+        .ok_or("missing decision.category")?;
+    let subject_type = decision["subject_type"]
+        .as_str()
+        .ok_or("missing decision.subject_type")?;
+    let subject_id = decision["subject_id"]
+        .as_str()
+        .ok_or("missing decision.subject_id")?;
+    let question = decision["question"]
+        .as_str()
+        .ok_or("missing decision.question")?;
+    let because = decision["because"]
+        .as_str()
+        .ok_or("missing decision.because")?;
+    let confidence = decision["confidence"]
+        .as_str()
+        .ok_or("missing decision.confidence")?;
 
     let outcome_summary = decision.get("outcome_summary").and_then(|v| v.as_str());
     let policy_type = decision.get("policy_type").and_then(|v| v.as_str());
@@ -981,7 +1029,10 @@ async fn replay_decision_create(conn: &libsql::Connection, data: &serde_json::Va
     let exception_reason = decision.get("exception_reason").and_then(|v| v.as_str());
     let approver = decision.get("approver").and_then(|v| v.as_str());
 
-    let options = data.get("options").and_then(|v| v.as_array()).ok_or("missing 'options'")?;
+    let options = data
+        .get("options")
+        .and_then(|v| v.as_array())
+        .ok_or("missing 'options'")?;
 
     let chosen_label = options
         .iter()
@@ -1026,7 +1077,11 @@ async fn replay_decision_create(conn: &libsql::Connection, data: &serde_json::Va
         let opt_id = opt["id"].as_str().ok_or("missing option.id")?;
         let label = opt["label"].as_str().ok_or("missing option.label")?;
         let summary = opt.get("summary").and_then(|v| v.as_str());
-        let is_chosen = if opt["is_chosen"].as_bool().unwrap_or(false) { 1i64 } else { 0i64 };
+        let is_chosen = if opt["is_chosen"].as_bool().unwrap_or(false) {
+            1i64
+        } else {
+            0i64
+        };
         let sort_order = opt["sort_order"].as_i64().unwrap_or(0);
 
         tx.execute(
@@ -1052,9 +1107,15 @@ async fn replay_decision_create(conn: &libsql::Connection, data: &serde_json::Va
 
     if let Some(outcomes) = data.get("outcomes").and_then(|v| v.as_array()) {
         for outcome in outcomes {
-            let etype = outcome["entity_type"].as_str().ok_or("missing outcome.entity_type")?;
-            let eid = outcome["entity_id"].as_str().ok_or("missing outcome.entity_id")?;
-            let rel = outcome["relation"].as_str().ok_or("missing outcome.relation")?;
+            let etype = outcome["entity_type"]
+                .as_str()
+                .ok_or("missing outcome.entity_type")?;
+            let eid = outcome["entity_id"]
+                .as_str()
+                .ok_or("missing outcome.entity_id")?;
+            let rel = outcome["relation"]
+                .as_str()
+                .ok_or("missing outcome.relation")?;
             tx.execute(
                 "INSERT INTO decision_outcomes (decision_id, entity_type, entity_id, relation) VALUES (?1, ?2, ?3, ?4)",
                 libsql::params![id, etype, eid, rel],
@@ -1067,9 +1128,13 @@ async fn replay_decision_create(conn: &libsql::Connection, data: &serde_json::Va
     if let Some(links) = data.get("links").and_then(|v| v.as_array()) {
         for (i, link) in links.iter().enumerate() {
             let link_id = format!("lnk-replay-{i:03}");
-            let st = link["source_type"].as_str().ok_or("missing link.source_type")?;
+            let st = link["source_type"]
+                .as_str()
+                .ok_or("missing link.source_type")?;
             let si = link["source_id"].as_str().ok_or("missing link.source_id")?;
-            let tt = link["target_type"].as_str().ok_or("missing link.target_type")?;
+            let tt = link["target_type"]
+                .as_str()
+                .ok_or("missing link.target_type")?;
             let ti = link["target_id"].as_str().ok_or("missing link.target_id")?;
             let rel = link["relation"].as_str().ok_or("missing link.relation")?;
             tx.execute(
@@ -1148,44 +1213,87 @@ async fn spike_decision_replay_roundtrip() {
     replay_decision_create(&conn, &trail_data).await.unwrap();
 
     let mut rows = conn
-        .query("SELECT id, question, because, confidence FROM decisions WHERE id = ?", ["dec-replay01"])
+        .query(
+            "SELECT id, question, because, confidence FROM decisions WHERE id = ?",
+            ["dec-replay01"],
+        )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("replayed decision should exist");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("replayed decision should exist");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-replay01");
-    assert_eq!(row.get::<String>(1).unwrap(), "Is the replay roundtrip reliable?");
-    assert_eq!(row.get::<String>(2).unwrap(), "test proves data survives replay");
+    assert_eq!(
+        row.get::<String>(1).unwrap(),
+        "Is the replay roundtrip reliable?"
+    );
+    assert_eq!(
+        row.get::<String>(2).unwrap(),
+        "test proves data survives replay"
+    );
     assert_eq!(row.get::<String>(3).unwrap(), "high");
 
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM decision_options WHERE decision_id = ?", ["dec-replay01"])
+        .query(
+            "SELECT COUNT(*) FROM decision_options WHERE decision_id = ?",
+            ["dec-replay01"],
+        )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 2);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        2
+    );
 
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM decision_option_evidence WHERE option_id = ?", ["opt-r01"])
+        .query(
+            "SELECT COUNT(*) FROM decision_option_evidence WHERE option_id = ?",
+            ["opt-r01"],
+        )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM decision_outcomes WHERE decision_id = ?", ["dec-replay01"])
+        .query(
+            "SELECT COUNT(*) FROM decision_outcomes WHERE decision_id = ?",
+            ["dec-replay01"],
+        )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM entity_links WHERE source_type = 'decision' AND source_id = ?", ["dec-replay01"])
+        .query(
+            "SELECT COUNT(*) FROM entity_links WHERE source_type = 'decision' AND source_id = ?",
+            ["dec-replay01"],
+        )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 2);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        2
+    );
 
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM audit_trail WHERE entity_type = 'decision' AND entity_id = ?", ["dec-replay01"])
+        .query(
+            "SELECT COUNT(*) FROM audit_trail WHERE entity_type = 'decision' AND entity_id = ?",
+            ["dec-replay01"],
+        )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
     let mut rows = conn
         .query(
@@ -1194,7 +1302,10 @@ async fn spike_decision_replay_roundtrip() {
         )
         .await
         .unwrap();
-    assert!(rows.next().await.unwrap().is_some(), "FTS should work after replay");
+    assert!(
+        rows.next().await.unwrap().is_some(),
+        "FTS should work after replay"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1259,8 +1370,14 @@ async fn spike_decision_replay_null_vs_absent() {
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
-    assert!(matches!(row.get_value(0).unwrap(), libsql::Value::Null), "policy_type (JSON null) should be SQL NULL");
-    assert!(matches!(row.get_value(1).unwrap(), libsql::Value::Null), "exception_kind (absent) should be SQL NULL");
+    assert!(
+        matches!(row.get_value(0).unwrap(), libsql::Value::Null),
+        "policy_type (JSON null) should be SQL NULL"
+    );
+    assert!(
+        matches!(row.get_value(1).unwrap(), libsql::Value::Null),
+        "exception_kind (absent) should be SQL NULL"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1289,19 +1406,28 @@ async fn spike_decision_replay_old_trails_without_decisions() {
         .query("SELECT COUNT(*) FROM decisions", ())
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 0);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        0
+    );
 
     let mut rows = conn
         .query("SELECT COUNT(*) FROM findings", ())
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
     let mut rows = conn
         .query("SELECT COUNT(*) FROM hypotheses", ())
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1358,17 +1484,41 @@ async fn spike_decision_mutation_protocol_order() {
 
     tx.commit().await.unwrap();
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decisions", ()).await.unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM decisions", ())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decision_options", ()).await.unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM decision_options", ())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decision_option_evidence", ()).await.unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM decision_option_evidence", ())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decision_outcomes", ()).await.unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 1);
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM decision_outcomes", ())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        1
+    );
 
     let mut rows = conn
         .query(
@@ -1416,14 +1566,23 @@ async fn spike_decision_trail_failure_rolls_back() {
 
     tx.rollback().await.unwrap();
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decisions WHERE id = 'dec-fail01'", ()).await.unwrap();
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM decisions WHERE id = 'dec-fail01'", ())
+        .await
+        .unwrap();
     assert_eq!(
         rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
         0,
         "rolled-back decision should not exist"
     );
 
-    let mut rows = conn.query("SELECT COUNT(*) FROM decision_options WHERE decision_id = 'dec-fail01'", ()).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT COUNT(*) FROM decision_options WHERE decision_id = 'dec-fail01'",
+            (),
+        )
+        .await
+        .unwrap();
     assert_eq!(
         rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
         0,
@@ -1490,7 +1649,11 @@ async fn spike_follows_precedent_link_created() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("precedent link should exist");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("precedent link should exist");
     assert_eq!(row.get::<String>(0).unwrap(), "decision");
     assert_eq!(row.get::<String>(1).unwrap(), "dec-00000001");
     assert_eq!(row.get::<String>(2).unwrap(), "follows_precedent");
@@ -1555,7 +1718,11 @@ async fn spike_overrides_policy_link_created() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("overrides_policy link should exist");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("overrides_policy link should exist");
     assert_eq!(row.get::<String>(0).unwrap(), "insight");
     assert_eq!(row.get::<String>(1).unwrap(), "ins-policy01");
 
@@ -1565,7 +1732,10 @@ async fn spike_overrides_policy_link_created() {
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "accepted_debt");
-    assert_eq!(row.get::<String>(1).unwrap(), "one-off script, no production impact");
+    assert_eq!(
+        row.get::<String>(1).unwrap(),
+        "one-off script, no production impact"
+    );
     assert_eq!(row.get::<String>(2).unwrap(), "insight");
     assert_eq!(row.get::<String>(3).unwrap(), "ins-policy01");
 }
@@ -1688,10 +1858,17 @@ async fn spike_derived_from_scoped_by_entity_type() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("decision derived_from link");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("decision derived_from link");
     assert_eq!(row.get::<String>(0).unwrap(), "decision");
     assert_eq!(row.get::<String>(1).unwrap(), "dec-scoped01");
-    assert!(rows.next().await.unwrap().is_none(), "should not include study-originated link");
+    assert!(
+        rows.next().await.unwrap().is_none(),
+        "should not include study-originated link"
+    );
 
     let mut rows = conn
         .query(
@@ -1700,7 +1877,11 @@ async fn spike_derived_from_scoped_by_entity_type() {
         )
         .await
         .unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(), 2, "both links exist unscoped");
+    assert_eq!(
+        rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap(),
+        2,
+        "both links exist unscoped"
+    );
 }
 
 // ===========================================================================
@@ -1761,13 +1942,90 @@ async fn setup_precedent_corpus(conn: &libsql::Connection, session_id: &str) {
     .unwrap();
 
     let decisions_data: Vec<(&str, &str, &str, &str, &str, &str, &str, &str, &str, &str)> = vec![
-        ("dec-p01", "ses-prev01", "verdict", "hypothesis", "hyp-p01", "Is spawn Send-bound?", "compile error proves it", "high", "2026-02-01T10:00:00", "hypothesis confirmed"),
-        ("dec-p02", "ses-prev01", "verdict", "hypothesis", "hyp-p02", "Does spawn require 'static?", "lifetime analysis confirms", "high", "2026-02-02T10:00:00", "hypothesis confirmed"),
-        ("dec-p03", "ses-prev01", "architecture", "task", "tsk-arch01", "Which async runtime to use?", "tokio is industry standard", "high", "2026-02-03T10:00:00", "chose tokio"),
-        ("dec-p04", "ses-prev02", "verdict", "hypothesis", "hyp-p03", "Is spawn_blocking Send-bound?", "docs say no Send needed", "medium", "2026-02-04T10:00:00", "debunked"),
-        ("dec-p05", "ses-prev02", "planning", "task", "tsk-plan01", "Task ordering for migration?", "dependencies require X before Y", "medium", "2026-02-05T10:00:00", "ordered"),
-        ("dec-p06", "ses-prev02", "exception", "task", "tsk-hack01", "Accept temporary hack?", "deadline pressure", "low", "2026-02-06T10:00:00", "accepted debt"),
-        ("dec-p07", "ses-prev01", "verdict", "hypothesis", "hyp-p01", "Reconfirm spawn Send bound after refactor?", "same evidence still holds", "high", "2026-02-07T10:00:00", "reconfirmed"),
+        (
+            "dec-p01",
+            "ses-prev01",
+            "verdict",
+            "hypothesis",
+            "hyp-p01",
+            "Is spawn Send-bound?",
+            "compile error proves it",
+            "high",
+            "2026-02-01T10:00:00",
+            "hypothesis confirmed",
+        ),
+        (
+            "dec-p02",
+            "ses-prev01",
+            "verdict",
+            "hypothesis",
+            "hyp-p02",
+            "Does spawn require 'static?",
+            "lifetime analysis confirms",
+            "high",
+            "2026-02-02T10:00:00",
+            "hypothesis confirmed",
+        ),
+        (
+            "dec-p03",
+            "ses-prev01",
+            "architecture",
+            "task",
+            "tsk-arch01",
+            "Which async runtime to use?",
+            "tokio is industry standard",
+            "high",
+            "2026-02-03T10:00:00",
+            "chose tokio",
+        ),
+        (
+            "dec-p04",
+            "ses-prev02",
+            "verdict",
+            "hypothesis",
+            "hyp-p03",
+            "Is spawn_blocking Send-bound?",
+            "docs say no Send needed",
+            "medium",
+            "2026-02-04T10:00:00",
+            "debunked",
+        ),
+        (
+            "dec-p05",
+            "ses-prev02",
+            "planning",
+            "task",
+            "tsk-plan01",
+            "Task ordering for migration?",
+            "dependencies require X before Y",
+            "medium",
+            "2026-02-05T10:00:00",
+            "ordered",
+        ),
+        (
+            "dec-p06",
+            "ses-prev02",
+            "exception",
+            "task",
+            "tsk-hack01",
+            "Accept temporary hack?",
+            "deadline pressure",
+            "low",
+            "2026-02-06T10:00:00",
+            "accepted debt",
+        ),
+        (
+            "dec-p07",
+            "ses-prev01",
+            "verdict",
+            "hypothesis",
+            "hyp-p01",
+            "Reconfirm spawn Send bound after refactor?",
+            "same evidence still holds",
+            "high",
+            "2026-02-07T10:00:00",
+            "reconfirmed",
+        ),
     ];
 
     for (id, ses, cat, st, si, q, b, conf, ts, outcome) in &decisions_data {
@@ -1935,7 +2193,10 @@ async fn spike_precedent_search_finds_same_subject_type() {
 
     assert!(!results.is_empty(), "should find precedents");
     let ids: Vec<&str> = results.iter().map(|(id, _)| id.as_str()).collect();
-    assert!(ids.contains(&"dec-p01"), "should find dec-p01 (same subject, shared evidence)");
+    assert!(
+        ids.contains(&"dec-p01"),
+        "should find dec-p01 (same subject, shared evidence)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2009,9 +2270,33 @@ async fn spike_precedent_search_deterministic_ranking() {
     let (_db, conn, session_id) = setup_spike_db().await;
     setup_precedent_corpus(&conn, &session_id).await;
 
-    let r1 = run_precedent_search(&conn, "hypothesis", "hyp-p01", "spawn Send", "2026-02-10T12:00:00", 10).await;
-    let r2 = run_precedent_search(&conn, "hypothesis", "hyp-p01", "spawn Send", "2026-02-10T12:00:00", 10).await;
-    let r3 = run_precedent_search(&conn, "hypothesis", "hyp-p01", "spawn Send", "2026-02-10T12:00:00", 10).await;
+    let r1 = run_precedent_search(
+        &conn,
+        "hypothesis",
+        "hyp-p01",
+        "spawn Send",
+        "2026-02-10T12:00:00",
+        10,
+    )
+    .await;
+    let r2 = run_precedent_search(
+        &conn,
+        "hypothesis",
+        "hyp-p01",
+        "spawn Send",
+        "2026-02-10T12:00:00",
+        10,
+    )
+    .await;
+    let r3 = run_precedent_search(
+        &conn,
+        "hypothesis",
+        "hyp-p01",
+        "spawn Send",
+        "2026-02-10T12:00:00",
+        10,
+    )
+    .await;
 
     let ids1: Vec<&str> = r1.iter().map(|(id, _)| id.as_str()).collect();
     let ids2: Vec<&str> = r2.iter().map(|(id, _)| id.as_str()).collect();
@@ -2068,7 +2353,10 @@ async fn spike_flywheel_new_trace_found_as_precedent() {
     .await;
 
     let ids: Vec<&str> = results.iter().map(|(id, _)| id.as_str()).collect();
-    assert!(ids.contains(&"dec-fly01"), "newly created trace should be findable as precedent: {ids:?}");
+    assert!(
+        ids.contains(&"dec-fly01"),
+        "newly created trace should be findable as precedent: {ids:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2088,7 +2376,15 @@ async fn spike_flywheel_more_traces_improve_retrieval() {
         (),
     ).await.unwrap();
 
-    let results_1 = run_precedent_search(&conn, "hypothesis", "hyp-new", "async fast benchmark", "2026-02-10T12:00:00", 5).await;
+    let results_1 = run_precedent_search(
+        &conn,
+        "hypothesis",
+        "hyp-new",
+        "async fast benchmark",
+        "2026-02-10T12:00:00",
+        5,
+    )
+    .await;
 
     for i in 2..=5 {
         let id = format!("dec-bulk{i:02}");
@@ -2103,7 +2399,15 @@ async fn spike_flywheel_more_traces_improve_retrieval() {
         ).await.unwrap();
     }
 
-    let results_5 = run_precedent_search(&conn, "hypothesis", "hyp-new", "async fast benchmark", "2026-02-10T12:00:00", 5).await;
+    let results_5 = run_precedent_search(
+        &conn,
+        "hypothesis",
+        "hyp-new",
+        "async fast benchmark",
+        "2026-02-10T12:00:00",
+        5,
+    )
+    .await;
 
     assert!(
         results_5.len() >= results_1.len(),
@@ -2137,7 +2441,10 @@ async fn spike_flywheel_cross_session_precedent() {
         let mut set = std::collections::HashSet::new();
         for (id, _) in &results {
             let mut rows = conn
-                .query("SELECT session_id FROM decisions WHERE id = ?", [id.as_str()])
+                .query(
+                    "SELECT session_id FROM decisions WHERE id = ?",
+                    [id.as_str()],
+                )
                 .await
                 .unwrap();
             if let Some(row) = rows.next().await.unwrap() {
@@ -2220,7 +2527,11 @@ async fn spike_query_rejected_options_with_evidence() {
         .await
         .unwrap();
 
-    let row = rows.next().await.unwrap().expect("should find rejected option with >= 2 evidence");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("should find rejected option with >= 2 evidence");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-rq5-01");
     assert_eq!(row.get::<String>(1).unwrap(), "postgres");
     assert_eq!(row.get::<i64>(2).unwrap(), 3);
@@ -2272,13 +2583,29 @@ async fn spike_query_same_alternative_evaluated() {
         .await
         .unwrap();
 
-    let r1 = rows.next().await.unwrap().expect("dec-alt01 considered debunk");
+    let r1 = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("dec-alt01 considered debunk");
     assert_eq!(r1.get::<String>(0).unwrap(), "dec-alt01");
-    assert_eq!(r1.get::<i64>(2).unwrap(), 0, "debunk was rejected in dec-alt01");
+    assert_eq!(
+        r1.get::<i64>(2).unwrap(),
+        0,
+        "debunk was rejected in dec-alt01"
+    );
 
-    let r2 = rows.next().await.unwrap().expect("dec-alt02 considered debunk");
+    let r2 = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("dec-alt02 considered debunk");
     assert_eq!(r2.get::<String>(0).unwrap(), "dec-alt02");
-    assert_eq!(r2.get::<i64>(2).unwrap(), 1, "debunk was chosen in dec-alt02");
+    assert_eq!(
+        r2.get::<i64>(2).unwrap(),
+        1,
+        "debunk was chosen in dec-alt02"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2307,24 +2634,25 @@ async fn spike_query_chosen_option_evidence_chain() {
         question: "Is the Send bound real?".into(),
         because: "two independent tests".into(),
         outcome_summary: Some("confirmed".into()),
-        policy_type: None, policy_id: None, exception_kind: None, exception_reason: None,
+        policy_type: None,
+        policy_id: None,
+        exception_kind: None,
+        exception_reason: None,
         approver: Some("llm".into()),
         confidence: "high".into(),
         metadata_json: None,
     };
-    let opts = vec![
-        OptionFixture {
-            id: "opt-chain-c".into(),
-            label: "confirm".into(),
-            summary: Some("compile + runtime evidence".into()),
-            is_chosen: true,
-            sort_order: 0,
-            evidence: vec![
-                ("finding".into(), "fnd-chain01".into()),
-                ("finding".into(), "fnd-chain02".into()),
-            ],
-        },
-    ];
+    let opts = vec![OptionFixture {
+        id: "opt-chain-c".into(),
+        label: "confirm".into(),
+        summary: Some("compile + runtime evidence".into()),
+        is_chosen: true,
+        sort_order: 0,
+        evidence: vec![
+            ("finding".into(), "fnd-chain01".into()),
+            ("finding".into(), "fnd-chain02".into()),
+        ],
+    }];
     create_test_decision(&conn, &dec, &opts, &[], &[]).await;
 
     let mut rows = conn
@@ -2382,16 +2710,38 @@ async fn spike_whats_next_includes_precedent_for_open_task() {
         let keywords: Vec<&str> = title.split_whitespace().take(4).collect();
         let fts_query = keywords.join(" ");
 
-        let results = run_precedent_search(&conn, "task", "tsk-open01", &fts_query, "2026-02-10T12:00:00", 3).await;
+        let results = run_precedent_search(
+            &conn,
+            "task",
+            "tsk-open01",
+            &fts_query,
+            "2026-02-10T12:00:00",
+            3,
+        )
+        .await;
         if !results.is_empty() {
             found_precedent = true;
         }
     }
 
-    assert!(found_precedent || true, "precedent search ran without error for open tasks");
+    assert!(
+        found_precedent || true,
+        "precedent search ran without error for open tasks"
+    );
 
-    let results = run_precedent_search(&conn, "task", "tsk-any", "async runtime tokio", "2026-02-10T12:00:00", 3).await;
-    assert!(!results.is_empty(), "should find architecture decisions about tokio as precedent");
+    let results = run_precedent_search(
+        &conn,
+        "task",
+        "tsk-any",
+        "async runtime tokio",
+        "2026-02-10T12:00:00",
+        3,
+    )
+    .await;
+    assert!(
+        !results.is_empty(),
+        "should find architecture decisions about tokio as precedent"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2420,7 +2770,10 @@ async fn spike_whats_next_includes_precedent_for_pending_hypothesis() {
     )
     .await;
 
-    assert!(!results.is_empty(), "should find prior verdict decisions about spawn Send bound");
+    assert!(
+        !results.is_empty(),
+        "should find prior verdict decisions about spawn Send bound"
+    );
 
     let ids: Vec<&str> = results.iter().map(|(id, _)| id.as_str()).collect();
     let has_verdict = {
@@ -2439,7 +2792,10 @@ async fn spike_whats_next_includes_precedent_for_pending_hypothesis() {
         }
         found
     };
-    assert!(has_verdict, "should find at least one verdict decision: {ids:?}");
+    assert!(
+        has_verdict,
+        "should find at least one verdict decision: {ids:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2470,16 +2826,16 @@ async fn spike_whats_next_surfaces_unresolved_exceptions() {
 
     let mut unresolved = Vec::new();
     while let Some(row) = rows.next().await.unwrap() {
-        unresolved.push((
-            row.get::<String>(0).unwrap(),
-            row.get::<String>(2).unwrap(),
-        ));
+        unresolved.push((row.get::<String>(0).unwrap(), row.get::<String>(2).unwrap()));
     }
 
     assert!(!unresolved.is_empty(), "should find unresolved exceptions");
 
     let has_accepted_debt = unresolved.iter().any(|(_, kind)| kind == "accepted_debt");
-    assert!(has_accepted_debt, "should find accepted_debt exceptions: {unresolved:?}");
+    assert!(
+        has_accepted_debt,
+        "should find accepted_debt exceptions: {unresolved:?}"
+    );
 }
 
 // ===========================================================================
@@ -2524,7 +2880,11 @@ async fn spike_decision_superseded_by_new_decision() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("supersedes link should exist");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("supersedes link should exist");
     assert_eq!(row.get::<String>(0).unwrap(), "dec-new-sup");
 
     let mut rows = conn
@@ -2542,9 +2902,20 @@ async fn spike_decision_superseded_by_new_decision() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("current decision should exist");
-    assert_eq!(row.get::<String>(0).unwrap(), "dec-new-sup", "only the new decision should be current");
-    assert!(rows.next().await.unwrap().is_none(), "old decision should be excluded");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("current decision should exist");
+    assert_eq!(
+        row.get::<String>(0).unwrap(),
+        "dec-new-sup",
+        "only the new decision should be current"
+    );
+    assert!(
+        rows.next().await.unwrap().is_none(),
+        "old decision should be excluded"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2615,7 +2986,9 @@ async fn spike_superseded_decision_excluded_from_precedent_search() {
 
     if !non_superseded_results.is_empty() {
         assert!(
-            non_superseded_results.iter().any(|(id, _)| id == "dec-sup-new"),
+            non_superseded_results
+                .iter()
+                .any(|(id, _)| id == "dec-sup-new"),
             "non-superseded results should include the new decision"
         );
     }

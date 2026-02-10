@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 zen-core.workspace = true
 zen-config.workspace = true
+zen-schema.workspace = true
 libsql.workspace = true
 serde.workspace = true
 serde_json.workspace = true

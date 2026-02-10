@@ -29,7 +29,6 @@ use libsql::Builder;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, Write};
 
-
 /// Helper: create an in-memory database for tests.
 async fn in_memory_db() -> libsql::Database {
     Builder::new_local(":memory:")
@@ -325,12 +324,54 @@ fn build_study_operations() -> Vec<Operation> {
 /// Helper: build audit entries for Approach A comparison.
 fn build_audit_entries() -> Vec<AuditEntry> {
     vec![
-        AuditEntry { ts: "2026-02-08T10:00:00Z".into(), ses: "ses-test0001".into(), entity: "session".into(), id: "ses-test0001".into(), action: "create".into(), detail: "Session started".into() },
-        AuditEntry { ts: "2026-02-08T10:01:00Z".into(), ses: "ses-test0001".into(), entity: "research".into(), id: "res-study001".into(), action: "create".into(), detail: "Created: Study: How tokio::spawn works".into() },
-        AuditEntry { ts: "2026-02-08T10:02:00Z".into(), ses: "ses-test0001".into(), entity: "hypothesis".into(), id: "hyp-asm001".into(), action: "create".into(), detail: "Created: spawn requires Send + 'static bounds".into() },
-        AuditEntry { ts: "2026-02-08T10:05:00Z".into(), ses: "ses-test0001".into(), entity: "finding".into(), id: "fnd-test001".into(), action: "create".into(), detail: "Created: Test: non-Send type -> E0277".into() },
-        AuditEntry { ts: "2026-02-08T10:05:30Z".into(), ses: "ses-test0001".into(), entity: "hypothesis".into(), id: "hyp-asm001".into(), action: "update".into(), detail: "Status: unverified -> confirmed".into() },
-        AuditEntry { ts: "2026-02-08T10:10:00Z".into(), ses: "ses-test0001".into(), entity: "insight".into(), id: "ins-conc001".into(), action: "create".into(), detail: "Created: Tokio spawn requires Send + 'static".into() },
+        AuditEntry {
+            ts: "2026-02-08T10:00:00Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "session".into(),
+            id: "ses-test0001".into(),
+            action: "create".into(),
+            detail: "Session started".into(),
+        },
+        AuditEntry {
+            ts: "2026-02-08T10:01:00Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "research".into(),
+            id: "res-study001".into(),
+            action: "create".into(),
+            detail: "Created: Study: How tokio::spawn works".into(),
+        },
+        AuditEntry {
+            ts: "2026-02-08T10:02:00Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "hypothesis".into(),
+            id: "hyp-asm001".into(),
+            action: "create".into(),
+            detail: "Created: spawn requires Send + 'static bounds".into(),
+        },
+        AuditEntry {
+            ts: "2026-02-08T10:05:00Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "finding".into(),
+            id: "fnd-test001".into(),
+            action: "create".into(),
+            detail: "Created: Test: non-Send type -> E0277".into(),
+        },
+        AuditEntry {
+            ts: "2026-02-08T10:05:30Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "hypothesis".into(),
+            id: "hyp-asm001".into(),
+            action: "update".into(),
+            detail: "Status: unverified -> confirmed".into(),
+        },
+        AuditEntry {
+            ts: "2026-02-08T10:10:00Z".into(),
+            ses: "ses-test0001".into(),
+            entity: "insight".into(),
+            id: "ins-conc001".into(),
+            action: "create".into(),
+            detail: "Created: Tokio spawn requires Send + 'static".into(),
+        },
     ]
 }
 
@@ -455,7 +496,11 @@ async fn spike_jsonl_compare_ergonomics() {
     // Append: raw serde_json (4 lines)
     // -----------------------------------------------------------------------
     {
-        let file = std::fs::OpenOptions::new().create(true).append(true).open(&path_b).unwrap();
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path_b)
+            .unwrap();
         let mut writer = std::io::BufWriter::new(file);
         writeln!(writer, "{}", serde_json::to_string(&extra).unwrap()).unwrap();
         writer.flush().unwrap();
@@ -475,12 +520,26 @@ async fn spike_jsonl_compare_ergonomics() {
     println!("\n{}", "=".repeat(72));
     println!("  SPIKE 0.12 PART A: CRATE ERGONOMICS COMPARISON");
     println!("{}\n", "=".repeat(72));
-    println!("  {:<30} {:>15} {:>15}", "Operation", "serde-jsonlines", "raw serde_json");
-    println!("  {:<30} {:>15} {:>15}", "-".repeat(30), "-".repeat(15), "-".repeat(15));
+    println!(
+        "  {:<30} {:>15} {:>15}",
+        "Operation", "serde-jsonlines", "raw serde_json"
+    );
+    println!(
+        "  {:<30} {:>15} {:>15}",
+        "-".repeat(30),
+        "-".repeat(15),
+        "-".repeat(15)
+    );
     println!("  {:<30} {:>15} {:>15}", "Write batch", "1 line", "5 lines");
     println!("  {:<30} {:>15} {:>15}", "Read batch", "1 line", "4 lines");
-    println!("  {:<30} {:>15} {:>15}", "Append single", "1 line", "4 lines");
-    println!("  {:<30} {:>15} {:>15}", "Error handling", "built-in", "manual");
+    println!(
+        "  {:<30} {:>15} {:>15}",
+        "Append single", "1 line", "4 lines"
+    );
+    println!(
+        "  {:<30} {:>15} {:>15}",
+        "Error handling", "built-in", "manual"
+    );
     println!("  {:<30} {:>15} {:>15}", "File creation", "auto", "manual");
     println!("  {:<30} {:>15} {:>15}", "Extra dependency", "yes", "no");
 }
@@ -567,7 +626,10 @@ async fn spike_jsonl_audit_size() {
     let avg_per_entry = file_size / 100;
 
     println!("\n  AUDIT-ONLY SIZE:");
-    println!("  100 entries: {} bytes ({} bytes/entry avg)", file_size, avg_per_entry);
+    println!(
+        "  100 entries: {} bytes ({} bytes/entry avg)",
+        file_size, avg_per_entry
+    );
     println!("  1,000 entries: ~{} KB", avg_per_entry * 1000 / 1024);
     println!("  10,000 entries: ~{} KB", avg_per_entry * 10_000 / 1024);
 
@@ -584,9 +646,19 @@ async fn spike_jsonl_audit_size() {
 #[tokio::test]
 async fn spike_jsonl_operation_format() {
     let entity_types = [
-        "session", "research", "finding", "finding_tag", "hypothesis",
-        "insight", "issue", "task", "impl_log", "compat", "study",
-        "entity_link", "audit",
+        "session",
+        "research",
+        "finding",
+        "finding_tag",
+        "hypothesis",
+        "insight",
+        "issue",
+        "task",
+        "impl_log",
+        "compat",
+        "study",
+        "entity_link",
+        "audit",
     ];
 
     for entity in entity_types {
@@ -668,39 +740,72 @@ async fn spike_jsonl_replay_rebuild() {
 
     // Step 3: Verify the rebuilt DB has correct state
     // Session exists
-    let mut rows = conn.query("SELECT id, status FROM sessions WHERE id = ?", ["ses-test0001"]).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT id, status FROM sessions WHERE id = ?",
+            ["ses-test0001"],
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().expect("session");
     assert_eq!(row.get::<String>(0).unwrap(), "ses-test0001");
 
     // Research exists
-    let mut rows = conn.query("SELECT title, status FROM research_items WHERE id = ?", ["res-study001"]).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT title, status FROM research_items WHERE id = ?",
+            ["res-study001"],
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().expect("research");
     assert!(row.get::<String>(0).unwrap().contains("tokio::spawn"));
 
     // 3 hypotheses exist, one is confirmed
-    let mut rows = conn.query("SELECT COUNT(*) FROM hypotheses WHERE research_id = ?", ["res-study001"]).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT COUNT(*) FROM hypotheses WHERE research_id = ?",
+            ["res-study001"],
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<i64>(0).unwrap(), 3);
 
-    let mut rows = conn.query("SELECT status FROM hypotheses WHERE id = ?", ["hyp-asm001"]).await.unwrap();
+    let mut rows = conn
+        .query("SELECT status FROM hypotheses WHERE id = ?", ["hyp-asm001"])
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "confirmed");
 
     // Finding exists with tag
-    let mut rows = conn.query("SELECT tag FROM finding_tags WHERE finding_id = ?", ["fnd-test001"]).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT tag FROM finding_tags WHERE finding_id = ?",
+            ["fnd-test001"],
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "test-result");
 
     // Entity link exists
-    let mut rows = conn.query(
-        "SELECT relation FROM entity_links WHERE source_id = ? AND target_id = ?",
-        libsql::params!["fnd-test001", "hyp-asm001"],
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT relation FROM entity_links WHERE source_id = ? AND target_id = ?",
+            libsql::params!["fnd-test001", "hyp-asm001"],
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "validates");
 
     // Insight exists
-    let mut rows = conn.query("SELECT content FROM insights WHERE id = ?", ["ins-conc001"]).await.unwrap();
+    let mut rows = conn
+        .query("SELECT content FROM insights WHERE id = ?", ["ins-conc001"])
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert!(row.get::<String>(0).unwrap().contains("Send + 'static"));
 }
@@ -730,7 +835,11 @@ async fn spike_jsonl_rebuild_fts() {
         "SELECT r.id FROM research_fts fts JOIN research_items r ON r.rowid = fts.rowid WHERE research_fts MATCH ?",
         ["tokio spawn"],
     ).await.unwrap();
-    let row = rows.next().await.unwrap().expect("FTS should find research");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should find research");
     assert_eq!(row.get::<String>(0).unwrap(), "res-study001");
 
     // FTS on findings
@@ -746,7 +855,11 @@ async fn spike_jsonl_rebuild_fts() {
         "SELECT h.id FROM hypotheses_fts fts JOIN hypotheses h ON h.rowid = fts.rowid WHERE hypotheses_fts MATCH ?",
         ["Send"],
     ).await.unwrap();
-    let row = rows.next().await.unwrap().expect("FTS should find hypothesis");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should find hypothesis");
     assert_eq!(row.get::<String>(0).unwrap(), "hyp-asm001");
 }
 
@@ -803,14 +916,43 @@ async fn spike_jsonl_operation_size() {
     println!("\n{}", "=".repeat(72));
     println!("  SPIKE 0.12 PART C: FORMAT SIZE COMPARISON");
     println!("{}\n", "=".repeat(72));
-    println!("  {:<35} {:>12} {:>12}", "Metric", "Operations", "Audit-only");
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Metric", "Operations", "Audit-only"
+    );
     println!("  {:<35} {:>12} {:>12}", "", "(Approach B)", "(Approach A)");
-    println!("  {:<35} {:>12} {:>12}", "-".repeat(35), "-".repeat(12), "-".repeat(12));
-    println!("  {:<35} {:>12} {:>12}", "Entries in scenario", ops.len(), audits.len());
-    println!("  {:<35} {:>10} B {:>10} B", "Total size", ops_size, audit_size);
-    println!("  {:<35} {:>10} B {:>10} B", "Avg per entry", ops_per_entry, audit_per_entry);
-    println!("  {:<35} {:>10} KB {:>10} KB", "Est. 1K entries", ops_per_entry * 1000 / 1024, audit_per_entry * 1000 / 1024);
-    println!("  {:<35} {:>10} KB {:>10} KB", "Est. 10K entries", ops_per_entry * 10_000 / 1024, audit_per_entry * 10_000 / 1024);
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "-".repeat(35),
+        "-".repeat(12),
+        "-".repeat(12)
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Entries in scenario",
+        ops.len(),
+        audits.len()
+    );
+    println!(
+        "  {:<35} {:>10} B {:>10} B",
+        "Total size", ops_size, audit_size
+    );
+    println!(
+        "  {:<35} {:>10} B {:>10} B",
+        "Avg per entry", ops_per_entry, audit_per_entry
+    );
+    println!(
+        "  {:<35} {:>10} KB {:>10} KB",
+        "Est. 1K entries",
+        ops_per_entry * 1000 / 1024,
+        audit_per_entry * 1000 / 1024
+    );
+    println!(
+        "  {:<35} {:>10} KB {:>10} KB",
+        "Est. 10K entries",
+        ops_per_entry * 10_000 / 1024,
+        audit_per_entry * 10_000 / 1024
+    );
     println!();
     println!("  NOTE: Operations carry full entity data (needed for rebuild).");
     println!("  Audit entries carry only action descriptions (not rebuildable).");
@@ -826,18 +968,56 @@ async fn spike_jsonl_compare_approaches() {
     println!("\n{}", "=".repeat(72));
     println!("  SPIKE 0.12 PART D: APPROACH COMPARISON");
     println!("{}\n", "=".repeat(72));
-    println!("  {:<35} {:>15} {:>15}", "Dimension", "A (export)", "B (source)");
-    println!("  {:<35} {:>15} {:>15}", "-".repeat(35), "-".repeat(15), "-".repeat(15));
-    println!("  {:<35} {:>15} {:>15}", "DB rebuildable from JSONL?", "No", "Yes");
-    println!("  {:<35} {:>15} {:>15}", "Survives DB corruption?", "No", "Yes");
-    println!("  {:<35} {:>15} {:>15}", "git clone gives full state?", "No", "Yes");
-    println!("  {:<35} {:>15} {:>15}", "Turso Cloud required?", "For durability", "Optional");
-    println!("  {:<35} {:>15} {:>15}", "JSONL entry size", "~150 B", "~250 B");
-    println!("  {:<35} {:>15} {:>15}", "Write path complexity", "Low", "Medium");
-    println!("  {:<35} {:>15} {:>15}", "Replay logic needed?", "No", "Yes (~60 LOC)");
-    println!("  {:<35} {:>15} {:>15}", "Schema change impact", "None", "Update replay");
-    println!("  {:<35} {:>15} {:>15}", "FTS5 after rebuild?", "N/A", "Works (tested)");
-    println!("  {:<35} {:>15} {:>15}", "Entity links after rebuild?", "N/A", "Works (tested)");
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Dimension", "A (export)", "B (source)"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "-".repeat(35),
+        "-".repeat(15),
+        "-".repeat(15)
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "DB rebuildable from JSONL?", "No", "Yes"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Survives DB corruption?", "No", "Yes"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "git clone gives full state?", "No", "Yes"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Turso Cloud required?", "For durability", "Optional"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "JSONL entry size", "~150 B", "~250 B"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Write path complexity", "Low", "Medium"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Replay logic needed?", "No", "Yes (~60 LOC)"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Schema change impact", "None", "Update replay"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "FTS5 after rebuild?", "N/A", "Works (tested)"
+    );
+    println!(
+        "  {:<35} {:>15} {:>15}",
+        "Entity links after rebuild?", "N/A", "Works (tested)"
+    );
     println!();
     println!("  Key insight: Approach B's replay logic is ~60 lines of match/insert.");
     println!("  Schema changes require updating the replay function, but this is");
@@ -860,23 +1040,64 @@ async fn spike_jsonl_per_session_files() {
 
     // Session A: 3 operations
     let ops_a = vec![
-        Operation { ts: "2026-02-08T10:00:00Z".into(), ses: "ses-aaa00001".into(), op: OpType::Create, entity: "session".into(), id: "ses-aaa00001".into(), data: serde_json::json!({"status": "active"}) },
-        Operation { ts: "2026-02-08T10:01:00Z".into(), ses: "ses-aaa00001".into(), op: OpType::Create, entity: "finding".into(), id: "fnd-a001".into(), data: serde_json::json!({"content": "Finding from session A"}) },
-        Operation { ts: "2026-02-08T10:02:00Z".into(), ses: "ses-aaa00001".into(), op: OpType::Create, entity: "insight".into(), id: "ins-a001".into(), data: serde_json::json!({"content": "Insight from session A"}) },
+        Operation {
+            ts: "2026-02-08T10:00:00Z".into(),
+            ses: "ses-aaa00001".into(),
+            op: OpType::Create,
+            entity: "session".into(),
+            id: "ses-aaa00001".into(),
+            data: serde_json::json!({"status": "active"}),
+        },
+        Operation {
+            ts: "2026-02-08T10:01:00Z".into(),
+            ses: "ses-aaa00001".into(),
+            op: OpType::Create,
+            entity: "finding".into(),
+            id: "fnd-a001".into(),
+            data: serde_json::json!({"content": "Finding from session A"}),
+        },
+        Operation {
+            ts: "2026-02-08T10:02:00Z".into(),
+            ses: "ses-aaa00001".into(),
+            op: OpType::Create,
+            entity: "insight".into(),
+            id: "ins-a001".into(),
+            data: serde_json::json!({"content": "Insight from session A"}),
+        },
     ];
 
     // Session B: 2 operations
     let ops_b = vec![
-        Operation { ts: "2026-02-08T10:00:30Z".into(), ses: "ses-bbb00002".into(), op: OpType::Create, entity: "session".into(), id: "ses-bbb00002".into(), data: serde_json::json!({"status": "active"}) },
-        Operation { ts: "2026-02-08T10:01:30Z".into(), ses: "ses-bbb00002".into(), op: OpType::Create, entity: "finding".into(), id: "fnd-b001".into(), data: serde_json::json!({"content": "Finding from session B"}) },
+        Operation {
+            ts: "2026-02-08T10:00:30Z".into(),
+            ses: "ses-bbb00002".into(),
+            op: OpType::Create,
+            entity: "session".into(),
+            id: "ses-bbb00002".into(),
+            data: serde_json::json!({"status": "active"}),
+        },
+        Operation {
+            ts: "2026-02-08T10:01:30Z".into(),
+            ses: "ses-bbb00002".into(),
+            op: OpType::Create,
+            entity: "finding".into(),
+            id: "fnd-b001".into(),
+            data: serde_json::json!({"content": "Finding from session B"}),
+        },
     ];
 
     serde_jsonlines::write_json_lines(&session_a, &ops_a).unwrap();
     serde_jsonlines::write_json_lines(&session_b, &ops_b).unwrap();
 
     // Verify isolation
-    let read_a: Vec<Operation> = serde_jsonlines::json_lines(&session_a).unwrap().collect::<std::io::Result<Vec<_>>>().unwrap();
-    let read_b: Vec<Operation> = serde_jsonlines::json_lines(&session_b).unwrap().collect::<std::io::Result<Vec<_>>>().unwrap();
+    let read_a: Vec<Operation> = serde_jsonlines::json_lines(&session_a)
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
+    let read_b: Vec<Operation> = serde_jsonlines::json_lines(&session_b)
+        .unwrap()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
 
     assert_eq!(read_a.len(), 3);
     assert_eq!(read_b.len(), 2);
@@ -891,7 +1112,10 @@ async fn spike_jsonl_per_session_files() {
         .map(|e| e.file_name().into_string().unwrap())
         .collect();
     session_files.sort();
-    assert_eq!(session_files, vec!["ses-aaa00001.jsonl", "ses-bbb00002.jsonl"]);
+    assert_eq!(
+        session_files,
+        vec!["ses-aaa00001.jsonl", "ses-bbb00002.jsonl"]
+    );
 
     // Verify we can rebuild from ALL session files
     let mut all_ops = Vec::new();
@@ -979,8 +1203,13 @@ async fn replay_operation(conn: &libsql::Connection, op: &Operation) {
         (OpType::Create, "session") => {
             conn.execute(
                 "INSERT INTO sessions (id, status) VALUES (?, ?)",
-                libsql::params![op.id.as_str(), op.data["status"].as_str().unwrap_or("active")],
-            ).await.unwrap();
+                libsql::params![
+                    op.id.as_str(),
+                    op.data["status"].as_str().unwrap_or("active")
+                ],
+            )
+            .await
+            .unwrap();
         }
 
         // -- Research --
@@ -1040,7 +1269,9 @@ async fn replay_operation(conn: &libsql::Connection, op: &Operation) {
             conn.execute(
                 "INSERT INTO finding_tags (finding_id, tag) VALUES (?, ?)",
                 libsql::params![op.id.as_str(), op.data["tag"].as_str().unwrap_or("")],
-            ).await.unwrap();
+            )
+            .await
+            .unwrap();
         }
 
         // -- Entity Link --

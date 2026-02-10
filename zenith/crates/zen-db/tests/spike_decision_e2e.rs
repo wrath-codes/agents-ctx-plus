@@ -80,8 +80,7 @@ fn build_filtered_graph(
     edges: &[EntityEdge],
     filter: &VisibilityFilter,
 ) -> (Vec<String>, Vec<(String, String)>) {
-    let node_map: HashMap<String, &EntityNode> =
-        nodes.iter().map(|n| (n.id.clone(), n)).collect();
+    let node_map: HashMap<String, &EntityNode> = nodes.iter().map(|n| (n.id.clone(), n)).collect();
 
     let visible_nodes: Vec<String> = nodes
         .iter()
@@ -94,7 +93,9 @@ fn build_filtered_graph(
     let visible_edges: Vec<(String, String)> = edges
         .iter()
         .filter(|e| filter.edge_visible(e, &node_map))
-        .filter(|e| visible_set.contains(e.source_id.as_str()) && visible_set.contains(e.target_id.as_str()))
+        .filter(|e| {
+            visible_set.contains(e.source_id.as_str()) && visible_set.contains(e.target_id.as_str())
+        })
         .map(|e| (e.source_id.clone(), e.target_id.clone()))
         .collect();
 
@@ -168,8 +169,14 @@ async fn spike_visibility_filter_before_graph_build() {
     assert!(pub_nodes.contains(&"dec-001".to_string()));
     assert!(pub_nodes.contains(&"fnd-001".to_string()));
     assert!(pub_nodes.contains(&"hyp-001".to_string()));
-    assert!(!pub_nodes.contains(&"dec-002".to_string()), "team node excluded");
-    assert!(!pub_nodes.contains(&"fnd-002".to_string()), "private node excluded");
+    assert!(
+        !pub_nodes.contains(&"dec-002".to_string()),
+        "team node excluded"
+    );
+    assert!(
+        !pub_nodes.contains(&"fnd-002".to_string()),
+        "private node excluded"
+    );
 
     assert_eq!(pub_edges.len(), 2, "public scope: 2 visible edges");
     assert!(pub_edges.contains(&("dec-001".to_string(), "fnd-001".to_string())));
@@ -183,10 +190,20 @@ async fn spike_visibility_filter_before_graph_build() {
     let (team_nodes, team_edges) = build_filtered_graph(&nodes, &edges, &team_filter);
 
     assert_eq!(team_nodes.len(), 4, "team scope: public + team nodes");
-    assert!(team_nodes.contains(&"dec-002".to_string()), "team node included for same org");
-    assert!(!team_nodes.contains(&"fnd-002".to_string()), "private node excluded from team scope");
+    assert!(
+        team_nodes.contains(&"dec-002".to_string()),
+        "team node included for same org"
+    );
+    assert!(
+        !team_nodes.contains(&"fnd-002".to_string()),
+        "private node excluded from team scope"
+    );
 
-    assert_eq!(team_edges.len(), 2, "team scope: edges between visible nodes only");
+    assert_eq!(
+        team_edges.len(),
+        2,
+        "team scope: edges between visible nodes only"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +274,10 @@ async fn spike_team_scope_does_not_leak_private_decisions() {
     };
     let (alpha_nodes, alpha_edges) = build_filtered_graph(&nodes, &edges, &alpha_filter);
 
-    assert!(alpha_nodes.contains(&"dec-pub".to_string()), "public visible to team");
+    assert!(
+        alpha_nodes.contains(&"dec-pub".to_string()),
+        "public visible to team"
+    );
     assert!(
         alpha_nodes.contains(&"dec-team-alpha".to_string()),
         "own team visible"
@@ -273,10 +293,7 @@ async fn spike_team_scope_does_not_leak_private_decisions() {
 
     assert_eq!(alpha_edges.len(), 2, "only edges touching visible nodes");
     assert!(alpha_edges.contains(&("dec-pub".to_string(), "fnd-shared".to_string())));
-    assert!(alpha_edges.contains(&(
-        "dec-team-alpha".to_string(),
-        "fnd-shared".to_string()
-    )));
+    assert!(alpha_edges.contains(&("dec-team-alpha".to_string(), "fnd-shared".to_string())));
 }
 
 // ---------------------------------------------------------------------------
@@ -334,10 +351,7 @@ async fn spike_public_scope_excludes_team_private_edges() {
     assert!(!pub_nodes.contains(&"dec-002".to_string()));
 
     assert_eq!(pub_edges.len(), 1, "only edges between public nodes");
-    assert_eq!(
-        pub_edges[0],
-        ("dec-001".to_string(), "fnd-001".to_string())
-    );
+    assert_eq!(pub_edges[0], ("dec-001".to_string(), "fnd-001".to_string()));
 
     for (src, tgt) in &pub_edges {
         assert!(
@@ -376,7 +390,10 @@ fn generate_scale_graph(
 fn build_graph_from_vecs(
     nodes: &[String],
     edges: &[(String, String)],
-) -> (rustworkx_core::petgraph::graph::DiGraph<String, ()>, BTreeMap<String, rustworkx_core::petgraph::graph::NodeIndex>) {
+) -> (
+    rustworkx_core::petgraph::graph::DiGraph<String, ()>,
+    BTreeMap<String, rustworkx_core::petgraph::graph::NodeIndex>,
+) {
     use rustworkx_core::petgraph::graph::DiGraph;
 
     let mut graph = DiGraph::new();
@@ -408,8 +425,7 @@ async fn spike_perf_small_graph() {
     let build_ms = start.elapsed().as_millis();
 
     let start = Instant::now();
-    let _centrality =
-        rustworkx_core::centrality::betweenness_centrality(&graph, false, false, 200);
+    let _centrality = rustworkx_core::centrality::betweenness_centrality(&graph, false, false, 200);
     let centrality_ms = start.elapsed().as_millis();
 
     assert!(

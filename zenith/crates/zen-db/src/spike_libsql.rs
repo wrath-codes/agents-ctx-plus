@@ -71,12 +71,9 @@ async fn spike_file_db_persists() {
     {
         let db = file_db(&dir).await;
         let conn = db.connect().unwrap();
-        conn.execute(
-            "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT)",
-            (),
-        )
-        .await
-        .unwrap();
+        conn.execute("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT)", ())
+            .await
+            .unwrap();
         conn.execute(
             "INSERT INTO kv (key, value) VALUES (?, ?)",
             libsql::params!["greeting", "hello"],
@@ -135,7 +132,10 @@ async fn spike_crud_roundtrip() {
 
     // Query all
     let mut rows = conn
-        .query("SELECT id, content, confidence FROM findings ORDER BY id", ())
+        .query(
+            "SELECT id, content, confidence FROM findings ORDER BY id",
+            (),
+        )
         .await
         .unwrap();
 
@@ -179,7 +179,11 @@ async fn spike_id_generation() {
             hex_part.chars().all(|c| c.is_ascii_hexdigit()),
             "hex part '{hex_part}' should be all hex digits"
         );
-        assert_eq!(hex_part, &hex_part.to_lowercase(), "hex part should be lowercase");
+        assert_eq!(
+            hex_part,
+            &hex_part.to_lowercase(),
+            "hex part should be lowercase"
+        );
     }
 
     // Verify uniqueness: generate 100 IDs and check for collisions
@@ -223,8 +227,15 @@ async fn spike_id_generation_in_insert() {
     let id = row.get::<String>(0).unwrap();
     let name = row.get::<String>(1).unwrap();
 
-    assert!(id.starts_with("itm-"), "generated ID should start with 'itm-': {id}");
-    assert_eq!(id.len(), 12, "ID should be 12 chars (3 prefix + 1 dash + 8 hex): {id}");
+    assert!(
+        id.starts_with("itm-"),
+        "generated ID should start with 'itm-': {id}"
+    );
+    assert_eq!(
+        id.len(),
+        12,
+        "ID should be 12 chars (3 prefix + 1 dash + 8 hex): {id}"
+    );
     assert_eq!(name, "test item");
 }
 
@@ -234,9 +245,12 @@ async fn spike_transactions() {
     let db = in_memory_db().await;
     let conn = db.connect().unwrap();
 
-    conn.execute("CREATE TABLE counters (name TEXT PRIMARY KEY, val INTEGER)", ())
-        .await
-        .unwrap();
+    conn.execute(
+        "CREATE TABLE counters (name TEXT PRIMARY KEY, val INTEGER)",
+        (),
+    )
+    .await
+    .unwrap();
 
     // Transaction that commits
     {
@@ -393,11 +407,31 @@ async fn spike_fts5_search() {
 
     // Insert test data
     let test_data: &[(&str, &str, &str)] = &[
-        ("fnd-001", "Tokio spawning tasks uses spawn() and spawn_blocking()", "docs"),
-        ("fnd-002", "The async runtime manages task scheduling internally", "research"),
-        ("fnd-003", "Connection pooling reduces database overhead", "benchmark"),
-        ("fnd-004", "Spawned tasks run concurrently on the tokio executor", "code review"),
-        ("fnd-005", "HTTP server listens on port 8080 by default", "config"),
+        (
+            "fnd-001",
+            "Tokio spawning tasks uses spawn() and spawn_blocking()",
+            "docs",
+        ),
+        (
+            "fnd-002",
+            "The async runtime manages task scheduling internally",
+            "research",
+        ),
+        (
+            "fnd-003",
+            "Connection pooling reduces database overhead",
+            "benchmark",
+        ),
+        (
+            "fnd-004",
+            "Spawned tasks run concurrently on the tokio executor",
+            "code review",
+        ),
+        (
+            "fnd-005",
+            "HTTP server listens on port 8080 by default",
+            "config",
+        ),
     ];
 
     for (id, content, source) in test_data {
@@ -643,10 +677,7 @@ async fn spike_end_to_end_zen_pattern() {
     let db_path = dir.path().join("zenith.db");
 
     // 1. Open database (simulating ZenDb::open_local)
-    let db = Builder::new_local(db_path)
-        .build()
-        .await
-        .unwrap();
+    let db = Builder::new_local(db_path).build().await.unwrap();
     let conn = db.connect().unwrap();
 
     // 2. Run migrations (simulating ZenDb::run_migrations via execute_batch)
@@ -707,7 +738,10 @@ async fn spike_end_to_end_zen_pattern() {
         .unwrap();
 
     let mut rows = conn
-        .query("SELECT id FROM sessions WHERE status = 'active' LIMIT 1", ())
+        .query(
+            "SELECT id FROM sessions WHERE status = 'active' LIMIT 1",
+            (),
+        )
         .await
         .unwrap();
     let session_id: String = rows.next().await.unwrap().unwrap().get(0).unwrap();
@@ -718,7 +752,11 @@ async fn spike_end_to_end_zen_pattern() {
 
     tx.execute(
         "INSERT INTO findings (session_id, content, confidence) VALUES (?, ?, ?)",
-        libsql::params![session_id.as_str(), "libsql crate compiles and works locally", "high"],
+        libsql::params![
+            session_id.as_str(),
+            "libsql crate compiles and works locally",
+            "high"
+        ],
     )
     .await
     .unwrap();
@@ -736,7 +774,13 @@ async fn spike_end_to_end_zen_pattern() {
     tx.execute(
         "INSERT INTO audit_trail (session_id, entity_type, entity_id, action, detail)
          VALUES (?, ?, ?, ?, ?)",
-        libsql::params![session_id.as_str(), "finding", finding_id.as_str(), "created", detail_json],
+        libsql::params![
+            session_id.as_str(),
+            "finding",
+            finding_id.as_str(),
+            "created",
+            detail_json
+        ],
     )
     .await
     .unwrap();
@@ -762,7 +806,11 @@ async fn spike_end_to_end_zen_pattern() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("FTS should find our finding");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should find our finding");
     assert_eq!(row.get::<String>(0).unwrap(), finding_id);
 
     // 6. Query audit trail (simulating AuditRepo::query)
@@ -878,10 +926,7 @@ async fn spike_empty_string_violates_fk_constraint() {
 
     // Verify the NULL was stored correctly
     let mut rows = conn
-        .query(
-            "SELECT research_id FROM findings WHERE id = 'fnd-003'",
-            (),
-        )
+        .query("SELECT research_id FROM findings WHERE id = 'fnd-003'", ())
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -1049,9 +1094,7 @@ async fn spike_dynamic_update_with_params_from_iter() {
     );
 
     // Execute with params_from_iter
-    let result = conn
-        .execute(&sql, libsql::params_from_iter(vals))
-        .await;
+    let result = conn.execute(&sql, libsql::params_from_iter(vals)).await;
     assert!(
         result.is_ok(),
         "Dynamic UPDATE with params_from_iter should succeed: {:?}",
@@ -1123,10 +1166,12 @@ async fn spike_dynamic_update_set_null_with_params_from_iter() {
         id_pos
     );
 
-    let result = conn
-        .execute(&sql, libsql::params_from_iter(vals))
-        .await;
-    assert!(result.is_ok(), "Setting NULL via params_from_iter should work: {:?}", result.err());
+    let result = conn.execute(&sql, libsql::params_from_iter(vals)).await;
+    assert!(
+        result.is_ok(),
+        "Setting NULL via params_from_iter should work: {:?}",
+        result.err()
+    );
 
     // Verify source is now NULL
     let mut rows = conn
@@ -1318,10 +1363,7 @@ async fn spike_transaction_rollback_on_trail_failure() {
 
     // Verify: fnd-fail should NOT exist (rolled back)
     let mut rows = conn
-        .query(
-            "SELECT COUNT(*) FROM findings WHERE id = 'fnd-fail'",
-            (),
-        )
+        .query("SELECT COUNT(*) FROM findings WHERE id = 'fnd-fail'", ())
         .await
         .unwrap();
     let count = rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap();
@@ -1385,10 +1427,7 @@ async fn spike_transaction_implicit_rollback_on_drop() {
 
         // Verify: visible inside the transaction
         let mut rows = tx
-            .query(
-                "SELECT COUNT(*) FROM test_rollback WHERE id = 'r-001'",
-                (),
-            )
+            .query("SELECT COUNT(*) FROM test_rollback WHERE id = 'r-001'", ())
             .await
             .unwrap();
         assert_eq!(
@@ -1402,10 +1441,7 @@ async fn spike_transaction_implicit_rollback_on_drop() {
 
     // Verify: row should not exist after implicit rollback
     let mut rows = conn
-        .query(
-            "SELECT COUNT(*) FROM test_rollback WHERE id = 'r-001'",
-            (),
-        )
+        .query("SELECT COUNT(*) FROM test_rollback WHERE id = 'r-001'", ())
         .await
         .unwrap();
     let count = rows.next().await.unwrap().unwrap().get::<i64>(0).unwrap();
@@ -1660,11 +1696,13 @@ async fn spike_replay_null_vs_absent_vs_value() {
         sets.push(format!("confidence = ?{}", vals.len()));
     }
 
-    assert_eq!(sets.len(), 2, "Should only update content and source, not confidence");
+    assert_eq!(
+        sets.len(),
+        2,
+        "Should only update content and source, not confidence"
+    );
 
-    vals.push(libsql::Value::Text(
-        chrono::Utc::now().to_rfc3339(),
-    ));
+    vals.push(libsql::Value::Text(chrono::Utc::now().to_rfc3339()));
     sets.push(format!("updated_at = ?{}", vals.len()));
 
     vals.push(libsql::Value::Text("fnd-001".to_string()));
@@ -1743,8 +1781,8 @@ async fn spike_option_option_serde_roundtrip_for_replay() {
     // Case 1: Update content only (source and confidence unchanged)
     let update1 = FindingUpdate {
         content: Some("new content".to_string()),
-        source: None,      // not changed → absent from JSON
-        confidence: None,  // not changed → absent from JSON
+        source: None,     // not changed → absent from JSON
+        confidence: None, // not changed → absent from JSON
     };
     let json1 = serde_json::to_string(&update1).unwrap();
     assert_eq!(json1, r#"{"content":"new content"}"#);
@@ -1752,7 +1790,7 @@ async fn spike_option_option_serde_roundtrip_for_replay() {
     // Case 2: Set source to NULL explicitly
     let update2 = FindingUpdate {
         content: Some("new content".to_string()),
-        source: Some(None),  // set to NULL → JSON null
+        source: Some(None), // set to NULL → JSON null
         confidence: None,
     };
     let json2 = serde_json::to_string(&update2).unwrap();
@@ -2038,7 +2076,14 @@ async fn spike_option_works_natively_in_params_macro() {
     conn.execute(
         "INSERT INTO findings (id, research_id, session_id, content, source, confidence)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        libsql::params!["fnd-001", research_id, "ses-001", "linked finding", source, "high"],
+        libsql::params![
+            "fnd-001",
+            research_id,
+            "ses-001",
+            "linked finding",
+            source,
+            "high"
+        ],
     )
     .await
     .unwrap();
@@ -2049,14 +2094,24 @@ async fn spike_option_works_natively_in_params_macro() {
     conn.execute(
         "INSERT INTO findings (id, research_id, session_id, content, source, confidence)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        libsql::params!["fnd-002", research_id, "ses-001", "standalone finding", source, "medium"],
+        libsql::params![
+            "fnd-002",
+            research_id,
+            "ses-001",
+            "standalone finding",
+            source,
+            "medium"
+        ],
     )
     .await
     .unwrap();
 
     // Verify Case 1: research_id is "res-001", source is "spike test"
     let mut rows = conn
-        .query("SELECT research_id, source FROM findings WHERE id = 'fnd-001'", ())
+        .query(
+            "SELECT research_id, source FROM findings WHERE id = 'fnd-001'",
+            (),
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -2065,14 +2120,23 @@ async fn spike_option_works_natively_in_params_macro() {
 
     // Verify Case 2: research_id is NULL, source is NULL
     let mut rows = conn
-        .query("SELECT research_id, source FROM findings WHERE id = 'fnd-002'", ())
+        .query(
+            "SELECT research_id, source FROM findings WHERE id = 'fnd-002'",
+            (),
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     let research_val = row.get_value(0).unwrap();
-    assert!(matches!(research_val, libsql::Value::Null), "research_id should be NULL");
+    assert!(
+        matches!(research_val, libsql::Value::Null),
+        "research_id should be NULL"
+    );
     let source_val = row.get_value(1).unwrap();
-    assert!(matches!(source_val, libsql::Value::Null), "source should be NULL");
+    assert!(
+        matches!(source_val, libsql::Value::Null),
+        "source should be NULL"
+    );
 }
 
 /// Prove Option<String> (owned) works too — matches zen-core entity field types.
@@ -2109,10 +2173,24 @@ async fn spike_option_string_owned_works_in_params_macro() {
     .await
     .unwrap();
 
-    let mut rows = conn.query("SELECT description FROM items WHERE id = 'itm-001'", ()).await.unwrap();
-    assert_eq!(rows.next().await.unwrap().unwrap().get::<String>(0).unwrap(), "has description");
+    let mut rows = conn
+        .query("SELECT description FROM items WHERE id = 'itm-001'", ())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.next()
+            .await
+            .unwrap()
+            .unwrap()
+            .get::<String>(0)
+            .unwrap(),
+        "has description"
+    );
 
-    let mut rows = conn.query("SELECT description FROM items WHERE id = 'itm-002'", ()).await.unwrap();
+    let mut rows = conn
+        .query("SELECT description FROM items WHERE id = 'itm-002'", ())
+        .await
+        .unwrap();
     let val = rows.next().await.unwrap().unwrap().get_value(0).unwrap();
     assert!(matches!(val, libsql::Value::Null));
 }
@@ -2188,13 +2266,25 @@ async fn spike_option_as_deref_pattern_for_repos() {
     }
 
     // Verify linked finding
-    let mut rows = conn.query("SELECT research_id, source FROM findings WHERE id = 'fnd-001'", ()).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT research_id, source FROM findings WHERE id = 'fnd-001'",
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "res-001");
     assert_eq!(row.get::<String>(1).unwrap(), "web");
 
     // Verify standalone finding (NULLs)
-    let mut rows = conn.query("SELECT research_id, source FROM findings WHERE id = 'fnd-002'", ()).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT research_id, source FROM findings WHERE id = 'fnd-002'",
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert!(matches!(row.get_value(0).unwrap(), libsql::Value::Null));
     assert!(matches!(row.get_value(1).unwrap(), libsql::Value::Null));
@@ -2224,7 +2314,10 @@ async fn spike_named_params_with_option() {
     .await
     .unwrap();
 
-    let mut rows = conn.query("SELECT description FROM items WHERE id = 'itm-001'", ()).await.unwrap();
+    let mut rows = conn
+        .query("SELECT description FROM items WHERE id = 'itm-001'", ())
+        .await
+        .unwrap();
     let val = rows.next().await.unwrap().unwrap().get_value(0).unwrap();
     assert!(matches!(val, libsql::Value::Null));
 }
@@ -2269,7 +2362,7 @@ async fn spike_vec_value_needed_for_dynamic_update_builders() {
     #[derive(Default)]
     struct FindingUpdate {
         content: Option<String>,
-        source: Option<Option<String>>,   // outer=specified?, inner=value-or-NULL
+        source: Option<Option<String>>, // outer=specified?, inner=value-or-NULL
         confidence: Option<String>,
     }
 
@@ -2324,7 +2417,11 @@ async fn spike_vec_value_needed_for_dynamic_update_builders() {
 
     // Execute update 1: only content changes (2 params: content + id)
     let (sql1, params1) = build_update("fnd-001", &update1);
-    assert_eq!(params1.len(), 2, "update1 should have 2 params (content + id)");
+    assert_eq!(
+        params1.len(),
+        2,
+        "update1 should have 2 params (content + id)"
+    );
     conn.execute(&sql1, params1).await.unwrap();
 
     // Execute update 2: 3 fields change (4 params: content + source + confidence + id)
@@ -2333,21 +2430,32 @@ async fn spike_vec_value_needed_for_dynamic_update_builders() {
     conn.execute(&sql2, params2).await.unwrap();
 
     // Verify update 1: only content changed, source and confidence unchanged
-    let mut rows = conn.query(
-        "SELECT content, source, confidence FROM findings WHERE id = 'fnd-001'", ()
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT content, source, confidence FROM findings WHERE id = 'fnd-001'",
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "updated content");
-    assert_eq!(row.get::<String>(1).unwrap(), "web");       // unchanged
-    assert_eq!(row.get::<String>(2).unwrap(), "low");        // unchanged
+    assert_eq!(row.get::<String>(1).unwrap(), "web"); // unchanged
+    assert_eq!(row.get::<String>(2).unwrap(), "low"); // unchanged
 
     // Verify update 2: all three changed, source is now NULL
-    let mut rows = conn.query(
-        "SELECT content, source, confidence FROM findings WHERE id = 'fnd-002'", ()
-    ).await.unwrap();
+    let mut rows = conn
+        .query(
+            "SELECT content, source, confidence FROM findings WHERE id = 'fnd-002'",
+            (),
+        )
+        .await
+        .unwrap();
     let row = rows.next().await.unwrap().unwrap();
     assert_eq!(row.get::<String>(0).unwrap(), "revised finding");
-    assert!(matches!(row.get_value(1).unwrap(), libsql::Value::Null), "source should be NULL");
+    assert!(
+        matches!(row.get_value(1).unwrap(), libsql::Value::Null),
+        "source should be NULL"
+    );
     assert_eq!(row.get::<String>(2).unwrap(), "high");
 
     // Key insight: params! can't do this because the array size differs per call.

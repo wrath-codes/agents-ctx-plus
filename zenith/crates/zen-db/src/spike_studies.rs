@@ -336,14 +336,23 @@ async fn spike_a_create_study_as_research() {
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, description, status)
          VALUES (?, ?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", study_plan, "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            study_plan,
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
 
     // Verify it can be queried
     let mut rows = conn
-        .query("SELECT id, title, description, status FROM research_items WHERE id = ?", ["res-study001"])
+        .query(
+            "SELECT id, title, description, status FROM research_items WHERE id = ?",
+            ["res-study001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().expect("expected study row");
@@ -362,7 +371,11 @@ async fn spike_a_create_study_as_research() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("FTS should find the study");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should find the study");
     assert_eq!(row.get::<String>(0).unwrap(), "res-study001");
 }
 
@@ -375,23 +388,43 @@ async fn spike_a_add_assumptions() {
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status)
          VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
 
     // Add 3 assumptions as hypotheses
     let assumptions = [
-        ("hyp-asm001", "spawn requires Send + 'static bounds on the future"),
-        ("hyp-asm002", "spawned tasks can panic without crashing the runtime"),
-        ("hyp-asm003", "spawn is zero-cost (no allocation at spawn time)"),
+        (
+            "hyp-asm001",
+            "spawn requires Send + 'static bounds on the future",
+        ),
+        (
+            "hyp-asm002",
+            "spawned tasks can panic without crashing the runtime",
+        ),
+        (
+            "hyp-asm003",
+            "spawn is zero-cost (no allocation at spawn time)",
+        ),
     ];
 
     for (id, content) in &assumptions {
         conn.execute(
             "INSERT INTO hypotheses (id, research_id, session_id, content, status)
              VALUES (?, ?, ?, ?, ?)",
-            libsql::params![*id, "res-study001", session_id.as_str(), *content, "unverified"],
+            libsql::params![
+                *id,
+                "res-study001",
+                session_id.as_str(),
+                *content,
+                "unverified"
+            ],
         )
         .await
         .unwrap();
@@ -423,7 +456,12 @@ async fn spike_a_record_test_validated() {
     // Set up study + assumption
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -459,7 +497,14 @@ async fn spike_a_record_test_validated() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-val001", "finding", "fnd-test001", "hypothesis", "hyp-asm001", "validates"],
+        libsql::params![
+            "lnk-val001",
+            "finding",
+            "fnd-test001",
+            "hypothesis",
+            "hyp-asm001",
+            "validates"
+        ],
     )
     .await
     .unwrap();
@@ -468,14 +513,20 @@ async fn spike_a_record_test_validated() {
     conn.execute(
         "UPDATE hypotheses SET status = 'confirmed', reason = ?, updated_at = datetime('now')
          WHERE id = ?",
-        libsql::params!["Compile error E0277 proves Send + 'static is required", "hyp-asm001"],
+        libsql::params![
+            "Compile error E0277 proves Send + 'static is required",
+            "hyp-asm001"
+        ],
     )
     .await
     .unwrap();
 
     // Verify the chain: hypothesis confirmed + finding linked
     let mut rows = conn
-        .query("SELECT status, reason FROM hypotheses WHERE id = ?", ["hyp-asm001"])
+        .query(
+            "SELECT status, reason FROM hypotheses WHERE id = ?",
+            ["hyp-asm001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -496,7 +547,10 @@ async fn spike_a_record_test_validated() {
 
     // Verify tag
     let mut rows = conn
-        .query("SELECT tag FROM finding_tags WHERE finding_id = ?", ["fnd-test001"])
+        .query(
+            "SELECT tag FROM finding_tags WHERE finding_id = ?",
+            ["fnd-test001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -510,7 +564,12 @@ async fn spike_a_record_test_invalidated() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -545,7 +604,14 @@ async fn spike_a_record_test_invalidated() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-deb001", "finding", "fnd-test003", "hypothesis", "hyp-asm003", "debunks"],
+        libsql::params![
+            "lnk-deb001",
+            "finding",
+            "fnd-test003",
+            "hypothesis",
+            "hyp-asm003",
+            "debunks"
+        ],
     )
     .await
     .unwrap();
@@ -559,7 +625,10 @@ async fn spike_a_record_test_invalidated() {
 
     // Verify
     let mut rows = conn
-        .query("SELECT status, reason FROM hypotheses WHERE id = ?", ["hyp-asm003"])
+        .query(
+            "SELECT status, reason FROM hypotheses WHERE id = ?",
+            ["hyp-asm003"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -584,7 +653,12 @@ async fn spike_a_conclude_study() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -618,20 +692,35 @@ async fn spike_a_conclude_study() {
 
     // Verify
     let mut rows = conn
-        .query("SELECT status FROM research_items WHERE id = ?", ["res-study001"])
+        .query(
+            "SELECT status FROM research_items WHERE id = ?",
+            ["res-study001"],
+        )
         .await
         .unwrap();
     assert_eq!(
-        rows.next().await.unwrap().unwrap().get::<String>(0).unwrap(),
+        rows.next()
+            .await
+            .unwrap()
+            .unwrap()
+            .get::<String>(0)
+            .unwrap(),
         "resolved"
     );
 
     let mut rows = conn
-        .query("SELECT content FROM insights WHERE research_id = ?", ["res-study001"])
+        .query(
+            "SELECT content FROM insights WHERE research_id = ?",
+            ["res-study001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
-    assert!(row.get::<String>(0).unwrap().contains("## Study Conclusions"));
+    assert!(
+        row.get::<String>(0)
+            .unwrap()
+            .contains("## Study Conclusions")
+    );
 }
 
 /// A.6: Query the full study state in a single query.
@@ -649,9 +738,24 @@ async fn spike_a_query_full_state() {
 
     // 3 hypotheses
     for (id, content, status, reason) in [
-        ("hyp-asm001", "spawn requires Send + 'static", "confirmed", "E0277 proves it"),
-        ("hyp-asm002", "panic doesn't crash runtime", "confirmed", "JoinHandle catches it"),
-        ("hyp-asm003", "spawn is zero-cost", "debunked", "Allocates ~200 bytes"),
+        (
+            "hyp-asm001",
+            "spawn requires Send + 'static",
+            "confirmed",
+            "E0277 proves it",
+        ),
+        (
+            "hyp-asm002",
+            "panic doesn't crash runtime",
+            "confirmed",
+            "JoinHandle catches it",
+        ),
+        (
+            "hyp-asm003",
+            "spawn is zero-cost",
+            "debunked",
+            "Allocates ~200 bytes",
+        ),
     ] {
         conn.execute(
             "INSERT INTO hypotheses (id, research_id, session_id, content, status, reason) VALUES (?, ?, ?, ?, ?, ?)",
@@ -664,7 +768,10 @@ async fn spike_a_query_full_state() {
     // 3 findings tagged test-result
     for (id, content) in [
         ("fnd-test001", "Test: non-Send type → E0277"),
-        ("fnd-test002", "Test: panic in task → JoinError, runtime continues"),
+        (
+            "fnd-test002",
+            "Test: panic in task → JoinError, runtime continues",
+        ),
         ("fnd-test003", "Test: spawn allocates ~200 bytes"),
     ] {
         conn.execute(
@@ -742,7 +849,12 @@ async fn spike_a_distinguish_from_research() {
     // Create a regular research item
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-regular1", session_id.as_str(), "Evaluate HTTP client libraries for Rust", "open"],
+        libsql::params![
+            "res-regular1",
+            session_id.as_str(),
+            "Evaluate HTTP client libraries for Rust",
+            "open"
+        ],
     )
     .await
     .unwrap();
@@ -750,7 +862,12 @@ async fn spike_a_distinguish_from_research() {
     // Create a study
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -758,7 +875,12 @@ async fn spike_a_distinguish_from_research() {
     // Create another regular research
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-regular2", session_id.as_str(), "Check serde compatibility with axum 0.8", "open"],
+        libsql::params![
+            "res-regular2",
+            session_id.as_str(),
+            "Check serde compatibility with axum 0.8",
+            "open"
+        ],
     )
     .await
     .unwrap();
@@ -801,7 +923,11 @@ async fn spike_a_distinguish_from_research() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("should find study via FTS + filter");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("should find study via FTS + filter");
     assert_eq!(row.get::<String>(0).unwrap(), "res-study001");
 }
 
@@ -812,7 +938,12 @@ async fn spike_a_progress_tracking() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "Study: How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "Study: How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -869,7 +1000,12 @@ async fn spike_b_create_study_table() {
     // Also create a research_item to link to (optional but realistic)
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -879,8 +1015,13 @@ async fn spike_b_create_study_table() {
         "INSERT INTO studies (id, session_id, research_id, topic, library, methodology, status)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
         libsql::params![
-            "stu-test0001", session_id.as_str(), "res-study001",
-            "How tokio::spawn works", "tokio", "explore", "active"
+            "stu-test0001",
+            session_id.as_str(),
+            "res-study001",
+            "How tokio::spawn works",
+            "tokio",
+            "explore",
+            "active"
         ],
     )
     .await
@@ -888,7 +1029,10 @@ async fn spike_b_create_study_table() {
 
     // Verify persistence
     let mut rows = conn
-        .query("SELECT id, topic, library, methodology, status FROM studies WHERE id = ?", ["stu-test0001"])
+        .query(
+            "SELECT id, topic, library, methodology, status FROM studies WHERE id = ?",
+            ["stu-test0001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().expect("expected study");
@@ -919,14 +1063,25 @@ async fn spike_b_add_assumptions_via_links() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
 
     conn.execute(
         "INSERT INTO studies (id, session_id, research_id, topic, library) VALUES (?, ?, ?, ?, ?)",
-        libsql::params!["stu-test0001", session_id.as_str(), "res-study001", "How tokio::spawn works", "tokio"],
+        libsql::params![
+            "stu-test0001",
+            session_id.as_str(),
+            "res-study001",
+            "How tokio::spawn works",
+            "tokio"
+        ],
     )
     .await
     .unwrap();
@@ -934,7 +1089,10 @@ async fn spike_b_add_assumptions_via_links() {
     // Create hypotheses and link to study
     let assumptions = [
         ("hyp-asm001", "spawn requires Send + 'static bounds"),
-        ("hyp-asm002", "spawned tasks can panic without crashing runtime"),
+        (
+            "hyp-asm002",
+            "spawned tasks can panic without crashing runtime",
+        ),
         ("hyp-asm003", "spawn is zero-cost (no allocation)"),
     ];
 
@@ -988,14 +1146,25 @@ async fn spike_b_record_and_validate() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
 
     conn.execute(
         "INSERT INTO studies (id, session_id, research_id, topic, library) VALUES (?, ?, ?, ?, ?)",
-        libsql::params!["stu-test0001", session_id.as_str(), "res-study001", "How tokio::spawn works", "tokio"],
+        libsql::params![
+            "stu-test0001",
+            session_id.as_str(),
+            "res-study001",
+            "How tokio::spawn works",
+            "tokio"
+        ],
     )
     .await
     .unwrap();
@@ -1011,7 +1180,14 @@ async fn spike_b_record_and_validate() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-sh001", "study", "stu-test0001", "hypothesis", "hyp-asm001", "relates-to"],
+        libsql::params![
+            "lnk-sh001",
+            "study",
+            "stu-test0001",
+            "hypothesis",
+            "hyp-asm001",
+            "relates-to"
+        ],
     )
     .await
     .unwrap();
@@ -1031,7 +1207,14 @@ async fn spike_b_record_and_validate() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-sf001", "study", "stu-test0001", "finding", "fnd-test001", "relates-to"],
+        libsql::params![
+            "lnk-sf001",
+            "study",
+            "stu-test0001",
+            "finding",
+            "fnd-test001",
+            "relates-to"
+        ],
     )
     .await
     .unwrap();
@@ -1040,7 +1223,14 @@ async fn spike_b_record_and_validate() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-fh001", "finding", "fnd-test001", "hypothesis", "hyp-asm001", "validates"],
+        libsql::params![
+            "lnk-fh001",
+            "finding",
+            "fnd-test001",
+            "hypothesis",
+            "hyp-asm001",
+            "validates"
+        ],
     )
     .await
     .unwrap();
@@ -1073,8 +1263,16 @@ async fn spike_b_record_and_validate() {
         ));
     }
     assert_eq!(links.len(), 2);
-    assert!(links.iter().any(|(t, id, _)| t == "finding" && id == "fnd-test001"));
-    assert!(links.iter().any(|(t, id, _)| t == "hypothesis" && id == "hyp-asm001"));
+    assert!(
+        links
+            .iter()
+            .any(|(t, id, _)| t == "finding" && id == "fnd-test001")
+    );
+    assert!(
+        links
+            .iter()
+            .any(|(t, id, _)| t == "hypothesis" && id == "hyp-asm001")
+    );
 
     // Verify finding → hypothesis validates link
     let mut rows = conn
@@ -1097,7 +1295,12 @@ async fn spike_b_conclude_study() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -1131,7 +1334,14 @@ async fn spike_b_conclude_study() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-si001", "study", "stu-test0001", "insight", "ins-conc001", "relates-to"],
+        libsql::params![
+            "lnk-si001",
+            "study",
+            "stu-test0001",
+            "insight",
+            "ins-conc001",
+            "relates-to"
+        ],
     )
     .await
     .unwrap();
@@ -1146,7 +1356,10 @@ async fn spike_b_conclude_study() {
 
     // Verify study status
     let mut rows = conn
-        .query("SELECT status, summary FROM studies WHERE id = ?", ["stu-test0001"])
+        .query(
+            "SELECT status, summary FROM studies WHERE id = ?",
+            ["stu-test0001"],
+        )
         .await
         .unwrap();
     let row = rows.next().await.unwrap().unwrap();
@@ -1163,7 +1376,11 @@ async fn spike_b_conclude_study() {
         )
         .await
         .unwrap();
-    let row = rows.next().await.unwrap().expect("FTS should find updated study");
+    let row = rows
+        .next()
+        .await
+        .unwrap()
+        .expect("FTS should find updated study");
     assert_eq!(row.get::<String>(0).unwrap(), "stu-test0001");
 }
 
@@ -1175,7 +1392,12 @@ async fn spike_b_query_full_state() {
     // Set up full scenario
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
@@ -1184,8 +1406,13 @@ async fn spike_b_query_full_state() {
         "INSERT INTO studies (id, session_id, research_id, topic, library, methodology, status)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
         libsql::params![
-            "stu-test0001", session_id.as_str(), "res-study001",
-            "How tokio::spawn works", "tokio", "explore", "active"
+            "stu-test0001",
+            session_id.as_str(),
+            "res-study001",
+            "How tokio::spawn works",
+            "tokio",
+            "explore",
+            "active"
         ],
     )
     .await
@@ -1193,9 +1420,24 @@ async fn spike_b_query_full_state() {
 
     // Hypotheses linked via entity_links
     for (i, (hyp_id, content, status, reason)) in [
-        ("hyp-asm001", "spawn requires Send + 'static", "confirmed", "E0277 proves it"),
-        ("hyp-asm002", "panic doesn't crash runtime", "confirmed", "JoinHandle catches it"),
-        ("hyp-asm003", "spawn is zero-cost", "debunked", "Allocates ~200 bytes"),
+        (
+            "hyp-asm001",
+            "spawn requires Send + 'static",
+            "confirmed",
+            "E0277 proves it",
+        ),
+        (
+            "hyp-asm002",
+            "panic doesn't crash runtime",
+            "confirmed",
+            "JoinHandle catches it",
+        ),
+        (
+            "hyp-asm003",
+            "spawn is zero-cost",
+            "debunked",
+            "Allocates ~200 bytes",
+        ),
     ]
     .iter()
     .enumerate()
@@ -1254,7 +1496,14 @@ async fn spike_b_query_full_state() {
     conn.execute(
         "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
          VALUES (?, ?, ?, ?, ?, ?)",
-        libsql::params!["lnk-si001", "study", "stu-test0001", "insight", "ins-conc001", "relates-to"],
+        libsql::params![
+            "lnk-si001",
+            "study",
+            "stu-test0001",
+            "insight",
+            "ins-conc001",
+            "relates-to"
+        ],
     )
     .await
     .unwrap();
@@ -1323,14 +1572,25 @@ async fn spike_b_progress_tracking() {
 
     conn.execute(
         "INSERT INTO research_items (id, session_id, title, status) VALUES (?, ?, ?, ?)",
-        libsql::params!["res-study001", session_id.as_str(), "How tokio::spawn works", "in_progress"],
+        libsql::params![
+            "res-study001",
+            session_id.as_str(),
+            "How tokio::spawn works",
+            "in_progress"
+        ],
     )
     .await
     .unwrap();
 
     conn.execute(
         "INSERT INTO studies (id, session_id, research_id, topic, library) VALUES (?, ?, ?, ?, ?)",
-        libsql::params!["stu-test0001", session_id.as_str(), "res-study001", "How tokio::spawn works", "tokio"],
+        libsql::params![
+            "stu-test0001",
+            session_id.as_str(),
+            "res-study001",
+            "How tokio::spawn works",
+            "tokio"
+        ],
     )
     .await
     .unwrap();
@@ -1434,8 +1694,14 @@ SELECT s.id, s.topic, s.library, s.methodology, s.status,
      WHERE el.source_type = 'study' AND el.source_id = s.id AND el.target_type = 'insight') as conclusions
 FROM studies s WHERE s.id = ?";
 
-    let lines_a = full_state_a.lines().filter(|l| !l.trim().is_empty()).count();
-    let lines_b = full_state_b.lines().filter(|l| !l.trim().is_empty()).count();
+    let lines_a = full_state_a
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
+    let lines_b = full_state_b
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
 
     // -----------------------------------------------------------------------
     // Metric 3: Progress query complexity
@@ -1461,8 +1727,8 @@ WHERE el.source_type = 'study' AND el.source_id = ? AND el.target_type = 'hypoth
     // -----------------------------------------------------------------------
     // Metric 4: Filterability — can we distinguish studies from research?
     // -----------------------------------------------------------------------
-    let filter_a = "WHERE title LIKE 'Study: %'";  // convention-based, fragile
-    let filter_b = "FROM studies WHERE ...";         // type-safe, native
+    let filter_a = "WHERE title LIKE 'Study: %'"; // convention-based, fragile
+    let filter_b = "FROM studies WHERE ..."; // type-safe, native
 
     // -----------------------------------------------------------------------
     // Metric 5: Schema cost
@@ -1482,14 +1748,37 @@ WHERE el.source_type = 'study' AND el.source_id = ? AND el.target_type = 'hypoth
     println!("\n{}", "=".repeat(72));
     println!("  SPIKE 0.11: STUDIES FEATURE — APPROACH COMPARISON");
     println!("{}\n", "=".repeat(72));
-    println!("  {:<35} {:>12} {:>12}", "Metric", "Approach A", "Approach B");
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Metric", "Approach A", "Approach B"
+    );
     println!("  {:<35} {:>12} {:>12}", "", "(compose)", "(hybrid)");
-    println!("  {:<35} {:>12} {:>12}", "-".repeat(35), "-".repeat(12), "-".repeat(12));
-    println!("  {:<35} {:>12} {:>12}", "INSERTs (study + 3 assumptions)", inserts_a, inserts_b);
-    println!("  {:<35} {:>12} {:>12}", "Full-state query (SQL lines)", lines_a, lines_b);
-    println!("  {:<35} {:>12} {:>12}", "Progress query (SQL lines)", progress_lines_a, progress_lines_b);
-    println!("  {:<35} {:>12} {:>12}", "New tables needed", new_tables_a, new_tables_b);
-    println!("  {:<35} {:>12} {:>12}", "Filter studies (type-safe?)", "No", "Yes");
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "-".repeat(35),
+        "-".repeat(12),
+        "-".repeat(12)
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "INSERTs (study + 3 assumptions)", inserts_a, inserts_b
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Full-state query (SQL lines)", lines_a, lines_b
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Progress query (SQL lines)", progress_lines_a, progress_lines_b
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "New tables needed", new_tables_a, new_tables_b
+    );
+    println!(
+        "  {:<35} {:>12} {:>12}",
+        "Filter studies (type-safe?)", "No", "Yes"
+    );
     println!("  {:<35} {:>12} {:>12}", "Top-level fields", "4", "6");
     println!();
     println!("  Approach A filter: {filter_a}");

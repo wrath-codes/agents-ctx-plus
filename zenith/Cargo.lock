@@ -11597,6 +11597,7 @@ dependencies = [
  "tracing",
  "zen-config",
  "zen-core",
+ "zen-schema",
 ]
 
 [[package]]

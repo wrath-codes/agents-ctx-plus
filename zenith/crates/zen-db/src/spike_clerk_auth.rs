@@ -96,10 +96,10 @@ fn decode_jwt_payload_unverified(token: &str) -> Option<serde_json::Value> {
 #[cfg(test)]
 mod part_a_clerk_validation {
     use super::*;
+    use clerk_rs::ClerkConfiguration;
     use clerk_rs::clerk::Clerk;
     use clerk_rs::validators::authorizer::validate_jwt;
     use clerk_rs::validators::jwks::MemoryCacheJwksProvider;
-    use clerk_rs::ClerkConfiguration;
 
     /// A1: Verify that JwksValidator can be created from a Clerk secret key
     /// without requiring any web framework.
@@ -110,14 +110,16 @@ mod part_a_clerk_validation {
             return;
         };
 
-        let config =
-            ClerkConfiguration::new(None, None, Some(secret_key.clone()), None);
+        let config = ClerkConfiguration::new(None, None, Some(secret_key.clone()), None);
         let clerk = Clerk::new(config);
         let _provider = MemoryCacheJwksProvider::new(clerk);
 
         // If we got here without panic, the validator was created successfully.
         // clerk-rs doesn't expose a "is_ready" method — creation is the test.
-        eprintln!("  clerk-rs JwksValidator created from secret key ({}...)", &secret_key[..12]);
+        eprintln!(
+            "  clerk-rs JwksValidator created from secret key ({}...)",
+            &secret_key[..12]
+        );
     }
 
     /// A2: Validate a real Clerk JWT and extract claims.
@@ -132,8 +134,7 @@ mod part_a_clerk_validation {
             return;
         };
 
-        let config =
-            ClerkConfiguration::new(None, None, Some(secret_key), None);
+        let config = ClerkConfiguration::new(None, None, Some(secret_key), None);
         let clerk = Clerk::new(config);
         let provider = Arc::new(MemoryCacheJwksProvider::new(clerk));
 
@@ -166,7 +167,9 @@ mod part_a_clerk_validation {
                     if let Some(exp) = p.get("exp").and_then(|v| v.as_i64()) {
                         let now = chrono::Utc::now().timestamp();
                         if exp < now {
-                            eprintln!("  Token expired (exp={exp}, now={now}). This is expected for old test tokens.");
+                            eprintln!(
+                                "  Token expired (exp={exp}, now={now}). This is expected for old test tokens."
+                            );
                             eprintln!("  Generate a fresh token and set ZENITH_AUTH__TEST_TOKEN");
                             return;
                         }
@@ -185,8 +188,7 @@ mod part_a_clerk_validation {
             return;
         };
 
-        let config =
-            ClerkConfiguration::new(None, None, Some(secret_key), None);
+        let config = ClerkConfiguration::new(None, None, Some(secret_key), None);
         let clerk = Clerk::new(config);
         let provider = Arc::new(MemoryCacheJwksProvider::new(clerk));
 
@@ -198,7 +200,10 @@ mod part_a_clerk_validation {
             result.is_err(),
             "Expected expired/invalid token to be rejected"
         );
-        eprintln!("  Invalid token correctly rejected: {:?}", result.err().unwrap());
+        eprintln!(
+            "  Invalid token correctly rejected: {:?}",
+            result.err().unwrap()
+        );
     }
 }
 
@@ -213,8 +218,7 @@ mod part_b_browser_flow {
     /// B1: Verify that tiny_http captures a token from a mock callback redirect.
     #[test]
     fn spike_tiny_http_callback_captures_token() {
-        let server =
-            tiny_http::Server::http("127.0.0.1:0").expect("Failed to start tiny_http");
+        let server = tiny_http::Server::http("127.0.0.1:0").expect("Failed to start tiny_http");
         let addr = server.server_addr().to_ip().expect("Should be IP address");
         let port = addr.port();
         eprintln!("  tiny_http listening on 127.0.0.1:{port}");
@@ -242,7 +246,9 @@ mod part_b_browser_flow {
             let n = stream.read(&mut buf).unwrap_or(0);
             let response = String::from_utf8_lossy(&buf[..n]);
             assert!(
-                response.contains("200") || response.contains("Success") || response.contains("close"),
+                response.contains("200")
+                    || response.contains("Success")
+                    || response.contains("close"),
                 "Response should indicate success, got: {response}"
             );
         });
@@ -333,7 +339,10 @@ mod part_c_token_storage {
         // Retrieve
         match entry.get_password() {
             Ok(retrieved) => {
-                assert_eq!(retrieved, token_value, "Retrieved token should match stored");
+                assert_eq!(
+                    retrieved, token_value,
+                    "Retrieved token should match stored"
+                );
                 eprintln!("  Retrieved token from keyring: matches");
             }
             Err(e) => {
@@ -374,8 +383,11 @@ mod part_c_token_storage {
             "user_id": "user_test123",
             "org_id": "org_abc"
         });
-        std::fs::write(&creds_file, serde_json::to_string_pretty(&token_data).unwrap())
-            .expect("Failed to write credentials");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string_pretty(&token_data).unwrap(),
+        )
+        .expect("Failed to write credentials");
 
         // Set permissions (Unix only)
         #[cfg(unix)]
@@ -463,7 +475,10 @@ mod part_c_token_storage {
         let exp = payload["exp"].as_i64().unwrap();
         let is_near_expiry = (exp - now) < 60;
         assert!(is_near_expiry, "Token should be near expiry");
-        eprintln!("  Near-expiry token detected: {}s remaining (< 60s buffer)", exp - now);
+        eprintln!(
+            "  Near-expiry token detected: {}s remaining (< 60s buffer)",
+            exp - now
+        );
 
         // Test 4: Malformed JWT
         let malformed = decode_jwt_payload_unverified("not.a.jwt.token.at.all");
@@ -512,12 +527,12 @@ mod part_d_turso_jwks {
             return;
         };
 
-        eprintln!("  Connecting to Turso via JWKS: {}...", &url[..url.len().min(40)]);
+        eprintln!(
+            "  Connecting to Turso via JWKS: {}...",
+            &url[..url.len().min(40)]
+        );
 
-        let db = match Builder::new_remote(url.clone(), clerk_jwt)
-            .build()
-            .await
-        {
+        let db = match Builder::new_remote(url.clone(), clerk_jwt).build().await {
             Ok(db) => db,
             Err(e) => {
                 eprintln!("  Connection failed: {e}");
@@ -532,8 +547,15 @@ mod part_d_turso_jwks {
         let conn = db.connect().expect("Failed to create connection");
 
         // Simple query to verify the connection works
-        let mut rows = conn.query("SELECT 1 AS result", ()).await.expect("SELECT 1 failed");
-        let row = rows.next().await.expect("next() failed").expect("No row returned");
+        let mut rows = conn
+            .query("SELECT 1 AS result", ())
+            .await
+            .expect("SELECT 1 failed");
+        let row = rows
+            .next()
+            .await
+            .expect("next() failed")
+            .expect("No row returned");
         let result: i64 = row.get(0).expect("Failed to get column 0");
         assert_eq!(result, 1);
         eprintln!("  SELECT 1 succeeded via Turso JWKS connection");
@@ -553,13 +575,9 @@ mod part_d_turso_jwks {
 
         eprintln!("  Opening embedded replica with Clerk JWT...");
 
-        let db = match Builder::new_remote_replica(
-            local_path_str,
-            url,
-            clerk_jwt,
-        )
-        .build()
-        .await
+        let db = match Builder::new_remote_replica(local_path_str, url, clerk_jwt)
+            .build()
+            .await
         {
             Ok(db) => db,
             Err(e) => {
@@ -625,8 +643,16 @@ mod part_d_turso_jwks {
 
         let tmp1 = TempDir::new().expect("Failed to create temp dir 1");
         let tmp2 = TempDir::new().expect("Failed to create temp dir 2");
-        let path1 = tmp1.path().join("replica1.db").to_string_lossy().to_string();
-        let path2 = tmp2.path().join("replica2.db").to_string_lossy().to_string();
+        let path1 = tmp1
+            .path()
+            .join("replica1.db")
+            .to_string_lossy()
+            .to_string();
+        let path2 = tmp2
+            .path()
+            .join("replica2.db")
+            .to_string_lossy()
+            .to_string();
 
         // Replica 1: write
         let db1 = match Builder::new_remote_replica(path1, url.clone(), clerk_jwt.clone())
@@ -702,7 +728,11 @@ mod part_d_turso_jwks {
         let expired_token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyX3Rlc3QiLCJleHAiOjEwMDAwMDAwMDB9.invalid";
 
         let tmp = TempDir::new().expect("tmp failed");
-        let path = tmp.path().join("expired_test.db").to_string_lossy().to_string();
+        let path = tmp
+            .path()
+            .join("expired_test.db")
+            .to_string_lossy()
+            .to_string();
 
         // Try to connect with expired token
         match Builder::new_remote_replica(path, url, expired_token.to_string())
@@ -785,8 +815,7 @@ mod part_e_api_key {
                 eprintln!("  API key verify response: status={status}");
                 eprintln!("  Body: {body}");
                 if status.is_success() {
-                    let parsed: serde_json::Value =
-                        serde_json::from_str(&body).unwrap_or_default();
+                    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
                     if let Some(subject) = parsed.get("subject").and_then(|v| v.as_str()) {
                         eprintln!("  API key subject: {subject}");
                     }
@@ -818,10 +847,15 @@ mod part_e_api_key {
             .await
             .expect("JWKS fetch failed");
 
-        assert!(resp.status().is_success(), "JWKS endpoint should return 200");
+        assert!(
+            resp.status().is_success(),
+            "JWKS endpoint should return 200"
+        );
 
         let body: serde_json::Value = resp.json().await.expect("JWKS should be JSON");
-        let keys = body["keys"].as_array().expect("JWKS should have keys array");
+        let keys = body["keys"]
+            .as_array()
+            .expect("JWKS should have keys array");
         assert!(!keys.is_empty(), "JWKS should have at least one key");
 
         for (i, key) in keys.iter().enumerate() {
