@@ -11659,6 +11659,8 @@ dependencies = [
 name = "zen-search"
 version = "0.1.0"
 dependencies = [
+ "ast-grep-core",
+ "ast-grep-language",
  "duckdb",
  "grep",
  "ignore",
@@ -11670,6 +11672,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tree-sitter",
  "zen-core",
  "zen-db",
  "zen-embeddings",

@@ -36,6 +36,8 @@
 
 **Why two engines**: Package source is already in DuckDB (compressed, no file sprawl). Local project files must be searched on the live filesystem. Each engine is optimal for its domain.
 
+**Scope boundary**: `znt grep` is lexical search only. Recursive, AST/doc-symbolic long-context search is covered by spike 0.21 and planned under `znt search --mode recursive`.
+
 **Relationship to `rg`**: `znt grep` is additive, not a replacement. It provides structured JSON output for LLM consumption and Zenith-aware filtering (`.zenithignore`, test file skipping, symbol correlation). For human-interactive ad-hoc search, users should still use `rg` directly.
 
 ---

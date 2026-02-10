@@ -29,6 +29,7 @@
 | 16 | [16-r2-parquet-export-spike-plan.md](./16-r2-parquet-export-spike-plan.md) | R2 Lance Export spike — Parquet + Lance on R2, vector/FTS/hybrid search — **DONE**: 18/18 tests |
 | 17 | [17-native-lance-spike-plan.md](./17-native-lance-spike-plan.md) | Native lancedb writes spike — lancedb Rust crate, serde_arrow production path, arrow_serde adapters — **DONE**: 10/10 tests |
 | 18 | [18-catalog-visibility-spike-plan.md](./18-catalog-visibility-spike-plan.md) | Turso Catalog + Clerk Visibility spike — DuckLake-inspired catalog, three-tier search, concurrent dedup, org JWT — **DONE**: 9/9 tests |
+| 21 | [21-rlm-recursive-query-spike-plan.md](./21-rlm-recursive-query-spike-plan.md) | Recursive context query spike (RLM-style) on Arrow monorepo — AST/doc symbolic recursion, categorized ref graph, external DataFusion refs — **DONE**: 17/17 tests |
 
 ---
 
@@ -44,7 +45,7 @@
 |EMBEDDINGS|fastembed (ONNX, 384-dim, local)
 |PARSING|ast-grep (ast-grep-core + ast-grep-language, 26 built-in languages)
 |JSONL_TRAIL|serde-jsonlines 0.7 (append-only per-session trail, DB rebuildable via replay)
-|SEARCH|fts5 (libsql) + lance_vector_search + lance_fts + lance_hybrid_search (duckdb lance ext) + grep (ripgrep library for local)
+|SEARCH|fts5 (libsql) + lance_vector_search + lance_fts + lance_hybrid_search (duckdb lance ext) + grep (ripgrep library for local) + recursive context query (rlm-style symbolic recursion)
 |GREP|grep 0.4 (ripgrep library) + ignore 0.4 (gitignore-aware walking)
 |ID_GENERATION|libsql/SQLite native: hex(randomblob(4)), prefixed in app layer
 |ENTITIES|research_items, findings, hypotheses, insights, issues, tasks, implementation_log, compatibility_checks, studies, entity_links, audit_trail, sessions, session_snapshots, project_meta, project_dependencies
@@ -81,6 +82,7 @@
 | JSONL as source of truth | Beads 3-layer pattern | Append-only per-session trail files, DB rebuildable from JSONL, git-friendly, no Turso Cloud required for durability |
 | Git ops not our job | User/LLM handles git | We produce JSONL files + provide hooks, user commits them |
 | Hypothesis lifecycle | 6 states | unverified → analyzing → confirmed/debunked/partial/inconclusive |
+| Recursive context query | RLM-style symbolic recursion + reference graph categories | Spike 0.21 validated 17/17 tests on Arrow monorepo with external DataFusion evidence |
 
 ---
 

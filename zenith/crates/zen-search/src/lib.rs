@@ -10,3 +10,5 @@
 
 #[cfg(test)]
 mod spike_grep;
+#[cfg(test)]
+mod spike_recursive_query;

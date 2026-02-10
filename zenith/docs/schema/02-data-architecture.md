@@ -27,7 +27,7 @@
 
 ## 1. Overview
 
-The package index stores **indexed package documentation** — tree-sitter-extracted API symbols and chunked documentation text with fastembed vector embeddings. This is what powers `znt search`, `znt grep`, and `znt onboard`.
+The package index stores **indexed package documentation** — ast-grep-extracted API symbols and chunked documentation text with fastembed vector embeddings. This is what powers `znt search`, `znt grep`, and `znt onboard`.
 
 ### Design Principles
 
@@ -55,7 +55,7 @@ When a user runs `znt install <package>`:
 
 1. Check Turso catalog — already indexed globally? If yes, skip (crowdsource dedup)
 2. Clone the package repository to a temp directory
-3. Parse source files with tree-sitter (26 supported languages)
+3. Parse source files with ast-grep (26 built-in languages)
 4. Extract API symbols: functions, structs, enums, traits, classes, interfaces, type aliases, constants, macros, modules
 5. Chunk documentation files (README, docs/, guides)
 6. Generate fastembed vectors (384-dim) for symbols and doc chunks
@@ -78,7 +78,7 @@ When a user runs `znt install <package>`:
 ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
 │  Clone + Parse   │  │  Turso Catalog   │  │  Detect Deps +   │
 │  + Embed         │  │  → Lance Paths   │  │  Check Catalog   │
-│  (tree-sitter +  │  │  → DuckDB Query  │  │  → Batch Index   │
+│  (ast-grep +     │  │  → DuckDB Query  │  │  → Batch Index   │
 │   fastembed +    │  │  (lance ext)     │  │                  │
 │   serde_arrow)   │  │                  │  │                  │
 └──────────┬───────┘  └──────────────────┘  └──────────────────┘
@@ -585,6 +585,34 @@ Chunked documentation text from READMEs, guides, and doc files.
 3. Merge results across all packages, sort by _hybrid_score
 
 4. Return top N to the LLM
+```
+
+### `znt search --mode recursive` (symbolic recursion flow)
+
+```
+1. Build metadata-only root plan
+   - package/file counts
+   - byte budgets
+   - candidate scopes
+
+2. Select slices via symbolic handles
+   - AST kinds (functions/structs/traits/enums)
+   - doc-comment keyword filtering
+   - source snippets by path + line ranges
+
+3. Execute budgeted recursive sub-queries
+   - max_depth
+   - max_chunks
+   - max_bytes_per_chunk
+   - max_total_bytes
+
+4. Build categorized reference graph
+   - same_module
+   - other_module_same_crate
+   - other_crate_workspace
+   - external (cross-workspace evidence, e.g. DataFusion)
+
+5. Return search hits + signatures + optional summary payload
 ```
 
 ### `znt onboard` (check catalog before indexing)

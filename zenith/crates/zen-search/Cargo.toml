@@ -25,6 +25,9 @@ pretty_assertions.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 duckdb.workspace = true
+ast-grep-core.workspace = true
+ast-grep-language.workspace = true
+tree-sitter.workspace = true
 
 [lints]
 workspace = true

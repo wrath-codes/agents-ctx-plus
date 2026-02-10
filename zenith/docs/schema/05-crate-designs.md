@@ -1491,7 +1491,7 @@ impl RegistryClient {
 
 ## 10. zen-search
 
-**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), and zen-embeddings. Provides the unified `znt search` command backend.
+**Purpose**: Search orchestration -- ties together zen-db (FTS5), zen-lake (vector), zen-embeddings, and recursive context query workflows (RLM-style symbolic recursion). Provides the unified `znt search` command backend.
 
 ### Dependencies
 
@@ -1517,9 +1517,11 @@ ignore.workspace = true      # gitignore-aware file walking
 ```
 zen-search/src/
 ├── lib.rs              # SearchEngine, GrepEngine, SearchResult, SearchMode
-├── vector.rs           # Vector search via DuckDB HNSW
+├── vector.rs           # Vector search via DuckDB lance extension (`lance_vector_search`)
 ├── fts.rs              # FTS5 search via Turso (findings, audit, etc.)
 ├── hybrid.rs           # Hybrid: vector + FTS combined ranking
+├── recursive.rs        # RecursiveQueryEngine (metadata-only root + budgeted symbolic sub-queries)
+├── ref_graph.rs        # Reference graph model (symbol_refs, ref_edges, categories, signature refs)
 ├── grep.rs             # GrepEngine: package mode (DuckDB) + local mode (grep crate)
 └── walk.rs             # File walker factory (ignore crate, WalkMode, test skip)
 ```
@@ -1553,6 +1555,7 @@ pub enum SearchMode {
     Vector,
     Fts,
     Hybrid,
+    Recursive,
 }
 
 impl SearchEngine {
@@ -1566,8 +1569,47 @@ impl SearchEngine {
             SearchMode::Vector => self.vector_search(query, &filters).await,
             SearchMode::Fts => self.fts_search(query, &filters).await,
             SearchMode::Hybrid => self.hybrid_search(query, &filters).await,
+            SearchMode::Recursive => self.recursive_search(query, &filters).await,
         }
     }
+}
+```
+
+### Recursive Search Types (spike 0.21 validated — 17/17 tests)
+
+See [21-rlm-recursive-query-spike-plan.md](./21-rlm-recursive-query-spike-plan.md) for full validation and output samples.
+
+```rust
+pub struct RecursiveBudget {
+    pub max_depth: usize,
+    pub max_chunks: usize,
+    pub max_bytes_per_chunk: usize,
+    pub max_total_bytes: usize,
+}
+
+pub struct SymbolRefHit {
+    pub ref_id: String,          // stable id: file::kind::name::line
+    pub file_path: String,
+    pub kind: String,
+    pub name: String,
+    pub line_start: u32,
+    pub line_end: u32,
+    pub signature: String,
+    pub doc: String,
+}
+
+pub enum RefCategory {
+    SameModule,
+    OtherModuleSameCrate,
+    OtherCrateWorkspace,
+    External,
+}
+
+pub struct RefEdge {
+    pub source_ref_id: String,
+    pub target_ref_id: String,
+    pub category: RefCategory,
+    pub evidence: String,
 }
 ```
 
@@ -1627,6 +1669,7 @@ impl GrepEngine {
 - Hybrid search combines both scoring methods
 - Package and kind filters work correctly
 - Context budget truncation works
+- **Recursive (spike 0.21)**: metadata-only planning, AST/doc symbolic extraction, budget controls, deterministic output, categorized ref graph, signature lookup by `ref_id`, external DataFusion references
 - **Grep (spike 0.14)**: `grep` crate regex matching (6 tests), `ignore` crate file walking (5 tests), DuckDB `source_files` storage + grep (6 tests), symbol correlation (2 tests), combined pipeline (3 tests), `source_cached` flag (1 test), `--all-packages` cross-package search (1 test)
 
 ---

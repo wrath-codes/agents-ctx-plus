@@ -1,6 +1,6 @@
 # Zenith: Implementation Plan
 
-**Version**: 2026-02-08
+**Version**: 2026-02-10
 **Status**: Active Planning Document
 **Purpose**: Phased implementation roadmap with milestones, dependencies, validation criteria, and risk mitigations
 
@@ -32,6 +32,7 @@
 - **Tests at every step** -- no moving to the next phase without tests passing
 - **Each phase produces a milestone** -- a commit that compiles, tests pass, and does something demonstrably useful
 - **Reference implementations consulted** -- aether patterns for storage, klaw patterns for parsing, ai-dev-tasks for PRD workflow
+- **Prefer symbolic access over full-context ingestion** -- long-context processing should use AST/doc/source handles + budgeted recursion (spike 0.21)
 
 ---
 
@@ -44,7 +45,7 @@
 | ID | Task | Validates | Blocks |
 |----|------|-----------|--------|
 | 0.1 | Create Cargo workspace with all 11 crate stubs (9 original + zen-hooks + zen-schema) | Rust 2024 edition, workspace structure | Everything |
-| 0.2 | ~~Add `turso` crate~~ → Add `libsql` crate, write spike: create local DB, execute SQL, query rows, FTS5 | **DONE** — libsql 0.9.29 works locally (turso crate FTS blocked) | Phase 1 |
+| 0.2 | ~~Add `turso` crate~~ → Add `libsql` crate, write spike: create local DB, execute SQL, query rows, FTS5, `Option<T>` params | **DONE** — libsql 0.9.29 works locally (turso crate FTS blocked). Spike 0.2g: `Option<T>` works natively in `params!` macro via `impl<T: Into<Value>> From<Option<T>> for Value` — eliminates verbose `Vec<Value>` for INSERT queries. `.as_deref()` converts `Option<String>` → `Option<&str>` for entity fields. `Vec<Value>` still needed for dynamic UPDATE builders (variable param count). `named_params!` also supports `Option<T>`. 6 tests added (21 total for spike 0.2). | Phase 1 |
 | 0.3 | ~~Add `libsql` embedded replica spike: connect to Turso Cloud, sync~~ | **DONE** — `Builder::new_remote_replica()` + `db.sync().await` works. Validated: connect, write-forward, two-replica roundtrip, FTS5 through replica, transactions, deferred batch sync. Requires `tokio multi_thread` runtime. | Phase 8 |
 | 0.4 | ~~Add `duckdb` crate (bundled), write spike: create table, insert, query~~ | **DONE** — `duckdb` 1.4 (bundled) compiles and works. Validated: CRUD, Appender bulk insert (1000 rows), transactions, JSON columns, `FLOAT[384]` arrays with `array_cosine_similarity()`, `execute_batch`, file persistence. DuckDB is synchronous; async strategy documented (prefer `spawn_blocking`, `async-duckdb` as alternative). `FLOAT[N]` enforces dimension at insert time. | Phase 2 |
 | 0.5 | ~~Add `duckdb` VSS extension spike: create HNSW index, vector search~~ | **DONE** — Full stack validated: (1) VSS HNSW works in-memory but crashes on persistence (DuckDB 1.4 bug). (2) MotherDuck cloud works (`md:` protocol). (3) R2 Parquet roundtrip works (`httpfs`). (4) **Lance community extension validated** as superior alternative: `lance_vector_search()`, `lance_fts()` (BM25), `lance_hybrid_search()` all work locally and on R2 (`s3://`). Lance has persistent vector indexes, no HNSW crash. **Decision**: Use Lance format for documentation lake instead of Parquet + HNSW. See `02-ducklake-data-model.md` §10. **Gotchas**: Lance FTS is term-exact (no stemming). Lance uses AWS env vars for S3 creds, not DuckDB `CREATE SECRET`. | Phase 4 |
@@ -63,6 +64,7 @@
 | 0.18 | ~~Write R2 Lance Export spike: validate Lance format on R2 for shared team index — vector search, FTS, hybrid search, JSON metadata roundtrip, incremental export, manifest lifecycle~~ | **DONE** — 18/18 tests pass (13 Parquet + 5 Lance). Validated: (1) **Parquet export/read**: all 3 tables (api_symbols, doc_chunks, indexed_packages) export to R2 and read back correctly. `FLOAT[]` embeddings need `::FLOAT[384]` cast for `array_cosine_similarity()`. JSON metadata survives Parquet roundtrip (JSON operators work on Parquet-read data). DuckDB manifest returns Struct type — need `to_json()::VARCHAR`. (2) **Performance**: 10K symbols insert 769ms, export to R2 5.1s, vector search 3.0s, text filter 310ms. (3) **Incremental**: delta export by timestamp works, multi-file merge via `read_parquet([...])` works. (4) **Lance on R2**: `COPY TO (FORMAT lance)` works, `lance_vector_search()` with 384-dim returns correct nearest neighbors (distance=0.0 for self-match). `lance_fts()` BM25 works. `lance_hybrid_search()` combines vector + text (alpha=0.5). (5) **Lance vs Parquet**: at 100 rows Parquet is 2x faster (brute-force cheaper than Lance overhead). At scale, Lance's persistent indexes will dominate. **Decision**: Use Lance format for both shared team index and local index. Lance provides native vector search, BM25 FTS, and hybrid search without brute-force scan. **Gotchas**: (a) Lance uses AWS credential chain (not DuckDB secrets) — must set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL` env vars. (b) Lance FTS is term-exact, not stemmed. (c) Parquet `FLOAT[]` needs explicit cast to `FLOAT[384]` for cosine ops. See [16-r2-parquet-export-spike-plan.md](./16-r2-parquet-export-spike-plan.md) | Phase 9 (R2 Lance export, shared reader, `znt export`) |
 | 0.19 | ~~Write native lancedb writes spike: validate `lancedb` Rust crate for writing Lance to R2, Arrow version bridge (duckdb arrow-56 vs lancedb arrow-57), serde_arrow production path, arrow_serde chrono adapters~~ | **DONE** — 10/10 tests pass. Validated: (1) **Arrow version bridge**: Value-based reconstruction converts arrow-56 → 57 (FFI doesn't work — Rust treats same `#[repr(C)]` layout as different types across crate versions). (2) **lancedb local + R2 writes**: api_symbols schema (19 cols, `FixedSizeList(Float32, 384)`) writes and reads back via DuckDB lance extension. (3) **Explicit indexes**: IVF-PQ vector + BM25 FTS via `create_index()`. PQ needs >= 256 rows. (4) **Incremental add**: `tbl.add()` for delta updates (100 + 50 = 150, search works across both). (5) **DuckDB → lancedb pipeline**: `query_arrow()` → value bridge → `create_table()` → local + R2 (EXPLORATORY — not production code, see Part I docs). (6) **Cross-process index read**: indexes survive handle drop, fresh DuckDB connection reads them. (7) **exist_ok**: `CreateTableMode::exist_ok()` returns existing table without data loss. (8) **serde_arrow production path** (test M1): Rust structs → `serde_arrow::to_record_batch()` → `lancedb::create_table()` → DuckDB reads → `serde_arrow::from_record_batch()` → Rust structs. Full round-trip with `DateTime<Utc>` via `arrow_serde` adapter. Vector search distance=0.000000. **Key decisions**: (a) `serde_arrow` is the production bridge (no DuckDB extraction needed). (b) `arrow_serde` ported from aether to zen-core (timestamp_micros_utc, date32 adapters). (c) `FixedSizeList(384)` override needed (serde_arrow defaults `Vec<f32>` to `LargeList`). (d) `unsafe_code = "forbid"` preserved — value bridge is safe. (e) `object_store` downgraded 0.13 → 0.12 for lance 2.0. (f) `protoc` required by `lance-encoding`. See [17-native-lance-spike-plan.md](./17-native-lance-spike-plan.md) | Phase 2 (zen-lake writes), Phase 9 (R2 upload) |
 | 0.20 | ~~Write Turso catalog + Clerk visibility spike: validate DuckLake-inspired catalog tables in Turso, Clerk JWT org claims for visibility scoping, embedded replica sync, three-tier search, concurrent write dedup, programmatic org-scoped JWT generation~~ | **DONE** — 9/9 tests pass. Validated: (1) **Programmatic org-scoped JWT** (J0): create session → get JWT from `zenith_cli` template → `clerk-rs` validates → `ActiveOrganization { id, slug, role, permissions }` extracted. (2) **indexed_packages schema in Turso** (J1): visibility columns work, public/team/private scoping correct. (3) **Embedded replica sync** (J2): catalog replicates, offline reads work. (4) **Clerk JWT visibility scoping** (J3): real `org_id` from JWT drives team visibility, `sub` drives private. No custom RBAC. (5) **End-to-end catalog → search** (J4): Turso catalog → lance path → DuckDB `lance_vector_search()` → distance=0.0. (6) **Three-tier search** (K1): public + team visible, private excluded, results merged. (7) **Private code isolation** (K2): only owner discovers private packages. (8) **Concurrent dedup** (L1): PRIMARY KEY → `SQLITE_CONSTRAINT`, first writer wins, concurrent race resolved correctly. (9) **Two Turso replicas** (L3): separate DBs coexist in same process, no interference. **Key findings**: (a) `org_permissions` must be `[]` in JWT template (shortcode doesn't resolve, breaks clerk-rs deserialization). (b) Turso "shared lock on node" errors are infrastructure-level (DB creation/deletion), not application concurrency. (c) Created Clerk org `zenith-dev` (`org_39PSbEI9mVoLgBQWuASKeltV7S9`), user `zenith_dev` is admin. See [18-catalog-visibility-spike-plan.md](./18-catalog-visibility-spike-plan.md) | Phase 8 (Turso catalog), Phase 9 (visibility, team, crowdsource) |
+| 0.21 | Write recursive context query spike: validate RLM-style symbolic recursion over full Arrow monorepo (AST/doc/source handles), extended tree-sitter impl queries, budgeted planning, categorized reference graph, and external DataFusion references | **DONE** — 17/17 tests pass. Validated on 606 Rust files / 407,210 LOC / 14.9MB. Extended impl query improved coverage (`+580` matches vs baseline). Deterministic budgeted recursion works. Reference categories work (`same_module`, `other_module_same_crate`, `other_crate_workspace`, `external`). Signature-preserving refs + DuckDB `symbol_refs`/`ref_edges` persistence validated. JSON summary output (`summary_json`, `summary_json_pretty`) validated. See [21-rlm-recursive-query-spike-plan.md](./21-rlm-recursive-query-spike-plan.md) | Phase 4 (4.13-4.15), Phase 5 (5.24) |
 
 ### Milestone 0
 
@@ -121,6 +123,10 @@ cargo test --workspace
 
 **Depends on**: Phase 1
 
+**Review status**: 12 issues identified and resolved in [20-phase2-storage-layer-plan.md](./20-phase2-storage-layer-plan.md) §11. 21 spike tests added (spikes 0.2b–0.2g). All blocking issues validated. Spike 0.2g discovered that `Option<T>` works natively in `params!` macro — INSERT queries use `params!` with `.as_deref()` instead of verbose `Vec<Value>`.
+
+Detailed validation provenance for this phase lives in [20-phase2-storage-layer-plan.md](./20-phase2-storage-layer-plan.md) §3.7 (Validation Traceability Matrix). Post-review amendments and 12 resolved issues are documented in §11 (Post-Review Amendments).
+
 ### Tasks
 
 | ID | Task | Crate | Blocks |
@@ -157,10 +163,17 @@ cargo test --workspace
 - JSONL trail: every mutation appends to per-session trail file
 - JSONL rebuild: replay all trail files produces identical DB state (including FTS5)
 - JSONL concurrent: multiple sessions write to separate files without corruption
+- JSONL concurrent (same session): multiple tasks append to same session file without corruption
+- Transaction atomicity: trail write failure causes SQL rollback (no orphaned DB state)
+- NULL binding: nullable FK columns use `Option<T>` in `params!` (maps to SQL NULL natively), dynamic updates use `Vec<Value>` with `.into()`
+- Update replay: replayer distinguishes JSON null (set to NULL) from absent key (not changed)
 
 ### Milestone 2
 
 - Complete CRUD layer with 13 repo modules (Session, Project, Research, Finding, Hypothesis, Insight, Issue, Task, ImplLog, Compat, Study, Link, Audit)
+- All mutations use transaction-wrapped protocol: BEGIN → SQL → audit → trail → COMMIT
+- All nullable columns use `Option<T>` in `params!` macro for INSERT (maps to SQL NULL natively), `Vec<Value>` with `.into()` for dynamic UPDATE builders
+- ProjectMeta and ProjectDependency entities are trail-backed (survive rebuild)
 - JSONL trail writer validates and appends every mutation; replayer rebuilds DB from trail
 - Every mutation writes to audit trail
 - FTS5 search works across all searchable entities
@@ -220,9 +233,9 @@ cargo test --workspace
 
 ## 6. Phase 4: Search & Registry
 
-**Goal**: Vector search over the lake, FTS over knowledge entities, registry API clients.
+**Goal**: Vector search over the lake, FTS over knowledge entities, recursive context query over code/doc environments, registry API clients.
 
-**Depends on**: Phase 2 (zen-db FTS), Phase 3 (zen-lake with vectors)
+**Depends on**: Phase 2 (zen-db FTS), Phase 3 (zen-lake with vectors), Phase 0 spike 0.21 (recursive context query validation)
 
 ### Tasks
 
@@ -240,6 +253,9 @@ cargo test --workspace
 | 4.10 | Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation | zen-search | 5.19 |
 | 4.11 | Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink` | zen-search | 5.19 |
 | 4.12 | Add `idx_symbols_file_lines` index to `api_symbols` | zen-lake | 4.10 |
+| 4.13 | Implement `RecursiveQueryEngine` (RLM-style): metadata-only root planning, AST/doc/source symbolic handles, budget controls (`max_depth`, `max_chunks`, `max_bytes_per_chunk`, `max_total_bytes`) | zen-search | 4.14 |
+| 4.14 | Implement categorized reference graph (`symbol_refs`, `ref_edges`) with signature-preserving stable ref IDs and categories (`same_module`, `other_module_same_crate`, `other_crate_workspace`, `external`) | zen-search + zen-lake | 5.24 |
+| 4.15 | Implement external reference scan pipeline (workspace-external evidence; initial target: cached DataFusion Arrow references) and JSON summary output for recursive search results | zen-search | 5.24 |
 
 ### Tests
 
@@ -248,12 +264,16 @@ cargo test --workspace
 - Hybrid: combined ranking produces better results than either alone
 - Registry: parse real API response fixtures (recorded JSON), handle errors (404, rate limit)
 - `search_all()` merges and sorts by downloads
+- Recursive query: Arrow monorepo scale test passes with budget controls and deterministic output
+- Reference graph: category counts and signature lookup by stable `ref_id` succeed
+- External references: cached DataFusion Arrow usage is discoverable and tagged as `external`
 
 ### Milestone 4
 
 - `znt search "async spawn"` returns ranked results from indexed packages
 - `znt research registry "http client" --ecosystem rust` returns crates.io results
 - Hybrid search combines vector similarity + FTS relevance
+- Recursive search returns categorized reference results with signatures and optional JSON summary payload
 
 ---
 
@@ -294,6 +314,7 @@ cargo test --workspace
 | 5.21 | Implement `warn_unconfigured()` at CLI startup: detect figment config sections with all-default values, warn user about possible typo'd env var keys (confirmed gotcha from zen-config spike) | zen-cli | Done |
 | 5.22 | Implement `znt schema <type>` CLI command: dump JSON Schema for any registered type from SchemaRegistry. Uses `SchemaRegistry.get()` + pretty print. | zen-cli | Done |
 | 5.23 | Update pre-commit hook (task 5.18b) to use schemars-generated schemas from zen-schema instead of hand-written schema from spike 0.13 | zen-hooks + zen-schema | Done |
+| 5.24 | Implement recursive search CLI mode and output flags: `znt search --mode recursive` + budget flags + reference-category output (`summary_json`, `summary_json_pretty`) | zen-cli + zen-search | Phase 6 |
 
 ### Tests
 
@@ -647,6 +668,7 @@ Parallel path: 0.17 + 0.18 + 0.19 + 0.20 → Phase 8 (catalog) + Phase 9 (team &
 | Lance AWS credential chain differs from DuckDB secrets | R2 access fails for Lance | **Mitigated** | Spike 0.18 validated: set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL` env vars from R2 config. Lance reads/writes work. |
 | `keyring` crate fails on headless Linux (no Secret Service) | Token storage fails | Medium | Spike 0.17 validated file fallback with 0600 permissions (task 9.4) |
 | Lance FTS is term-exact (no stemming) | "spawning" won't match "spawn" | Low | Vector search is primary signal. Lance FTS is boost only. libSQL FTS5 (porter stemming) remains for knowledge entity search. |
+| `unwrap_or("")` pattern in spike code propagates to production | FK constraint violations on nullable columns during replay | **Mitigated** | Spike 0.2b proved `""` violates FK constraints. Spike 0.2g discovered `Option<T>` works natively in `params!` macro — INSERT queries use `params!` with `.as_deref()` (no `Vec<Value>` needed). Dynamic UPDATE builders still use `Vec<Value>` with `.into()`. `json_to_value()` helper established for replayer. 21 spike tests validate. See [20-phase2-storage-layer-plan.md](./20-phase2-storage-layer-plan.md) §11. |
 
 ---
 
@@ -658,7 +680,7 @@ At each milestone, verify:
 |-----------|-----------|---------|
 | 0 | All spikes compile and pass | `cargo test --workspace` |
 | 1 | DB opens, schema created, entities insertable, SchemaRegistry validates all entity types | `cargo test -p zen-core -p zen-config -p zen-db -p zen-schema` |
-| 2 | All 13 repos work, FTS search works, audit trail logs everything, JSONL trail validates on write | `cargo test -p zen-db` |
+| 2 | All 13 repos work, FTS search works, audit trail logs everything, JSONL trail validates on write, mutations are transaction-wrapped, NULL binding via `Option<T>` params correct | `cargo test -p zen-db` |
 | 3 | Parse Rust/Python/TS files via ast-grep, extract symbols, embed, store in DuckDB | `cargo test -p zen-parser -p zen-embeddings -p zen-lake` |
 | 4 | Vector search returns relevant results, registry clients work | `cargo test -p zen-search -p zen-registry` |
 | **5 (MVP)** | **`znt init` → `znt install tokio` → `znt search "spawn"` returns results. Git hooks install correctly, pre-commit validates JSONL, post-checkout detects trail changes.** | **Build binary, run e2e** |

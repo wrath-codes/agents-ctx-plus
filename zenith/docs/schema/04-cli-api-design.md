@@ -292,7 +292,7 @@ znt session list [--limit 10] [--status active|wrapped_up|abandoned]
 
 ### `znt install`
 
-Clone a package repository, parse with tree-sitter, generate embeddings, store in DuckLake.
+Clone a package repository, parse with ast-grep, generate embeddings, store in the local/search lake.
 
 ```bash
 znt install <package> [--ecosystem <eco>] [--version <ver>]
@@ -360,7 +360,12 @@ znt search <query> [flags]
 | `--kind` | Filter by symbol kind (function, struct, trait, etc.) | All |
 | `--limit` | Max results | `20` |
 | `--context-budget` | Max characters of content to return | `8000` |
-| `--mode` | Search mode: `vector`, `fts`, `hybrid` | `hybrid` |
+| `--mode` | Search mode: `vector`, `fts`, `hybrid`, `recursive` | `hybrid` |
+| `--max-depth` | Recursive mode only: recursion depth cap | `2` |
+| `--max-chunks` | Recursive mode only: max selected chunks | `200` |
+| `--max-bytes-per-chunk` | Recursive mode only: per-slice byte cap | `6000` |
+| `--max-total-bytes` | Recursive mode only: total byte budget | `750000` |
+| `--show-ref-graph` | Recursive mode only: include categorized references (`same_module`, `other_module_same_crate`, `other_crate_workspace`, `external`) | `false` |
 
 **Output:**
 
@@ -385,6 +390,34 @@ znt search <query> [flags]
     "total_results": 15,
     "returned": 10,
     "search_mode": "hybrid"
+}
+```
+
+**Recursive mode output additions** (`--mode recursive`):
+
+```json
+{
+    "search_mode": "recursive",
+    "results": [
+        {
+            "name": "spawn_blocking",
+            "signature": "pub(crate) fn spawn_blocking<F, R>(...) -> JoinHandle<R>",
+            "file_path": "tokio/src/runtime/blocking/pool.rs",
+            "line_start": 142,
+            "line_end": 190,
+            "ref_id": "tokio/src/runtime/blocking/pool.rs::function::spawn_blocking::142"
+        }
+    ],
+    "ref_graph": {
+        "categories": {
+            "same_module": 15,
+            "other_module_same_crate": 133,
+            "other_crate_workspace": 1108,
+            "external": 40
+        },
+        "summary_json": "...",
+        "summary_json_pretty": "..."
+    }
 }
 ```
 
@@ -1215,5 +1248,5 @@ Minimal output. For `audit`, returns newline-delimited JSON (one entry per line)
 ## Cross-References
 
 - Turso data model: [01-turso-data-model.md](./01-turso-data-model.md)
-- DuckLake data model: [02-ducklake-data-model.md](./02-ducklake-data-model.md)
+- Data architecture: [02-data-architecture.md](./02-data-architecture.md)
 - Architecture overview: [03-architecture-overview.md](./03-architecture-overview.md)

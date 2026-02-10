@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS project_dependencies (
     name TEXT NOT NULL,
     version TEXT,
     source TEXT NOT NULL,
-    indexed BOOLEAN DEFAULT FALSE,
+    indexed BOOLEAN NOT NULL DEFAULT FALSE,
     indexed_at TEXT,
     PRIMARY KEY (ecosystem, name)
 );
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS insights (
 
 CREATE TABLE IF NOT EXISTS issues (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL DEFAULT 'task',
+    type TEXT NOT NULL DEFAULT 'bug',
     parent_id TEXT REFERENCES issues(id),
     title TEXT NOT NULL,
     description TEXT,
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS implementation_log (
     id TEXT PRIMARY KEY,
-    task_id TEXT REFERENCES tasks(id),
+    task_id TEXT NOT NULL REFERENCES tasks(id),
     session_id TEXT REFERENCES sessions(id),
     file_path TEXT NOT NULL,
     start_line INTEGER,
