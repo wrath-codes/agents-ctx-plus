@@ -469,6 +469,7 @@ impl fmt::Display for CompatStatus {
 pub enum AuditAction {
     Created,
     Updated,
+    Deleted,
     StatusChanged,
     Linked,
     Unlinked,
@@ -486,6 +487,7 @@ impl AuditAction {
         match self {
             Self::Created => "created",
             Self::Updated => "updated",
+            Self::Deleted => "deleted",
             Self::StatusChanged => "status_changed",
             Self::Linked => "linked",
             Self::Unlinked => "unlinked",
