@@ -1,6 +1,6 @@
 [package]
 name = "zen-lake"
-description = "DuckDB/DuckLake operations for Zenith documentation lake"
+description = "DuckDB local cache + Lance/R2 storage for Zenith documentation lake"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -15,3 +15,4 @@ pub mod research;
 pub mod session;
 pub mod study;
 pub mod task;
+pub mod whats_next;
