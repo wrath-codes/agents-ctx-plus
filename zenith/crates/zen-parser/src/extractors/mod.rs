@@ -7,11 +7,11 @@ pub mod dispatcher;
 pub mod elixir;
 pub mod go;
 pub(crate) mod helpers;
-pub mod html;
 pub mod javascript;
 pub mod tsx;
 pub mod typescript;
 
 pub use dispatcher::bash;
+pub use dispatcher::html;
 pub use dispatcher::python;
 pub use dispatcher::rust;
