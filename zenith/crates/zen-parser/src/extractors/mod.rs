@@ -9,9 +9,9 @@ pub mod go;
 pub(crate) mod helpers;
 pub mod html;
 pub mod javascript;
-pub mod python;
-pub mod rust;
 pub mod tsx;
 pub mod typescript;
 
 pub use dispatcher::bash;
+pub use dispatcher::python;
+pub use dispatcher::rust;
