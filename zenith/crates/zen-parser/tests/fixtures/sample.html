@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A sample page for testing.">
+    <title>Sample App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="favicon.ico">
+    <script src="vendor.js"></script>
+    <script type="module" src="app.js"></script>
+</head>
+<body>
+    <header id="main-header" class="site-header sticky">
+        <nav id="main-nav" class="navbar" role="navigation">
+            <a href="/" class="logo">Home</a>
+            <ul class="nav-links">
+                <li><a href="/about">About</a></li>
+                <li><a href="/contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main id="content">
+        <section id="hero" class="hero-section full-width">
+            <h1>Welcome to Sample App</h1>
+            <p>This is a demo page.</p>
+        </section>
+
+        <section id="features">
+            <article id="feature-1" class="feature-card" data-category="core">
+                <h2>Feature One</h2>
+                <p>Description of feature one.</p>
+            </article>
+            <article id="feature-2" class="feature-card" data-category="extra">
+                <h2>Feature Two</h2>
+                <p>Description of feature two.</p>
+            </article>
+        </section>
+
+        <form id="contact-form" action="/api/contact" method="POST" class="form-styled">
+            <label for="name-input">Name</label>
+            <input type="text" id="name-input" name="name" required placeholder="Your name">
+            <label for="email-input">Email</label>
+            <input type="email" id="email-input" name="email" required>
+            <textarea id="message-input" name="message" rows="4"></textarea>
+            <button type="submit" id="submit-btn" class="btn primary">Send</button>
+        </form>
+
+        <template id="card-template">
+            <div class="card">
+                <slot name="header"></slot>
+                <slot></slot>
+            </div>
+        </template>
+
+        <details id="faq-section">
+            <summary>Frequently Asked Questions</summary>
+            <p>Here are some answers.</p>
+        </details>
+
+        <dialog id="confirm-dialog" class="modal">
+            <p>Are you sure?</p>
+            <button id="confirm-yes">Yes</button>
+            <button id="confirm-no">No</button>
+        </dialog>
+    </main>
+
+    <aside id="sidebar" class="sidebar-panel">
+        <h3>Related Links</h3>
+    </aside>
+
+    <table id="data-table" class="striped">
+        <thead><tr><th>Name</th><th>Value</th></tr></thead>
+        <tbody><tr><td>Alpha</td><td>1</td></tr></tbody>
+    </table>
+
+    <iframe id="embed-frame" src="https://example.com" width="600" height="400"></iframe>
+    <object id="flash-obj" data="animation.swf" type="application/x-shockwave-flash"></object>
+    <embed id="pdf-embed" src="document.pdf" type="application/pdf">
+
+    <video id="intro-video" src="intro.mp4" controls autoplay></video>
+    <audio id="bg-music" src="background.mp3" loop></audio>
+    <picture id="hero-picture">
+        <source srcset="hero-large.webp" media="(min-width: 800px)">
+        <img src="hero-small.jpg" alt="Hero">
+    </picture>
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+
+    <fieldset id="preferences" class="pref-group">
+        <legend>Preferences</legend>
+        <label><input type="checkbox" name="dark-mode"> Dark Mode</label>
+    </fieldset>
+    <select id="country-select" name="country">
+        <option value="us">United States</option>
+        <option value="uk">United Kingdom</option>
+    </select>
+    <output id="calc-result" for="num1 num2">0</output>
+
+    <slot name="sidebar-content"></slot>
+
+    <my-component data-id="123" slot="main"></my-component>
+    <x-modal open title="Greeting">
+        <p>Hello from custom element</p>
+    </x-modal>
+    <app-header theme="dark" sticky></app-header>
+
+    <footer id="main-footer" class="site-footer">
+        <p>&copy; 2026 Sample App</p>
+    </footer>
+
+    <script type="module">
+        import { init } from './app.js';
+        init();
+    </script>
+</body>
+</html>

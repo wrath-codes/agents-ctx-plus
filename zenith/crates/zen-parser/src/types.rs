@@ -34,6 +34,7 @@ pub enum SymbolKind {
     Macro,
     Module,
     Union,
+    Component,
 }
 
 impl std::fmt::Display for SymbolKind {
@@ -52,6 +53,7 @@ impl std::fmt::Display for SymbolKind {
             Self::Macro => "macro",
             Self::Module => "module",
             Self::Union => "union",
+            Self::Component => "component",
         };
         write!(f, "{s}")
     }
@@ -131,6 +133,35 @@ pub struct SymbolMetadata {
     // Error detection
     pub is_error_type: bool,
     pub returns_result: bool,
+
+    // HTML-specific
+    pub tag_name: Option<String>,
+    pub element_id: Option<String>,
+    pub class_names: Vec<String>,
+    pub html_attributes: Vec<(String, Option<String>)>,
+    pub is_custom_element: bool,
+    pub is_self_closing: bool,
+
+    // CSS-specific
+    pub selector: Option<String>,
+    pub media_query: Option<String>,
+    pub at_rule_name: Option<String>,
+    pub css_properties: Vec<String>,
+    pub is_custom_property: bool,
+
+    // TSX/React-specific
+    pub is_component: bool,
+    pub is_hook: bool,
+    pub is_hoc: bool,
+    pub is_forward_ref: bool,
+    pub is_memo: bool,
+    pub is_lazy: bool,
+    pub is_class_component: bool,
+    pub is_error_boundary: bool,
+    pub component_directive: Option<String>,
+    pub props_type: Option<String>,
+    pub hooks_used: Vec<String>,
+    pub jsx_elements: Vec<String>,
 }
 
 /// Parsed documentation sections from doc comments/docstrings.

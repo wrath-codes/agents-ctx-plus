@@ -1,0 +1,365 @@
+/* CSS sample fixture for zen-parser extractor tests */
+
+/* ── Imports ──────────────────────────────────────────── */
+@import url('reset.css');
+@import url('theme/dark.css');
+
+/* ── Charset ──────────────────────────────────────────── */
+@charset "UTF-8";
+
+/* ── Namespace ────────────────────────────────────────── */
+@namespace svg url(http://www.w3.org/2000/svg);
+
+/* ── Custom Properties (CSS Variables) ────────────────── */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 2rem;
+    --font-family: 'Inter', sans-serif;
+    --border-radius: 4px;
+}
+
+/* ── Element Selectors ────────────────────────────────── */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-family);
+    background-color: #f5f5f5;
+}
+
+h1 {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+/* ── Class Selectors ──────────────────────────────────── */
+.card {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: var(--spacing-md);
+}
+
+.card__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-sm);
+}
+
+.card__body {
+    flex: 1;
+    line-height: 1.6;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.btn--primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn--secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+/* ── ID Selectors ─────────────────────────────────────── */
+#main-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#sidebar {
+    width: 280px;
+    min-height: 100vh;
+    background: #fafafa;
+}
+
+#content-area {
+    flex: 1;
+    padding: var(--spacing-lg);
+}
+
+/* ── Pseudo-classes ───────────────────────────────────── */
+a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.btn:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+input:invalid {
+    border-color: #e74c3c;
+}
+
+li:nth-child(odd) {
+    background-color: #f9f9f9;
+}
+
+/* ── Pseudo-elements ──────────────────────────────────── */
+p::first-line {
+    font-weight: bold;
+}
+
+.tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* ── Combinator Selectors ─────────────────────────────── */
+.parent .child {
+    color: inherit;
+}
+
+.parent > .direct-child {
+    margin-left: 1rem;
+}
+
+.sibling + .adjacent {
+    margin-top: 0;
+}
+
+.sibling ~ .general {
+    opacity: 0.8;
+}
+
+/* ── Multiple Selectors ───────────────────────────────── */
+h1, h2, h3, h4 {
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* ── @media Queries ───────────────────────────────────── */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+    .card {
+        padding: var(--spacing-sm);
+    }
+}
+
+@media (min-width: 1200px) {
+    .container {
+        max-width: 1140px;
+        margin: 0 auto;
+    }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        font-size: 12pt;
+    }
+}
+
+/* ── @keyframes ───────────────────────────────────────── */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* ── @font-face ───────────────────────────────────────── */
+@font-face {
+    font-family: 'CustomFont';
+    src: url('fonts/custom.woff2') format('woff2'),
+         url('fonts/custom.woff') format('woff');
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'CustomFont';
+    src: url('fonts/custom-bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+}
+
+/* ── @layer ────────────────────────────────────────────── */
+@layer base {
+    * {
+        box-sizing: border-box;
+    }
+    body {
+        line-height: 1.5;
+    }
+}
+
+@layer utilities {
+    .text-center {
+        text-align: center;
+    }
+    .hidden {
+        display: none;
+    }
+}
+
+/* ── @container ────────────────────────────────────────── */
+@container sidebar (min-width: 400px) {
+    .sidebar-widget {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ── @supports ─────────────────────────────────────────── */
+@supports (display: grid) {
+    .layout {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: var(--spacing-md);
+    }
+}
+
+@supports (backdrop-filter: blur(10px)) {
+    .glass {
+        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.7);
+    }
+}
+
+/* ── Complex selectors ────────────────────────────────── */
+.card:hover .card__title {
+    color: var(--primary-color);
+}
+
+[data-theme="dark"] .card {
+    background: #1a1a2e;
+    color: #eee;
+}
+
+.form-group > label + input {
+    margin-top: 4px;
+}
+
+/* ── Attribute selectors ──────────────────────────────── */
+[data-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+a[href^="https"] {
+    padding-right: 1.2em;
+}
+
+input[type="email"] {
+    width: 100%;
+}
+
+/* ── Universal selector ───────────────────────────────── */
+* {
+    box-sizing: border-box;
+}
+
+/* ── Modern pseudo-functions ──────────────────────────── */
+:is(h1, h2, h3) {
+    font-weight: bold;
+}
+
+:where(.card, .panel) {
+    padding: 1rem;
+}
+
+article:has(> img) {
+    display: grid;
+}
+
+:not(.active) {
+    opacity: 0.5;
+}
+
+/* ── Native CSS nesting ───────────────────────────────── */
+.nav {
+    background: white;
+    & .nav__link {
+        color: var(--primary-color);
+    }
+    &:hover {
+        background: #f0f0f0;
+    }
+}
+
+/* ── @page ────────────────────────────────────────────── */
+@page {
+    margin: 2cm;
+}
+
+/* ── @property (Houdini) ──────────────────────────────── */
+@property --gradient-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+/* ── @counter-style ───────────────────────────────────── */
+@counter-style thumbs {
+    system: cyclic;
+    symbols: "\1F44D";
+    suffix: " ";
+}
+
+/* ── @scope ───────────────────────────────────────────── */
+@scope (.card) to (.card__body) {
+    p {
+        color: inherit;
+    }
+}
+
+@scope (.hero) {
+    h1 {
+        font-size: 3rem;
+    }
+}
+
+/* ── @starting-style ──────────────────────────────────── */
+@starting-style {
+    .fade-in {
+        opacity: 0;
+    }
+}
