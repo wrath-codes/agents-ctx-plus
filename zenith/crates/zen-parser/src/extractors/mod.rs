@@ -5,7 +5,6 @@ pub mod cpp;
 pub mod dispatcher;
 pub(crate) mod helpers;
 pub mod tsx;
-pub mod typescript;
 
 pub use dispatcher::bash;
 pub use dispatcher::css;
@@ -15,3 +14,4 @@ pub use dispatcher::html;
 pub use dispatcher::javascript;
 pub use dispatcher::python;
 pub use dispatcher::rust;
+pub use dispatcher::typescript;
