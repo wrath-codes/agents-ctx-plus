@@ -36,6 +36,8 @@ pub struct WhatsNextResponse {
 pub struct SearchResult {
     pub package: String,
     pub ecosystem: String,
+    /// Symbol kind emitted by `zen-parser` (`snake_case`), for example
+    /// `function`, `method`, `constructor`, `field`, `property`, `event`, `indexer`.
     pub kind: String,
     pub name: String,
     pub signature: Option<String>,

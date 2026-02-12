@@ -332,6 +332,22 @@ roundtrip_and_validate!(
     }
 );
 
+roundtrip_and_validate!(
+    search_result_member_kind_roundtrip,
+    SearchResult,
+    SearchResult {
+        package: "react".into(),
+        ecosystem: "npm".into(),
+        kind: "property".into(),
+        name: "Component::props".into(),
+        signature: Some("readonly props: Props".into()),
+        doc_comment: Some("Component properties.".into()),
+        file_path: Some("src/component.tsx".into()),
+        line_start: Some(12),
+        score: 0.84,
+    }
+);
+
 // --- Audit detail types ---
 
 roundtrip_and_validate!(

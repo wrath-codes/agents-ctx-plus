@@ -47,6 +47,17 @@ mod tests {
         max_total_bytes: usize,
     }
 
+    fn is_type_like_kind(kind: &str) -> bool {
+        matches!(
+            kind,
+            "struct" | "enum" | "trait" | "class" | "interface" | "union"
+        )
+    }
+
+    fn is_callable_kind(kind: &str) -> bool {
+        matches!(kind, "function" | "method" | "constructor")
+    }
+
     fn require_arrow_root() -> PathBuf {
         let root = PathBuf::from(ARROW_ROOT);
         assert!(
@@ -832,13 +843,13 @@ mod tests {
         let mut fn_hits = Vec::new();
         for h in hits {
             match h.kind.as_str() {
-                "struct" | "enum" | "trait" => {
+                k if is_type_like_kind(k) => {
                     let d = h.doc.to_lowercase();
                     if d.contains("invariant") || d.contains("safety") || d.contains("panic") {
                         type_hits.push(h);
                     }
                 }
-                "function" => {
+                k if is_callable_kind(k) => {
                     let d = h.doc.to_lowercase();
                     if d.contains("panic") || d.contains("safe") || d.contains("invariant") {
                         fn_hits.push(h);
@@ -1134,12 +1145,12 @@ mod tests {
 
         let type_hits: Vec<SymbolHit> = hits
             .iter()
-            .filter(|h| matches!(h.kind.as_str(), "struct" | "enum" | "trait"))
+            .filter(|h| is_type_like_kind(h.kind.as_str()))
             .cloned()
             .collect();
         let fn_hits: Vec<SymbolHit> = hits
             .iter()
-            .filter(|h| h.kind == "function")
+            .filter(|h| is_callable_kind(h.kind.as_str()))
             .cloned()
             .collect();
 

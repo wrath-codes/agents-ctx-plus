@@ -53,6 +53,31 @@ mod tests {
     use std::path::Path;
     use tempfile::TempDir;
 
+    fn is_supported_symbol_kind(kind: &str) -> bool {
+        matches!(
+            kind,
+            "function"
+                | "method"
+                | "constructor"
+                | "field"
+                | "property"
+                | "event"
+                | "indexer"
+                | "struct"
+                | "enum"
+                | "trait"
+                | "interface"
+                | "class"
+                | "type_alias"
+                | "const"
+                | "static"
+                | "macro"
+                | "module"
+                | "union"
+                | "component"
+        )
+    }
+
     // =========================================================================
     // Section 1: grep crate — RegexMatcher + Searcher + Sink
     // =========================================================================
@@ -1491,10 +1516,12 @@ impl Runtime {
                 hit.line_no,
                 hit.symbol_name
             );
-            assert_eq!(
-                hit.symbol_kind.as_deref(),
-                Some("function"),
-                "All symbols in our test data are functions"
+            assert!(
+                hit.symbol_kind
+                    .as_deref()
+                    .is_some_and(is_supported_symbol_kind),
+                "symbol_kind should be a supported API kind, got {:?}",
+                hit.symbol_kind
             );
         }
 
@@ -1538,7 +1565,11 @@ impl Runtime {
         );
         // Verify spawn_blocking hits have the right kind
         for hit in &spawn_blocking_hits {
-            assert_eq!(hit.symbol_kind.as_deref(), Some("function"));
+            assert!(
+                hit.symbol_kind
+                    .as_deref()
+                    .is_some_and(is_supported_symbol_kind)
+            );
             assert!(hit.line_text.contains("spawn"));
         }
     }
