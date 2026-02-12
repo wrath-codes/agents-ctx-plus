@@ -9,6 +9,7 @@ pub use dispatcher::csharp;
 pub use dispatcher::css;
 pub use dispatcher::elixir;
 pub use dispatcher::go;
+pub use dispatcher::haskell;
 pub use dispatcher::html;
 pub use dispatcher::javascript;
 pub use dispatcher::python;

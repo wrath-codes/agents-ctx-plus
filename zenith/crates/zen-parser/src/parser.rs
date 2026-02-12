@@ -97,6 +97,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_haskell() {
+        assert_eq!(detect_language("Main.hs"), Some(SupportLang::Haskell));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

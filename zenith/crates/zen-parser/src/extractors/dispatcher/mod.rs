@@ -5,6 +5,7 @@ pub mod csharp;
 pub mod css;
 pub mod elixir;
 pub mod go;
+pub mod haskell;
 pub mod html;
 pub mod javascript;
 pub mod python;
