@@ -43,3 +43,19 @@ fn find_by_name_prefix<'a>(items: &'a [ParsedItem], prefix: &str) -> &'a ParsedI
             panic!("item starting with '{prefix}' not found. Available: {names:?}")
         })
 }
+
+#[test]
+fn bash_does_not_emit_member_only_kinds() {
+    let source = "#!/usr/bin/env bash\nvalue=1\nrun() { echo hi; }\n";
+    let items = parse_and_extract(source);
+    assert!(items.iter().all(|item| {
+        !matches!(
+            item.kind,
+            SymbolKind::Constructor
+                | SymbolKind::Field
+                | SymbolKind::Property
+                | SymbolKind::Event
+                | SymbolKind::Indexer
+        )
+    }));
+}

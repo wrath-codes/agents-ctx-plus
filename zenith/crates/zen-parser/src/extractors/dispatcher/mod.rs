@@ -10,3 +10,6 @@ pub mod python;
 pub mod rust;
 pub mod tsx;
 pub mod typescript;
+
+#[cfg(test)]
+mod conformance;

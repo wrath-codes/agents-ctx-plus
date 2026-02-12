@@ -1,5 +1,3 @@
-#![allow(clippy::field_reassign_with_default)]
-
 //! Class processing: class definitions, members, nested types, access specifiers.
 
 use ast_grep_core::Node;
@@ -178,10 +176,12 @@ fn push_cpp_member_item<D: ast_grep_core::Doc>(
         SymbolKind::Field
     };
 
-    let mut metadata = SymbolMetadata::default();
-    metadata.owner_name = Some(class_name.to_string());
-    metadata.owner_kind = Some(SymbolKind::Class);
-    metadata.is_static_member = node.children().any(|c| c.text().as_ref() == "static");
+    let metadata = SymbolMetadata {
+        owner_name: Some(class_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        is_static_member: node.children().any(|c| c.text().as_ref() == "static"),
+        ..Default::default()
+    };
 
     items.push(ParsedItem {
         kind,

@@ -412,6 +412,12 @@ fn constructor_and_property_member_items_emitted() {
 
     let prop = find_by_name(&items, "PropertyExample::value");
     assert_eq!(prop.kind, SymbolKind::Property);
+
+    let property_count = items
+        .iter()
+        .filter(|i| i.kind == SymbolKind::Property && i.name == "PropertyExample::value")
+        .count();
+    assert_eq!(property_count, 1, "property items should be deduplicated");
 }
 
 // ── Visibility example class ───────────────────────────────────

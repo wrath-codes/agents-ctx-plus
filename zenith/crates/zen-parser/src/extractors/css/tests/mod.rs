@@ -30,3 +30,19 @@ fn find_all_by_at_rule<'a>(items: &'a [ParsedItem], rule: &str) -> Vec<&'a Parse
         .filter(|i| i.metadata.at_rule_name.as_deref() == Some(rule))
         .collect()
 }
+
+#[test]
+fn css_does_not_emit_member_only_kinds() {
+    let items =
+        parse_and_extract(".card { color: red; }\n@media screen { .card { display: block; } }");
+    assert!(items.iter().all(|item| {
+        !matches!(
+            item.kind,
+            SymbolKind::Constructor
+                | SymbolKind::Field
+                | SymbolKind::Property
+                | SymbolKind::Event
+                | SymbolKind::Indexer
+        )
+    }));
+}

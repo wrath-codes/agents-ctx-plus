@@ -89,3 +89,19 @@ fn constructor_and_property_emitted_as_members() {
         .expect("should emit Animal displayName property member");
     assert_eq!(prop.kind, SymbolKind::Property);
 }
+
+#[test]
+fn getter_and_setter_emit_single_property_item() {
+    let source = r#"
+class Sample {
+  get title() { return "a"; }
+  set title(v) {}
+}
+"#;
+    let items = parse_and_extract(source);
+    let title_props: Vec<_> = items
+        .iter()
+        .filter(|i| i.kind == SymbolKind::Property && i.name == "title")
+        .collect();
+    assert_eq!(title_props.len(), 1, "property items: {title_props:?}");
+}

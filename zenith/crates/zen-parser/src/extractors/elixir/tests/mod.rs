@@ -41,3 +41,19 @@ fn find_all_by_name<'a>(items: &'a [ParsedItem], name: &str) -> Vec<&'a ParsedIt
 }
 
 // ── Module extraction ──────────────────────────────────────────
+
+#[test]
+fn elixir_does_not_emit_member_only_kinds() {
+    let source = "defmodule Demo do\n  def run, do: :ok\nend\n";
+    let items = parse_and_extract(source);
+    assert!(items.iter().all(|item| {
+        !matches!(
+            item.kind,
+            SymbolKind::Constructor
+                | SymbolKind::Field
+                | SymbolKind::Property
+                | SymbolKind::Event
+                | SymbolKind::Indexer
+        )
+    }));
+}

@@ -39,3 +39,20 @@ fn interface_member_items_emitted() {
     let name = find_by_name(&items, "Handler::name");
     assert_eq!(name.kind, SymbolKind::Property);
 }
+
+#[test]
+fn interface_indexer_and_event_members_emitted() {
+    let source = r"
+interface Bus {
+  onMessage: (ev: MessageEvent) => void;
+  [key: string]: unknown;
+}
+";
+    let items = parse_and_extract(source);
+
+    let event_member = find_by_name(&items, "Bus::onMessage");
+    assert_eq!(event_member.kind, SymbolKind::Event);
+
+    let indexer = find_by_name(&items, "Bus[]");
+    assert_eq!(indexer.kind, SymbolKind::Indexer);
+}

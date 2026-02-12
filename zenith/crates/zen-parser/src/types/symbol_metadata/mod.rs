@@ -27,8 +27,11 @@ pub struct SymbolMetadata {
     pub generics: Option<String>,
     pub attributes: Vec<String>,
     pub parameters: Vec<String>,
+    /// Parent symbol name for member-level items (for example `MyType`).
     pub owner_name: Option<String>,
+    /// Parent symbol kind for member-level items (for example `Class`).
     pub owner_kind: Option<SymbolKind>,
+    /// Whether the member declaration is static in its owner context.
     pub is_static_member: bool,
 
     // Rust-specific

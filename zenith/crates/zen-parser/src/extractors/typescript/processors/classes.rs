@@ -1,10 +1,5 @@
-#![allow(
-    clippy::field_reassign_with_default,
-    clippy::uninlined_format_args,
-    clippy::useless_let_if_seq
-)]
-
 use ast_grep_core::Node;
+use std::collections::HashSet;
 
 use crate::extractors::helpers;
 use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, TypeScriptMetadataExt, Visibility};
@@ -93,92 +88,166 @@ pub fn process_class_members<D: ast_grep_core::Doc>(
     };
 
     let mut items = Vec::new();
+    let mut seen = HashSet::new();
     for child in body.children() {
         match child.kind().as_ref() {
             "method_definition" | "abstract_method_signature" | "abstract_method_definition" => {
-                if let Some(name_node) = child.field("name") {
-                    let name = name_node.text().to_string();
-                    let mut kind = if name == "constructor" {
-                        SymbolKind::Constructor
-                    } else {
-                        SymbolKind::Method
-                    };
-                    if child
-                        .children()
-                        .any(|c| c.kind().as_ref() == "get" || c.kind().as_ref() == "set")
-                    {
-                        kind = SymbolKind::Property;
-                    }
-
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.clone());
-                    metadata.owner_kind = Some(SymbolKind::Class);
-                    metadata.is_static_member =
-                        child.children().any(|c| c.kind().as_ref() == "static");
-
-                    items.push(ParsedItem {
-                        kind,
-                        name,
-                        signature: helpers::extract_signature(&child),
-                        source: helpers::extract_source(&child, 30),
-                        doc_comment: String::new(),
-                        start_line: child.start_pos().line() as u32 + 1,
-                        end_line: child.end_pos().line() as u32 + 1,
-                        visibility: visibility.clone(),
-                        metadata,
-                    });
+                if let Some(item) =
+                    build_ts_class_callable_member(&child, &owner_name, &visibility, &mut seen)
+                {
+                    items.push(item);
                 }
             }
             "public_field_definition" => {
-                if let Some(name_node) = child.field("name") {
-                    let name = name_node.text().to_string();
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.clone());
-                    metadata.owner_kind = Some(SymbolKind::Class);
-                    metadata.is_static_member =
-                        child.children().any(|c| c.kind().as_ref() == "static");
-
-                    let kind = if child.children().any(|c| c.kind().as_ref() == "readonly") {
-                        SymbolKind::Property
-                    } else {
-                        SymbolKind::Field
-                    };
-
-                    items.push(ParsedItem {
-                        kind,
-                        name,
-                        signature: helpers::extract_signature(&child),
-                        source: helpers::extract_source(&child, 20),
-                        doc_comment: String::new(),
-                        start_line: child.start_pos().line() as u32 + 1,
-                        end_line: child.end_pos().line() as u32 + 1,
-                        visibility: visibility.clone(),
-                        metadata,
-                    });
+                if let Some(item) =
+                    build_ts_class_field_member(&child, &owner_name, &visibility, &mut seen)
+                {
+                    items.push(item);
                 }
             }
             "index_signature" => {
-                let mut metadata = SymbolMetadata::default();
-                metadata.owner_name = Some(owner_name.clone());
-                metadata.owner_kind = Some(SymbolKind::Class);
-
-                items.push(ParsedItem {
-                    kind: SymbolKind::Indexer,
-                    name: format!("{}[]", owner_name),
-                    signature: helpers::extract_signature(&child),
-                    source: helpers::extract_source(&child, 10),
-                    doc_comment: String::new(),
-                    start_line: child.start_pos().line() as u32 + 1,
-                    end_line: child.end_pos().line() as u32 + 1,
-                    visibility: visibility.clone(),
-                    metadata,
-                });
+                if let Some(item) =
+                    build_ts_class_indexer_member(&child, &owner_name, &visibility, &mut seen)
+                {
+                    items.push(item);
+                }
             }
             _ => {}
         }
     }
 
     items
+}
+
+fn build_ts_class_callable_member<D: ast_grep_core::Doc>(
+    child: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let name = child.field("name").map(|n| n.text().to_string())?;
+    let is_accessor = child
+        .children()
+        .any(|c| c.kind().as_ref() == "get" || c.kind().as_ref() == "set");
+    let kind = if is_accessor {
+        SymbolKind::Property
+    } else if name == "constructor" {
+        SymbolKind::Constructor
+    } else {
+        SymbolKind::Method
+    };
+    let dedupe_key = if kind == SymbolKind::Property {
+        format!("property:{owner_name}:{name}")
+    } else {
+        format!(
+            "{}:{owner_name}:{name}:{}",
+            kind,
+            child.start_pos().line() as u32 + 1
+        )
+    };
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        is_static_member: child.children().any(|c| c.kind().as_ref() == "static"),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind,
+        name,
+        signature: helpers::extract_signature(child),
+        source: helpers::extract_source(child, 30),
+        doc_comment: String::new(),
+        start_line: child.start_pos().line() as u32 + 1,
+        end_line: child.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
+}
+
+fn build_ts_class_field_member<D: ast_grep_core::Doc>(
+    child: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let name = child.field("name").map(|n| n.text().to_string())?;
+    let kind = if is_event_like_member(&name, child) {
+        SymbolKind::Event
+    } else if child.children().any(|c| c.kind().as_ref() == "readonly") {
+        SymbolKind::Property
+    } else {
+        SymbolKind::Field
+    };
+    let dedupe_key = format!("{kind}:{owner_name}:{name}");
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        is_static_member: child.children().any(|c| c.kind().as_ref() == "static"),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind,
+        name,
+        signature: helpers::extract_signature(child),
+        source: helpers::extract_source(child, 20),
+        doc_comment: String::new(),
+        start_line: child.start_pos().line() as u32 + 1,
+        end_line: child.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
+}
+
+fn build_ts_class_indexer_member<D: ast_grep_core::Doc>(
+    child: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let dedupe_key = format!("indexer:{owner_name}");
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind: SymbolKind::Indexer,
+        name: format!("{owner_name}[]"),
+        signature: helpers::extract_signature(child),
+        source: helpers::extract_source(child, 10),
+        doc_comment: String::new(),
+        start_line: child.start_pos().line() as u32 + 1,
+        end_line: child.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
+}
+
+fn is_event_like_member<D: ast_grep_core::Doc>(name: &str, node: &Node<D>) -> bool {
+    if name.len() > 2
+        && name.starts_with("on")
+        && name.chars().nth(2).is_some_and(|c| c.is_ascii_uppercase())
+    {
+        return true;
+    }
+
+    node.children()
+        .any(|child| child.kind().as_ref() == "type_annotation" && child.text().contains("Event"))
 }
 
 fn extract_class_heritage<D: ast_grep_core::Doc>(node: &Node<D>, clause_kind: &str) -> Vec<String> {

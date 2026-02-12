@@ -56,31 +56,42 @@ impl std::fmt::Display for SymbolKind {
 mod tests {
     use super::SymbolKind;
 
+    const KIND_CASES: &[(SymbolKind, &str)] = &[
+        (SymbolKind::Function, "function"),
+        (SymbolKind::Method, "method"),
+        (SymbolKind::Constructor, "constructor"),
+        (SymbolKind::Struct, "struct"),
+        (SymbolKind::Enum, "enum"),
+        (SymbolKind::Trait, "trait"),
+        (SymbolKind::Interface, "interface"),
+        (SymbolKind::Class, "class"),
+        (SymbolKind::TypeAlias, "type_alias"),
+        (SymbolKind::Const, "const"),
+        (SymbolKind::Static, "static"),
+        (SymbolKind::Field, "field"),
+        (SymbolKind::Property, "property"),
+        (SymbolKind::Event, "event"),
+        (SymbolKind::Indexer, "indexer"),
+        (SymbolKind::Macro, "macro"),
+        (SymbolKind::Module, "module"),
+        (SymbolKind::Union, "union"),
+        (SymbolKind::Component, "component"),
+    ];
+
     #[test]
     fn display_matches_snake_case() {
-        assert_eq!(SymbolKind::Function.to_string(), "function");
-        assert_eq!(SymbolKind::Method.to_string(), "method");
-        assert_eq!(SymbolKind::Constructor.to_string(), "constructor");
-        assert_eq!(SymbolKind::Field.to_string(), "field");
-        assert_eq!(SymbolKind::Property.to_string(), "property");
-        assert_eq!(SymbolKind::Event.to_string(), "event");
-        assert_eq!(SymbolKind::Indexer.to_string(), "indexer");
+        for (kind, expected) in KIND_CASES {
+            assert_eq!(kind.to_string(), *expected);
+        }
     }
 
     #[test]
-    fn serde_roundtrip_for_new_variants() {
-        let variants = [
-            SymbolKind::Constructor,
-            SymbolKind::Field,
-            SymbolKind::Property,
-            SymbolKind::Event,
-            SymbolKind::Indexer,
-        ];
-
-        for variant in variants {
-            let json = serde_json::to_string(&variant).expect("serialize kind");
+    fn serde_roundtrip_for_all_variants() {
+        for (kind, expected) in KIND_CASES {
+            let json = serde_json::to_string(kind).expect("serialize kind");
+            assert_eq!(json, format!("\"{expected}\""));
             let parsed: SymbolKind = serde_json::from_str(&json).expect("deserialize kind");
-            assert_eq!(parsed, variant);
+            assert_eq!(parsed, *kind);
         }
     }
 }

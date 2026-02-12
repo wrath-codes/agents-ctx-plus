@@ -29,3 +29,18 @@ fn find_all_by_tag<'a>(items: &'a [ParsedItem], tag: &str) -> Vec<&'a ParsedItem
         .filter(|i| i.metadata.tag_name.as_deref() == Some(tag))
         .collect()
 }
+
+#[test]
+fn html_does_not_emit_member_only_kinds() {
+    let items = parse_and_extract("<div id=\"app\"><button>Run</button></div>");
+    assert!(items.iter().all(|item| {
+        !matches!(
+            item.kind,
+            SymbolKind::Constructor
+                | SymbolKind::Field
+                | SymbolKind::Property
+                | SymbolKind::Event
+                | SymbolKind::Indexer
+        )
+    }));
+}

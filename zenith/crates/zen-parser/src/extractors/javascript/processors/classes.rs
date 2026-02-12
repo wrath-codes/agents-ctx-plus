@@ -1,6 +1,5 @@
-#![allow(clippy::field_reassign_with_default, clippy::useless_let_if_seq)]
-
 use ast_grep_core::Node;
+use std::collections::HashSet;
 
 use crate::extractors::helpers;
 use crate::types::{JavaScriptMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
@@ -71,6 +70,7 @@ pub fn process_class_members<D: ast_grep_core::Doc>(
     };
 
     let mut members = Vec::new();
+    let mut seen = HashSet::new();
     let visibility = if is_exported {
         Visibility::Export
     } else {
@@ -82,29 +82,44 @@ pub fn process_class_members<D: ast_grep_core::Doc>(
             "method_definition" => {
                 if let Some(name_node) = child.field("name") {
                     let name = name_node.text().to_string();
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.clone());
-                    metadata.owner_kind = Some(SymbolKind::Class);
-                    metadata.is_static_member =
-                        child.children().any(|c| c.kind().as_ref() == "static");
-                    metadata.parameters = child
+                    let is_static_member = child.children().any(|c| c.kind().as_ref() == "static");
+                    let parameters = child
                         .children()
                         .find(|c| c.kind().as_ref() == "formal_parameters")
                         .map(|p| extract_js_parameters(&p))
                         .unwrap_or_default();
+                    let is_accessor = child
+                        .children()
+                        .any(|c| c.kind().as_ref() == "get" || c.kind().as_ref() == "set");
 
-                    let mut kind = if name == "constructor" {
+                    let kind = if is_accessor {
+                        SymbolKind::Property
+                    } else if name == "constructor" {
                         SymbolKind::Constructor
                     } else {
                         SymbolKind::Method
                     };
 
-                    if child
-                        .children()
-                        .any(|c| c.kind().as_ref() == "get" || c.kind().as_ref() == "set")
-                    {
-                        kind = SymbolKind::Property;
+                    let dedupe_key = if kind == SymbolKind::Property {
+                        format!("property:{owner_name}:{name}")
+                    } else {
+                        format!(
+                            "{}:{owner_name}:{name}:{}",
+                            kind,
+                            child.start_pos().line() as u32 + 1
+                        )
+                    };
+                    if !seen.insert(dedupe_key) {
+                        continue;
                     }
+
+                    let metadata = SymbolMetadata {
+                        owner_name: Some(owner_name.clone()),
+                        owner_kind: Some(SymbolKind::Class),
+                        is_static_member,
+                        parameters,
+                        ..Default::default()
+                    };
 
                     members.push(ParsedItem {
                         kind,
@@ -122,11 +137,16 @@ pub fn process_class_members<D: ast_grep_core::Doc>(
             "public_field_definition" | "field_definition" => {
                 if let Some(name_node) = child.field("name") {
                     let name = name_node.text().to_string();
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.clone());
-                    metadata.owner_kind = Some(SymbolKind::Class);
-                    metadata.is_static_member =
-                        child.children().any(|c| c.kind().as_ref() == "static");
+                    let dedupe_key = format!("field:{owner_name}:{name}");
+                    if !seen.insert(dedupe_key) {
+                        continue;
+                    }
+                    let metadata = SymbolMetadata {
+                        owner_name: Some(owner_name.clone()),
+                        owner_kind: Some(SymbolKind::Class),
+                        is_static_member: child.children().any(|c| c.kind().as_ref() == "static"),
+                        ..Default::default()
+                    };
 
                     members.push(ParsedItem {
                         kind: SymbolKind::Field,

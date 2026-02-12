@@ -3,10 +3,11 @@
 //! Extracts from `function_definition`, `class_definition`,
 //! `decorated_definition`, and module-level typed/untyped assignments.
 //!
-//! Walks only top-level children of the module to avoid duplicate extraction
-//! of nested classes and methods (which are captured in class metadata).
+//! Walks only top-level children of the module. Member-level symbols are
+//! emitted from class processors with ownership metadata.
 
 use crate::types::{ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata, Visibility};
+use std::collections::HashSet;
 
 #[path = "../python/doc.rs"]
 mod doc;
@@ -29,8 +30,8 @@ use pyhelpers::{decorator_matches, python_visibility};
 
 /// Extract all API symbols from a Python source file.
 ///
-/// Walks only top-level children of the module root to prevent duplicate
-/// extraction of methods/nested classes (which are captured as class metadata).
+/// Walks only top-level children of the module root. Class processors emit
+/// member-level items and final output is deduplicated before export handling.
 ///
 /// # Errors
 /// Returns `ParserError` if parsing fails.
@@ -84,6 +85,8 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
         }
     }
 
+    dedupe_items(&mut items);
+
     // Apply __all__ export visibility
     if let Some(ref exports) = all_exports {
         for item in &mut items {
@@ -95,6 +98,18 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
     }
 
     Ok(items)
+}
+
+fn dedupe_items(items: &mut Vec<ParsedItem>) {
+    let mut seen = HashSet::new();
+    items.retain(|item| {
+        let key = if item.kind == SymbolKind::Property || item.kind == SymbolKind::Event {
+            format!("{}:{}", item.kind, item.name)
+        } else {
+            format!("{}:{}:{}", item.kind, item.name, item.start_line)
+        };
+        seen.insert(key)
+    });
 }
 
 #[cfg(test)]

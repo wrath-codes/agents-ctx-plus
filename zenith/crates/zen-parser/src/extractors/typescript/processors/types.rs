@@ -1,6 +1,5 @@
-#![allow(clippy::field_reassign_with_default, clippy::uninlined_format_args)]
-
 use ast_grep_core::Node;
+use std::collections::HashSet;
 
 use crate::extractors::helpers;
 use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, TypeScriptMetadataExt, Visibility};
@@ -69,6 +68,7 @@ pub fn process_interface_members<D: ast_grep_core::Doc>(
     };
 
     let mut items = Vec::new();
+    let mut seen = HashSet::new();
     for child in node.children() {
         if child.kind().as_ref() != "interface_body" && child.kind().as_ref() != "object_type" {
             continue;
@@ -77,70 +77,28 @@ pub fn process_interface_members<D: ast_grep_core::Doc>(
         for member in child.children() {
             match member.kind().as_ref() {
                 "method_signature" => {
-                    if let Some(name_node) = member.field("name") {
-                        let mut metadata = SymbolMetadata::default();
-                        metadata.owner_name = Some(owner_name.clone());
-                        metadata.owner_kind = Some(SymbolKind::Interface);
-                        metadata.return_type = extract_ts_return_type(&member);
-                        metadata.parameters = extract_ts_parameters(&member);
-
-                        items.push(ParsedItem {
-                            kind: SymbolKind::Method,
-                            name: format!("{}::{}", owner_name, name_node.text()),
-                            signature: helpers::extract_signature(&member),
-                            source: helpers::extract_source(&member, 10),
-                            doc_comment: String::new(),
-                            start_line: member.start_pos().line() as u32 + 1,
-                            end_line: member.end_pos().line() as u32 + 1,
-                            visibility: visibility.clone(),
-                            metadata,
-                        });
+                    if let Some(item) =
+                        build_interface_method_member(&member, &owner_name, &visibility, &mut seen)
+                    {
+                        items.push(item);
                     }
                 }
                 "property_signature" => {
-                    if let Some(name_node) = member.field("name") {
-                        let mut metadata = SymbolMetadata::default();
-                        metadata.owner_name = Some(owner_name.clone());
-                        metadata.owner_kind = Some(SymbolKind::Interface);
-                        metadata.return_type = member
-                            .children()
-                            .find(|c| c.kind().as_ref() == "type_annotation")
-                            .map(|ta| {
-                                ta.text()
-                                    .to_string()
-                                    .trim_start_matches(':')
-                                    .trim()
-                                    .to_string()
-                            });
-
-                        items.push(ParsedItem {
-                            kind: SymbolKind::Property,
-                            name: format!("{}::{}", owner_name, name_node.text()),
-                            signature: helpers::extract_signature(&member),
-                            source: helpers::extract_source(&member, 10),
-                            doc_comment: String::new(),
-                            start_line: member.start_pos().line() as u32 + 1,
-                            end_line: member.end_pos().line() as u32 + 1,
-                            visibility: visibility.clone(),
-                            metadata,
-                        });
+                    if let Some(item) = build_interface_property_member(
+                        &member,
+                        &owner_name,
+                        &visibility,
+                        &mut seen,
+                    ) {
+                        items.push(item);
                     }
                 }
                 "index_signature" => {
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.clone());
-                    metadata.owner_kind = Some(SymbolKind::Interface);
-                    items.push(ParsedItem {
-                        kind: SymbolKind::Indexer,
-                        name: format!("{}[]", owner_name),
-                        signature: helpers::extract_signature(&member),
-                        source: helpers::extract_source(&member, 10),
-                        doc_comment: String::new(),
-                        start_line: member.start_pos().line() as u32 + 1,
-                        end_line: member.end_pos().line() as u32 + 1,
-                        visibility: visibility.clone(),
-                        metadata,
-                    });
+                    if let Some(item) =
+                        build_interface_indexer_member(&member, &owner_name, &visibility, &mut seen)
+                    {
+                        items.push(item);
+                    }
                 }
                 _ => {}
             }
@@ -148,6 +106,115 @@ pub fn process_interface_members<D: ast_grep_core::Doc>(
     }
 
     items
+}
+
+fn build_interface_method_member<D: ast_grep_core::Doc>(
+    member: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let member_name = member.field("name").map(|n| n.text().to_string())?;
+    let dedupe_key = format!("method:{owner_name}:{member_name}");
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Interface),
+        return_type: extract_ts_return_type(member),
+        parameters: extract_ts_parameters(member),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind: SymbolKind::Method,
+        name: format!("{owner_name}::{member_name}"),
+        signature: helpers::extract_signature(member),
+        source: helpers::extract_source(member, 10),
+        doc_comment: String::new(),
+        start_line: member.start_pos().line() as u32 + 1,
+        end_line: member.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
+}
+
+fn build_interface_property_member<D: ast_grep_core::Doc>(
+    member: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let member_name = member.field("name").map(|n| n.text().to_string())?;
+    let kind = if is_event_like_interface_member(&member_name, member) {
+        SymbolKind::Event
+    } else {
+        SymbolKind::Property
+    };
+    let dedupe_key = format!("{kind}:{owner_name}:{member_name}");
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Interface),
+        return_type: member
+            .children()
+            .find(|c| c.kind().as_ref() == "type_annotation")
+            .map(|ta| {
+                ta.text()
+                    .to_string()
+                    .trim_start_matches(':')
+                    .trim()
+                    .to_string()
+            }),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind,
+        name: format!("{owner_name}::{member_name}"),
+        signature: helpers::extract_signature(member),
+        source: helpers::extract_source(member, 10),
+        doc_comment: String::new(),
+        start_line: member.start_pos().line() as u32 + 1,
+        end_line: member.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
+}
+
+fn build_interface_indexer_member<D: ast_grep_core::Doc>(
+    member: &Node<D>,
+    owner_name: &str,
+    visibility: &Visibility,
+    seen: &mut HashSet<String>,
+) -> Option<ParsedItem> {
+    let dedupe_key = format!("indexer:{owner_name}");
+    if !seen.insert(dedupe_key) {
+        return None;
+    }
+
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Interface),
+        ..Default::default()
+    };
+
+    Some(ParsedItem {
+        kind: SymbolKind::Indexer,
+        name: format!("{owner_name}[]"),
+        signature: helpers::extract_signature(member),
+        source: helpers::extract_source(member, 10),
+        doc_comment: String::new(),
+        start_line: member.start_pos().line() as u32 + 1,
+        end_line: member.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    })
 }
 
 fn extract_interface_heritage<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
@@ -178,6 +245,18 @@ fn extract_interface_members<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<Strin
         }
     }
     members
+}
+
+fn is_event_like_interface_member<D: ast_grep_core::Doc>(name: &str, node: &Node<D>) -> bool {
+    if name.len() > 2
+        && name.starts_with("on")
+        && name.chars().nth(2).is_some_and(|c| c.is_ascii_uppercase())
+    {
+        return true;
+    }
+
+    node.children()
+        .any(|child| child.kind().as_ref() == "type_annotation" && child.text().contains("Event"))
 }
 
 // ── type_alias_declaration ─────────────────────────────────────────

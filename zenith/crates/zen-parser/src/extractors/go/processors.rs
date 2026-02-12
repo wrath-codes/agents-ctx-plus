@@ -1,5 +1,3 @@
-#![allow(clippy::field_reassign_with_default)]
-
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
@@ -115,9 +113,11 @@ fn extract_type_member_items<D: ast_grep_core::Doc>(
         match child.kind().as_ref() {
             "struct_type" => {
                 for field in extract_struct_fields(&child) {
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.to_string());
-                    metadata.owner_kind = Some(owner_kind);
+                    let metadata = SymbolMetadata {
+                        owner_name: Some(owner_name.to_string()),
+                        owner_kind: Some(owner_kind),
+                        ..Default::default()
+                    };
                     items.push(ParsedItem {
                         kind: SymbolKind::Field,
                         name: format!("{owner_name}::{field}"),
@@ -133,9 +133,11 @@ fn extract_type_member_items<D: ast_grep_core::Doc>(
             }
             "interface_type" => {
                 for method in extract_interface_methods(&child) {
-                    let mut metadata = SymbolMetadata::default();
-                    metadata.owner_name = Some(owner_name.to_string());
-                    metadata.owner_kind = Some(owner_kind);
+                    let metadata = SymbolMetadata {
+                        owner_name: Some(owner_name.to_string()),
+                        owner_kind: Some(owner_kind),
+                        ..Default::default()
+                    };
                     items.push(ParsedItem {
                         kind: SymbolKind::Method,
                         name: format!("{owner_name}::{method}"),

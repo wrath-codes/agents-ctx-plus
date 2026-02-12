@@ -9,6 +9,14 @@
 //! - **Generic extractor** (all other built-in languages):
 //!   kind-based extraction capturing function/class/type definitions
 //!
+//! Symbol taxonomy is normalized across extractors:
+//! - top-level callables use `Function`
+//! - member callables use `Method` or `Constructor`
+//! - member data uses `Field`/`Property`/`Event`/`Indexer`
+//!
+//! Member-level symbols should populate `SymbolMetadata::owner_name`,
+//! `SymbolMetadata::owner_kind`, and `SymbolMetadata::is_static_member`.
+//!
 //! Uses a two-tier fallback: ast-grep `KindMatcher` → regex.
 
 pub mod error;

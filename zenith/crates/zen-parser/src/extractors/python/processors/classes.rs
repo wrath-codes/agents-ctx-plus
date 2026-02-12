@@ -1,8 +1,7 @@
-#![allow(clippy::field_reassign_with_default, clippy::uninlined_format_args)]
-
 //! Class definition processing for Python extraction.
 
 use ast_grep_core::Node;
+use std::collections::HashSet;
 
 use crate::extractors::helpers;
 use crate::types::{ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata, Visibility};
@@ -121,11 +120,12 @@ pub fn process_class_member_items<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<
     };
 
     let mut items = Vec::new();
+    let mut seen = HashSet::new();
     for child in body.children() {
         match child.kind().as_ref() {
             "function_definition" => {
                 if let Some(member) = build_function_member_item(&child, &owner_name, &[]) {
-                    items.push(member);
+                    push_member_if_new(&mut items, &mut seen, member);
                 }
             }
             "decorated_definition" => {
@@ -140,12 +140,12 @@ pub fn process_class_member_items<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<
                     && let Some(member) =
                         build_function_member_item(&func, &owner_name, &decorators)
                 {
-                    items.push(member);
+                    push_member_if_new(&mut items, &mut seen, member);
                 }
             }
             "expression_statement" => {
                 if let Some(field_item) = build_field_member_item(&child, &owner_name) {
-                    items.push(field_item);
+                    push_member_if_new(&mut items, &mut seen, field_item);
                 }
             }
             _ => {}
@@ -259,11 +259,13 @@ fn build_function_member_item<D: ast_grep_core::Doc>(
     decorators: &[String],
 ) -> Option<ParsedItem> {
     let name = node.field("name").map(|n| n.text().to_string())?;
-    let mut metadata = SymbolMetadata::default();
-    metadata.owner_name = Some(owner_name.to_string());
-    metadata.owner_kind = Some(SymbolKind::Class);
-    metadata.parameters = super::super::pyhelpers::extract_python_parameters(node);
-    metadata.return_type = node.field("return_type").map(|rt| rt.text().to_string());
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        parameters: super::super::pyhelpers::extract_python_parameters(node),
+        return_type: node.field("return_type").map(|rt| rt.text().to_string()),
+        ..Default::default()
+    };
 
     let kind = if name == "__init__" {
         SymbolKind::Constructor
@@ -278,7 +280,7 @@ fn build_function_member_item<D: ast_grep_core::Doc>(
 
     Some(ParsedItem {
         kind,
-        name: format!("{owner_name}::{}", name),
+        name: format!("{owner_name}::{name}"),
         signature: helpers::extract_signature_python(node),
         source: helpers::extract_source(node, 30),
         doc_comment: extract_docstring(node),
@@ -308,10 +310,12 @@ fn build_field_member_item<D: ast_grep_core::Doc>(
         return None;
     }
 
-    let mut metadata = SymbolMetadata::default();
-    metadata.owner_name = Some(owner_name.to_string());
-    metadata.owner_kind = Some(SymbolKind::Class);
-    metadata.is_static_member = true;
+    let metadata = SymbolMetadata {
+        owner_name: Some(owner_name.to_string()),
+        owner_kind: Some(SymbolKind::Class),
+        is_static_member: true,
+        ..Default::default()
+    };
 
     Some(ParsedItem {
         kind: SymbolKind::Field,
@@ -324,4 +328,15 @@ fn build_field_member_item<D: ast_grep_core::Doc>(
         visibility: Visibility::Private,
         metadata,
     })
+}
+
+fn push_member_if_new(items: &mut Vec<ParsedItem>, seen: &mut HashSet<String>, item: ParsedItem) {
+    let key = if item.kind == SymbolKind::Property {
+        format!("{}:{}", item.kind, item.name)
+    } else {
+        format!("{}:{}:{}", item.kind, item.name, item.start_line)
+    };
+    if seen.insert(key) {
+        items.push(item);
+    }
 }

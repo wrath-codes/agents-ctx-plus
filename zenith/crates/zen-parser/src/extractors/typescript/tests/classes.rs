@@ -71,3 +71,27 @@ fn class_constructor_member_emitted() {
         .expect("should emit HttpError constructor member");
     assert_eq!(ctor.kind, SymbolKind::Constructor);
 }
+
+#[test]
+fn class_event_and_indexer_members_emitted() {
+    let source = r"
+class Store {
+  onChange: (ev: Event) => void;
+  [name: string]: unknown;
+}
+";
+    let items = parse_and_extract(source);
+
+    let event_member = items
+        .iter()
+        .find(|i| {
+            i.kind == SymbolKind::Event
+                && i.metadata.owner_name.as_deref() == Some("Store")
+                && i.name.contains("onChange")
+        })
+        .expect("should emit Store event member");
+    assert_eq!(event_member.kind, SymbolKind::Event);
+
+    let indexer = find_by_name(&items, "Store[]");
+    assert_eq!(indexer.kind, SymbolKind::Indexer);
+}
