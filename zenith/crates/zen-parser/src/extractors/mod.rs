@@ -1,6 +1,7 @@
 //! Extraction orchestrator — two-tier fallback: ast-grep → regex.
 
 pub mod bash;
+pub mod c;
 pub mod css;
 pub mod elixir;
 pub mod go;
