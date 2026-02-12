@@ -9,7 +9,7 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../rust/processors.rs"]
+#[path = "../rust/processors/mod.rs"]
 mod processors;
 
 const RUST_ITEM_KINDS: &[&str] = &[
