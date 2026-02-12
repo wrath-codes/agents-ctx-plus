@@ -9,8 +9,8 @@
 //! - Result ranking and deduplication
 
 #[cfg(test)]
+mod spike_graph_algorithms;
+#[cfg(test)]
 mod spike_grep;
 #[cfg(test)]
 mod spike_recursive_query;
-#[cfg(test)]
-mod spike_graph_algorithms;

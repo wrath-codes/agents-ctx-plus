@@ -10,7 +10,7 @@
 mod tests {
     use ast_grep_core::matcher::KindMatcher;
     use ast_grep_language::{LanguageExt, SupportLang};
-    use duckdb::{params, Connection};
+    use duckdb::{Connection, params};
     use ignore::WalkBuilder;
     use serde_json::json;
     use std::collections::{BTreeMap, BTreeSet};

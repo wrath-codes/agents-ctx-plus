@@ -98,7 +98,7 @@
 //! and either Option 1 or Option 2 for read queries during search — since zenith's DuckDB
 //! usage is bursty (index a package, then query), not continuous.
 
-use duckdb::{params, Connection};
+use duckdb::{Connection, params};
 use tempfile::TempDir;
 
 /// Helper: create an in-memory DuckDB connection.

@@ -158,9 +158,22 @@ fn process_impl_method<D: ast_grep_core::Doc>(
     let return_type = helpers::extract_return_type(child);
     let doc = helpers::extract_doc_comments_rust(child, source);
     let doc_sections = helpers::parse_rust_doc_sections(&doc);
+    let parameters = helpers::extract_parameters(child);
+    let has_self_receiver = parameters.iter().any(|p| {
+        let compact = p.replace(' ', "");
+        compact == "self"
+            || compact.starts_with("&self")
+            || compact.starts_with("&mutself")
+            || compact.starts_with("mutself")
+    });
+    let kind = if name == "new" && !has_self_receiver {
+        SymbolKind::Constructor
+    } else {
+        SymbolKind::Method
+    };
 
     Some(ParsedItem {
-        kind: SymbolKind::Method,
+        kind,
         name,
         signature: helpers::extract_signature(child),
         source: helpers::extract_source(child, 50),
@@ -174,7 +187,7 @@ fn process_impl_method<D: ast_grep_core::Doc>(
             return_type: return_type.clone(),
             generics: generics.clone(),
             attributes: attrs.clone(),
-            parameters: helpers::extract_parameters(child),
+            parameters,
             lifetimes: helpers::extract_lifetimes(generics.as_deref()),
             where_clause: helpers::extract_where_clause(child),
             trait_name: trait_name.map(String::from),

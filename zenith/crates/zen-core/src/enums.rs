@@ -793,7 +793,9 @@ mod tests {
         assert!(HypothesisStatus::Unverified.can_transition_to(HypothesisStatus::Analyzing));
         assert!(HypothesisStatus::Analyzing.can_transition_to(HypothesisStatus::Confirmed));
         assert!(HypothesisStatus::Analyzing.can_transition_to(HypothesisStatus::Debunked));
-        assert!(HypothesisStatus::Analyzing.can_transition_to(HypothesisStatus::PartiallyConfirmed));
+        assert!(
+            HypothesisStatus::Analyzing.can_transition_to(HypothesisStatus::PartiallyConfirmed)
+        );
         assert!(HypothesisStatus::Analyzing.can_transition_to(HypothesisStatus::Inconclusive));
     }
 

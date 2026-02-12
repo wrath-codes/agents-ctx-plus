@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 //! Class processing: class definitions, members, nested types, access specifiers.
 
 use ast_grep_core::Node;
@@ -69,7 +71,7 @@ pub(super) fn process_class<D: ast_grep_core::Doc>(
 
     items.push(ParsedItem {
         kind: SymbolKind::Class,
-        name,
+        name: name.clone(),
         signature: extract_signature(node),
         source: extract_source_limited(node, 40),
         doc_comment: doc_comment.to_string(),
@@ -79,9 +81,119 @@ pub(super) fn process_class<D: ast_grep_core::Doc>(
         metadata,
     });
 
+    emit_class_member_items(node, &name, items);
+
     // Emit nested types (nested classes, structs, enums, aliases) as
     // separate ParsedItems.
     extract_nested_types(node, items);
+}
+
+fn emit_class_member_items<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+    class_name: &str,
+    items: &mut Vec<ParsedItem>,
+) {
+    let Some(body) = node
+        .children()
+        .find(|c| c.kind().as_ref() == "field_declaration_list")
+    else {
+        return;
+    };
+
+    let mut current_access = Visibility::Private;
+
+    for child in body.children() {
+        match child.kind().as_ref() {
+            "access_specifier" => {
+                let text = child.text().to_string();
+                let trimmed = text.trim().trim_end_matches(':').trim();
+                current_access = match trimmed {
+                    "public" => Visibility::Public,
+                    "protected" => Visibility::Protected,
+                    _ => Visibility::Private,
+                };
+            }
+            "function_definition" => {
+                if let Some(name) = extract_method_name(&child) {
+                    push_cpp_member_item(items, class_name, &name, &current_access, &child, true);
+                }
+            }
+            "field_declaration" => {
+                let children: Vec<_> = child.children().collect();
+                let has_func_decl = children
+                    .iter()
+                    .any(|c| c.kind().as_ref() == "function_declarator");
+
+                if has_func_decl {
+                    if let Some(name) = extract_field_decl_method_name(&children) {
+                        push_cpp_member_item(
+                            items,
+                            class_name,
+                            &name,
+                            &current_access,
+                            &child,
+                            true,
+                        );
+                    }
+                } else {
+                    for fc in &children {
+                        if fc.kind().as_ref() == "field_identifier" {
+                            push_cpp_member_item(
+                                items,
+                                class_name,
+                                fc.text().as_ref(),
+                                &current_access,
+                                &child,
+                                false,
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn push_cpp_member_item<D: ast_grep_core::Doc>(
+    items: &mut Vec<ParsedItem>,
+    class_name: &str,
+    member_name: &str,
+    visibility: &Visibility,
+    node: &Node<D>,
+    is_callable: bool,
+) {
+    let simple_name = member_name
+        .split("::")
+        .last()
+        .unwrap_or(member_name)
+        .to_string();
+    let kind = if is_callable {
+        if simple_name == class_name {
+            SymbolKind::Constructor
+        } else {
+            SymbolKind::Method
+        }
+    } else {
+        SymbolKind::Field
+    };
+
+    let mut metadata = SymbolMetadata::default();
+    metadata.owner_name = Some(class_name.to_string());
+    metadata.owner_kind = Some(SymbolKind::Class);
+    metadata.is_static_member = node.children().any(|c| c.text().as_ref() == "static");
+
+    items.push(ParsedItem {
+        kind,
+        name: format!("{class_name}::{simple_name}"),
+        signature: extract_signature(node),
+        source: extract_source_limited(node, 12),
+        doc_comment: String::new(),
+        start_line: node.start_pos().line() as u32 + 1,
+        end_line: node.end_pos().line() as u32 + 1,
+        visibility: visibility.clone(),
+        metadata,
+    });
 }
 
 /// Walk a class/struct body and emit separate `ParsedItem`s for nested

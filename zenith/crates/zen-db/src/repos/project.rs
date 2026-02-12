@@ -43,10 +43,7 @@ impl ZenService {
         let mut rows = self
             .db()
             .conn()
-            .query(
-                "SELECT value FROM project_meta WHERE key = ?1",
-                [key],
-            )
+            .query("SELECT value FROM project_meta WHERE key = ?1", [key])
             .await?;
         match rows.next().await? {
             Some(row) => Ok(Some(row.get::<String>(0)?)),
@@ -58,7 +55,10 @@ impl ZenService {
         let mut rows = self
             .db()
             .conn()
-            .query("SELECT key, value, updated_at FROM project_meta ORDER BY key", ())
+            .query(
+                "SELECT key, value, updated_at FROM project_meta ORDER BY key",
+                (),
+            )
             .await?;
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -75,10 +75,7 @@ impl ZenService {
         Ok(())
     }
 
-    pub async fn upsert_dependency(
-        &self,
-        dep: &ProjectDependency,
-    ) -> Result<(), DatabaseError> {
+    pub async fn upsert_dependency(&self, dep: &ProjectDependency) -> Result<(), DatabaseError> {
         self.db()
             .conn()
             .execute(
@@ -155,11 +152,7 @@ impl ZenService {
         Ok(results)
     }
 
-    pub async fn mark_indexed(
-        &self,
-        ecosystem: &str,
-        name: &str,
-    ) -> Result<(), DatabaseError> {
+    pub async fn mark_indexed(&self, ecosystem: &str, name: &str) -> Result<(), DatabaseError> {
         self.db()
             .conn()
             .execute(

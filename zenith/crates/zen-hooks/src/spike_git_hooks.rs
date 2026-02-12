@@ -371,11 +371,13 @@ fn spike_install_strategy_symlink() {
         std::os::unix::fs::symlink("../../.zenith/hooks/pre-commit", &target_hook)
             .expect("symlink creation should work");
         assert!(target_hook.exists(), "symlink should resolve");
-        assert!(target_hook
-            .symlink_metadata()
-            .unwrap()
-            .file_type()
-            .is_symlink());
+        assert!(
+            target_hook
+                .symlink_metadata()
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         eprintln!("  Symlink created: .git/hooks/pre-commit -> ../../.zenith/hooks/pre-commit");
     }
 

@@ -63,7 +63,12 @@ pub(super) fn enrich_items<D: ast_grep_core::Doc>(
 
 fn enrich_item(item: &mut ParsedItem, bodies: &[FnBody], class_infos: &[ClassInfo]) {
     match item.kind {
-        SymbolKind::Function | SymbolKind::Const => functions::enrich_fn_item(item, bodies),
+        SymbolKind::Function
+        | SymbolKind::Const
+        | SymbolKind::Static
+        | SymbolKind::Method
+        | SymbolKind::Constructor
+        | SymbolKind::Property => functions::enrich_fn_item(item, bodies),
         SymbolKind::Class => classes::enrich_class_item(item, class_infos),
         _ => {}
     }

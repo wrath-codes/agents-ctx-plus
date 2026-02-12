@@ -90,6 +90,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             metadata,
         })
     } else {
+        let value_kind = declaration_value_kind(declaration);
         let mut metadata = SymbolMetadata::default();
         if is_exported {
             metadata.mark_exported();
@@ -97,7 +98,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
         metadata.set_doc_sections(doc_sections);
 
         Some(ParsedItem {
-            kind: SymbolKind::Const,
+            kind: value_kind,
             name,
             signature: helpers::extract_signature(declaration),
             source: helpers::extract_source(declaration, 50),
@@ -108,4 +109,15 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             metadata,
         })
     }
+}
+
+fn declaration_value_kind<D: ast_grep_core::Doc>(declaration: &Node<D>) -> SymbolKind {
+    for child in declaration.children() {
+        match child.kind().as_ref() {
+            "const" => return SymbolKind::Const,
+            "let" | "var" => return SymbolKind::Static,
+            _ => {}
+        }
+    }
+    SymbolKind::Static
 }

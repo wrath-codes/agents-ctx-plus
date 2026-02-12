@@ -45,8 +45,8 @@ fn reasonable_item_count() {
         names
     );
     assert!(
-        items.len() <= 60,
-        "should not exceed 60 items (no duplicates), got {}: {:?}",
+        items.len() <= 140,
+        "should not exceed 140 items (no runaway duplicates), got {}: {:?}",
         items.len(),
         names
     );

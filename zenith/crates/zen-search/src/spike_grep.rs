@@ -41,13 +41,13 @@
 
 #[cfg(test)]
 mod tests {
-    use duckdb::{params, Connection};
+    use duckdb::{Connection, params};
     use grep::matcher::Matcher;
     use grep::regex::{RegexMatcher, RegexMatcherBuilder};
     use grep::searcher::sinks::UTF8;
     use grep::searcher::{BinaryDetection, SearcherBuilder, Sink, SinkMatch};
-    use ignore::overrides::OverrideBuilder;
     use ignore::WalkBuilder;
+    use ignore::overrides::OverrideBuilder;
     use pretty_assertions::assert_eq;
     use std::io;
     use std::path::Path;

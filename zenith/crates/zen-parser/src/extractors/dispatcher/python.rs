@@ -18,8 +18,8 @@ mod pyhelpers;
 use ast_grep_language::SupportLang;
 use doc::extract_module_docstring;
 use processors::{
-    extract_dunder_all, process_class, process_decorated, process_function,
-    process_module_assignment,
+    extract_dunder_all, process_class, process_class_member_items, process_decorated,
+    process_function, process_module_assignment,
 };
 
 #[cfg(test)]
@@ -62,14 +62,13 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
         let kind = child.kind();
         match kind.as_ref() {
             "decorated_definition" => {
-                if let Some(item) = process_decorated(&child) {
-                    items.push(item);
-                }
+                items.extend(process_decorated(&child));
             }
             "class_definition" => {
                 if let Some(item) = process_class(&child, &[]) {
                     items.push(item);
                 }
+                items.extend(process_class_member_items(&child));
             }
             "function_definition" => {
                 if let Some(item) = process_function(&child, &[]) {

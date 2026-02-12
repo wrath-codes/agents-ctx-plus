@@ -58,6 +58,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
                 if let Some(item) = processors::process_class(&node, &node, false, false) {
                     items.push(item);
                 }
+                items.extend(processors::process_class_members(&node, false));
             }
             "lexical_declaration" => {
                 items.extend(processors::process_lexical_declaration(&node, &node, false));

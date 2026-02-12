@@ -11,7 +11,7 @@
 
 #[cfg(test)]
 mod tests {
-    use schemars::{schema_for, JsonSchema};
+    use schemars::{JsonSchema, schema_for};
     use serde::{Deserialize, Serialize};
     use serde_json::json;
 
@@ -513,10 +513,12 @@ mod tests {
 
         // v99 -> error
         assert!(results[3].is_err());
-        assert!(results[3]
-            .as_ref()
-            .unwrap_err()
-            .contains("Unsupported trail version: 99"));
+        assert!(
+            results[3]
+                .as_ref()
+                .unwrap_err()
+                .contains("Unsupported trail version: 99")
+        );
     }
 
     // =========================================================================

@@ -1,9 +1,11 @@
+#![allow(clippy::field_reassign_with_default, clippy::useless_let_if_seq)]
+
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
 use crate::types::{JavaScriptMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
-use super::super::js_helpers::{extract_jsdoc_before, parse_jsdoc_sections};
+use super::super::js_helpers::{extract_js_parameters, extract_jsdoc_before, parse_jsdoc_sections};
 
 // ── class_declaration ──────────────────────────────────────────────
 
@@ -54,6 +56,96 @@ pub fn process_class<D: ast_grep_core::Doc>(
         visibility,
         metadata,
     })
+}
+
+pub fn process_class_members<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+    is_exported: bool,
+) -> Vec<ParsedItem> {
+    let Some(owner_name) = node.field("name").map(|n| n.text().to_string()) else {
+        return Vec::new();
+    };
+
+    let Some(body) = node.field("body") else {
+        return Vec::new();
+    };
+
+    let mut members = Vec::new();
+    let visibility = if is_exported {
+        Visibility::Export
+    } else {
+        Visibility::Private
+    };
+
+    for child in body.children() {
+        match child.kind().as_ref() {
+            "method_definition" => {
+                if let Some(name_node) = child.field("name") {
+                    let name = name_node.text().to_string();
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.owner_name = Some(owner_name.clone());
+                    metadata.owner_kind = Some(SymbolKind::Class);
+                    metadata.is_static_member =
+                        child.children().any(|c| c.kind().as_ref() == "static");
+                    metadata.parameters = child
+                        .children()
+                        .find(|c| c.kind().as_ref() == "formal_parameters")
+                        .map(|p| extract_js_parameters(&p))
+                        .unwrap_or_default();
+
+                    let mut kind = if name == "constructor" {
+                        SymbolKind::Constructor
+                    } else {
+                        SymbolKind::Method
+                    };
+
+                    if child
+                        .children()
+                        .any(|c| c.kind().as_ref() == "get" || c.kind().as_ref() == "set")
+                    {
+                        kind = SymbolKind::Property;
+                    }
+
+                    members.push(ParsedItem {
+                        kind,
+                        name,
+                        signature: helpers::extract_signature(&child),
+                        source: helpers::extract_source(&child, 30),
+                        doc_comment: String::new(),
+                        start_line: child.start_pos().line() as u32 + 1,
+                        end_line: child.end_pos().line() as u32 + 1,
+                        visibility: visibility.clone(),
+                        metadata,
+                    });
+                }
+            }
+            "public_field_definition" | "field_definition" => {
+                if let Some(name_node) = child.field("name") {
+                    let name = name_node.text().to_string();
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.owner_name = Some(owner_name.clone());
+                    metadata.owner_kind = Some(SymbolKind::Class);
+                    metadata.is_static_member =
+                        child.children().any(|c| c.kind().as_ref() == "static");
+
+                    members.push(ParsedItem {
+                        kind: SymbolKind::Field,
+                        name,
+                        signature: helpers::extract_signature(&child),
+                        source: helpers::extract_source(&child, 20),
+                        doc_comment: String::new(),
+                        start_line: child.start_pos().line() as u32 + 1,
+                        end_line: child.end_pos().line() as u32 + 1,
+                        visibility: visibility.clone(),
+                        metadata,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    members
 }
 
 fn extract_class_heritage<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {

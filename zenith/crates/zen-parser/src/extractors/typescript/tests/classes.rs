@@ -57,3 +57,17 @@ fn abstract_class_methods_extracted() {
         c.metadata.methods
     );
 }
+
+#[test]
+fn class_constructor_member_emitted() {
+    let source = include_str!("../../../../tests/fixtures/sample.ts");
+    let items = parse_and_extract(source);
+    let ctor = items
+        .iter()
+        .find(|i| {
+            i.kind == SymbolKind::Constructor
+                && i.metadata.owner_name.as_deref() == Some("HttpError")
+        })
+        .expect("should emit HttpError constructor member");
+    assert_eq!(ctor.kind, SymbolKind::Constructor);
+}

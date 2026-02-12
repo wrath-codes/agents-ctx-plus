@@ -10,12 +10,15 @@ use ast_grep_core::Node;
 
 use crate::types::ParsedItem;
 
-pub(super) use classes::process_class;
+pub(super) use classes::{process_class, process_class_members};
 pub(super) use declarations::{
     process_ambient_declaration, process_lexical_declaration, process_variable_declaration,
 };
 pub(super) use functions::{process_function, process_function_signature};
-pub(super) use types::{process_enum, process_interface, process_namespace, process_type_alias};
+pub(super) use types::{
+    process_enum, process_interface, process_interface_members, process_namespace,
+    process_type_alias,
+};
 
 // ── export_statement unwrapping ────────────────────────────────────
 
@@ -39,11 +42,13 @@ pub(super) fn process_export_statement<D: ast_grep_core::Doc>(
                 if let Some(item) = process_class(&child, export_node, true, is_default) {
                     items.push(item);
                 }
+                items.extend(process_class_members(&child, true));
             }
             "interface_declaration" => {
                 if let Some(item) = process_interface(&child, export_node, true) {
                     items.push(item);
                 }
+                items.extend(process_interface_members(&child, true));
             }
             "type_alias_declaration" => {
                 if let Some(item) = process_type_alias(&child, export_node, true) {

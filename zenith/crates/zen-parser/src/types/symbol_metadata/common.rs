@@ -1,4 +1,4 @@
-use crate::types::DocSections;
+use crate::types::{DocSections, SymbolKind};
 
 use super::SymbolMetadata;
 
@@ -14,6 +14,9 @@ pub trait CommonMetadataExt {
     fn set_generics(&mut self, generics: Option<String>);
     fn set_type_parameters(&mut self, type_parameters: Option<String>);
     fn set_parameters(&mut self, parameters: Vec<String>);
+    fn set_owner_name(&mut self, owner_name: Option<String>);
+    fn set_owner_kind(&mut self, owner_kind: Option<SymbolKind>);
+    fn mark_static_member(&mut self);
     fn set_doc_sections(&mut self, doc_sections: DocSections);
     fn set_where_clause(&mut self, where_clause: Option<String>);
     fn set_trait_name(&mut self, trait_name: Option<String>);
@@ -68,6 +71,18 @@ impl CommonMetadataExt for SymbolMetadata {
 
     fn set_parameters(&mut self, parameters: Vec<String>) {
         self.parameters = parameters;
+    }
+
+    fn set_owner_name(&mut self, owner_name: Option<String>) {
+        self.owner_name = owner_name;
+    }
+
+    fn set_owner_kind(&mut self, owner_kind: Option<SymbolKind>) {
+        self.owner_kind = owner_kind;
+    }
+
+    fn mark_static_member(&mut self) {
+        self.is_static_member = true;
     }
 
     fn set_doc_sections(&mut self, doc_sections: DocSections) {

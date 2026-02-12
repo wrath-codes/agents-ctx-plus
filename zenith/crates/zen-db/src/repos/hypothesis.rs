@@ -80,7 +80,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -152,7 +153,10 @@ impl ZenService {
             sets.join(", ")
         );
 
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let updated = self.get_hypothesis(hyp_id).await?;
 
@@ -165,7 +169,8 @@ impl ZenService {
             action: AuditAction::Updated,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -192,10 +197,10 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM hypotheses WHERE id = ?1",
-            [hyp_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM hypotheses WHERE id = ?1", [hyp_id])
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -206,7 +211,8 @@ impl ZenService {
             action: AuditAction::StatusChanged,
             detail: Some(serde_json::json!({ "action": "deleted" })),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -227,9 +233,8 @@ impl ZenService {
     ///
     /// Returns `DatabaseError` if the query fails.
     pub async fn list_hypotheses(&self, limit: u32) -> Result<Vec<Hypothesis>, DatabaseError> {
-        let sql = format!(
-            "SELECT {SELECT_COLS} FROM hypotheses ORDER BY created_at DESC LIMIT {limit}"
-        );
+        let sql =
+            format!("SELECT {SELECT_COLS} FROM hypotheses ORDER BY created_at DESC LIMIT {limit}");
         let mut rows = self.db().conn().query(&sql, ()).await?;
 
         let mut items = Vec::new();
@@ -256,7 +261,11 @@ impl ZenService {
              WHERE hypotheses_fts MATCH ?1
              ORDER BY rank LIMIT ?2";
 
-        let mut rows = self.db().conn().query(&sql, libsql::params![query, limit]).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(&sql, libsql::params![query, limit])
+            .await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -292,15 +301,21 @@ impl ZenService {
         let now = Utc::now();
 
         if reason.is_some() {
-            self.db().conn().execute(
-                "UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4",
-                libsql::params![new_status.as_str(), reason, now.to_rfc3339(), hyp_id],
-            ).await?;
+            self.db()
+                .conn()
+                .execute(
+                    "UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4",
+                    libsql::params![new_status.as_str(), reason, now.to_rfc3339(), hyp_id],
+                )
+                .await?;
         } else {
-            self.db().conn().execute(
-                "UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3",
-                libsql::params![new_status.as_str(), now.to_rfc3339(), hyp_id],
-            ).await?;
+            self.db()
+                .conn()
+                .execute(
+                    "UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                    libsql::params![new_status.as_str(), now.to_rfc3339(), hyp_id],
+                )
+                .await?;
         }
 
         let updated = Hypothesis {
@@ -323,9 +338,12 @@ impl ZenService {
             entity_type: EntityType::Hypothesis,
             entity_id: hyp_id.to_string(),
             action: AuditAction::StatusChanged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -411,9 +429,15 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_hypothesis(&sid, "Hyp 1", None, None).await.unwrap();
-        svc.create_hypothesis(&sid, "Hyp 2", None, None).await.unwrap();
-        svc.create_hypothesis(&sid, "Hyp 3", None, None).await.unwrap();
+        svc.create_hypothesis(&sid, "Hyp 1", None, None)
+            .await
+            .unwrap();
+        svc.create_hypothesis(&sid, "Hyp 2", None, None)
+            .await
+            .unwrap();
+        svc.create_hypothesis(&sid, "Hyp 3", None, None)
+            .await
+            .unwrap();
 
         let items = svc.list_hypotheses(10).await.unwrap();
         assert_eq!(items.len(), 3);

@@ -74,8 +74,16 @@ pub fn process_function<D: ast_grep_core::Doc>(
         metadata.mark_generator();
     }
 
+    let kind = if name == "__init__" {
+        SymbolKind::Constructor
+    } else if is_property {
+        SymbolKind::Property
+    } else {
+        SymbolKind::Function
+    };
+
     Some(ParsedItem {
-        kind: SymbolKind::Function,
+        kind,
         name,
         signature: helpers::extract_signature_python(node),
         source: helpers::extract_source(node, 50),

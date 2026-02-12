@@ -9,7 +9,7 @@ use crate::types::{ParsedItem, SymbolKind, SymbolMetadata};
 
 use super::pyhelpers::{extract_decorators, python_visibility};
 
-pub(super) use classes::process_class;
+pub(super) use classes::{process_class, process_class_member_items};
 pub(super) use functions::process_function;
 
 pub(super) fn extract_dunder_all<D: ast_grep_core::Doc>(root: &Node<D>) -> Option<Vec<String>> {
@@ -42,17 +42,26 @@ pub(super) fn extract_dunder_all<D: ast_grep_core::Doc>(root: &Node<D>) -> Optio
     None
 }
 
-pub(super) fn process_decorated<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
+pub(super) fn process_decorated<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedItem> {
     let decorators = extract_decorators(node);
-    let inner = node.children().find(|c| {
+    let Some(inner) = node.children().find(|c| {
         let k = c.kind();
         k.as_ref() == "class_definition" || k.as_ref() == "function_definition"
-    })?;
+    }) else {
+        return Vec::new();
+    };
 
     match inner.kind().as_ref() {
-        "class_definition" => process_class(&inner, &decorators),
-        "function_definition" => process_function(&inner, &decorators),
-        _ => None,
+        "class_definition" => {
+            let mut items = Vec::new();
+            if let Some(class_item) = process_class(&inner, &decorators) {
+                items.push(class_item);
+            }
+            items.extend(process_class_member_items(&inner));
+            items
+        }
+        "function_definition" => process_function(&inner, &decorators).into_iter().collect(),
+        _ => Vec::new(),
     }
 }
 

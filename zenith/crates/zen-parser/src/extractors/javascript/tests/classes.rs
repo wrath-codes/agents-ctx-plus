@@ -63,3 +63,29 @@ fn error_class_detected() {
         c.metadata.base_classes
     );
 }
+
+#[test]
+fn constructor_and_property_emitted_as_members() {
+    let source = include_str!("../../../../tests/fixtures/sample.js");
+    let items = parse_and_extract(source);
+
+    let ctor = items
+        .iter()
+        .find(|i| {
+            i.kind == SymbolKind::Constructor
+                && i.metadata.owner_name.as_deref() == Some("Animal")
+                && i.name.contains("constructor")
+        })
+        .expect("should emit Animal constructor member");
+    assert_eq!(ctor.kind, SymbolKind::Constructor);
+
+    let prop = items
+        .iter()
+        .find(|i| {
+            i.kind == SymbolKind::Property
+                && i.metadata.owner_name.as_deref() == Some("Animal")
+                && i.name.contains("displayName")
+        })
+        .expect("should emit Animal displayName property member");
+    assert_eq!(prop.kind, SymbolKind::Property);
+}

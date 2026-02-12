@@ -68,7 +68,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -84,11 +85,15 @@ impl ZenService {
     }
 
     pub async fn get_insight(&self, id: &str) -> Result<Insight, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT id, research_id, session_id, content, confidence, created_at, updated_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT id, research_id, session_id, content, confidence, created_at, updated_at
              FROM insights WHERE id = ?1",
-            [id],
-        ).await?;
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_insight(&row)
     }
@@ -123,13 +128,13 @@ impl ZenService {
         params.push(now.to_rfc3339().into());
         idx += 1;
 
-        let sql = format!(
-            "UPDATE insights SET {} WHERE id = ?{idx}",
-            sets.join(", ")
-        );
+        let sql = format!("UPDATE insights SET {} WHERE id = ?{idx}", sets.join(", "));
         params.push(insight_id.into());
 
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let insight = self.get_insight(insight_id).await?;
 
@@ -140,9 +145,12 @@ impl ZenService {
             entity_type: EntityType::Insight,
             entity_id: insight_id.to_string(),
             action: AuditAction::Updated,
-            detail: Some(serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -164,10 +172,10 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM insights WHERE id = ?1",
-            [insight_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM insights WHERE id = ?1", [insight_id])
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -178,7 +186,8 @@ impl ZenService {
             action: AuditAction::Deleted,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -194,13 +203,17 @@ impl ZenService {
     }
 
     pub async fn list_insights(&self, limit: u32) -> Result<Vec<Insight>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!(
                 "SELECT id, research_id, session_id, content, confidence, created_at, updated_at
                  FROM insights ORDER BY created_at DESC LIMIT {limit}"
             ),
-            (),
-        ).await?;
+                (),
+            )
+            .await?;
 
         let mut insights = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -244,7 +257,12 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let insight = svc
-            .create_insight(&sid, "Combining findings suggests a pattern", Confidence::High, None)
+            .create_insight(
+                &sid,
+                "Combining findings suggests a pattern",
+                Confidence::High,
+                None,
+            )
             .await
             .unwrap();
 
@@ -270,7 +288,9 @@ mod tests {
             .await
             .unwrap();
 
-        let update = InsightUpdateBuilder::new().content("updated insight").build();
+        let update = InsightUpdateBuilder::new()
+            .content("updated insight")
+            .build();
         let updated = svc.update_insight(&sid, &insight.id, update).await.unwrap();
 
         assert_eq!(updated.content, "updated insight");
@@ -313,12 +333,22 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_insight(&sid, "work-stealing scheduler improves throughput", Confidence::High, None)
-            .await
-            .unwrap();
-        svc.create_insight(&sid, "serde is fast at deserialization", Confidence::Medium, None)
-            .await
-            .unwrap();
+        svc.create_insight(
+            &sid,
+            "work-stealing scheduler improves throughput",
+            Confidence::High,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.create_insight(
+            &sid,
+            "serde is fast at deserialization",
+            Confidence::Medium,
+            None,
+        )
+        .await
+        .unwrap();
 
         let results = svc.search_insights("throughput", 10).await.unwrap();
         assert_eq!(results.len(), 1);

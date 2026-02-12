@@ -267,9 +267,11 @@ async fn spike_agentfs_filesystem_ops() {
     );
 
     let lib = agent.fs.read_file("/workspace/src/lib.rs").await.unwrap();
-    assert!(String::from_utf8(lib.unwrap())
-        .unwrap()
-        .contains("pub fn hello"));
+    assert!(
+        String::from_utf8(lib.unwrap())
+            .unwrap()
+            .contains("pub fn hello")
+    );
 
     // Check existence via stat()
     let readme_stat = agent.fs.stat("/workspace/README.md").await.unwrap();
@@ -348,10 +350,7 @@ async fn spike_agentfs_tool_tracking() {
 
     // Verify the recorded tool call
     let call = agent.tools.get(id).await.unwrap();
-    assert!(
-        call.is_some(),
-        "get() should return the recorded tool call"
-    );
+    assert!(call.is_some(), "get() should return the recorded tool call");
     let call = call.unwrap();
     assert_eq!(call.name, "zen_install");
     assert_eq!(call.status, agentfs_sdk::ToolCallStatus::Success);
@@ -474,10 +473,7 @@ async fn spike_agentfs_tool_stats() {
 
     // Get stats for a specific tool
     let search_stats = agent.tools.stats_for("zen_search").await.unwrap();
-    assert!(
-        search_stats.is_some(),
-        "should have stats for zen_search"
-    );
+    assert!(search_stats.is_some(), "should have stats for zen_search");
     let search_stats = search_stats.unwrap();
     assert_eq!(search_stats.total_calls, 7); // 5 success + 2 error
     assert_eq!(search_stats.successful, 5);
@@ -508,12 +504,7 @@ async fn spike_agentfs_indexing_workspace_pattern() {
     // 2. "Clone" — write source files into workspace
     agent
         .fs
-        .create_file(
-            "/index-tokio-1.40.0/src/lib.rs",
-            DEFAULT_FILE_MODE,
-            0,
-            0,
-        )
+        .create_file("/index-tokio-1.40.0/src/lib.rs", DEFAULT_FILE_MODE, 0, 0)
         .await
         .unwrap();
     agent
@@ -592,11 +583,7 @@ async fn spike_agentfs_indexing_workspace_pattern() {
         .remove("/index-tokio-1.40.0/README.md")
         .await
         .unwrap();
-    agent
-        .fs
-        .remove("/index-tokio-1.40.0/src")
-        .await
-        .unwrap();
+    agent.fs.remove("/index-tokio-1.40.0/src").await.unwrap();
     agent.fs.remove("/index-tokio-1.40.0").await.unwrap();
 
     // Verify cleanup

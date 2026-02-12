@@ -143,6 +143,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             },
         })
     } else {
+        let value_kind = declaration_value_kind(declaration);
         let type_annotation = declarator
             .children()
             .find(|c| c.kind().as_ref() == "type_annotation")
@@ -155,7 +156,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             });
 
         Some(ParsedItem {
-            kind: SymbolKind::Const,
+            kind: value_kind,
             name,
             signature: helpers::extract_signature(declaration),
             source: helpers::extract_source(declaration, 50),
@@ -174,4 +175,15 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             },
         })
     }
+}
+
+fn declaration_value_kind<D: ast_grep_core::Doc>(declaration: &Node<D>) -> SymbolKind {
+    for child in declaration.children() {
+        match child.kind().as_ref() {
+            "const" => return SymbolKind::Const,
+            "let" | "var" => return SymbolKind::Static,
+            _ => {}
+        }
+    }
+    SymbolKind::Static
 }

@@ -76,9 +76,12 @@ impl ZenService {
             entity_type: EntityType::EntityLink,
             entity_id: id.clone(),
             action: AuditAction::Linked,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -94,27 +97,27 @@ impl ZenService {
     }
 
     pub async fn get_link(&self, id: &str) -> Result<EntityLink, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE id = ?1",
-            [id],
-        ).await?;
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_link(&row)
     }
 
-    pub async fn delete_link(
-        &self,
-        session_id: &str,
-        link_id: &str,
-    ) -> Result<(), DatabaseError> {
+    pub async fn delete_link(&self, session_id: &str, link_id: &str) -> Result<(), DatabaseError> {
         let link = self.get_link(link_id).await?;
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM entity_links WHERE id = ?1",
-            [link_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM entity_links WHERE id = ?1", [link_id])
+            .await?;
 
         let detail = LinkedDetail {
             source_type: link.source_type.as_str().to_string(),
@@ -131,9 +134,12 @@ impl ZenService {
             entity_type: EntityType::EntityLink,
             entity_id: link_id.to_string(),
             action: AuditAction::Unlinked,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -153,11 +159,15 @@ impl ZenService {
         source_type: EntityType,
         source_id: &str,
     ) -> Result<Vec<EntityLink>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE source_type = ?1 AND source_id = ?2",
-            libsql::params![source_type.as_str(), source_id],
-        ).await?;
+                libsql::params![source_type.as_str(), source_id],
+            )
+            .await?;
 
         let mut links = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -171,11 +181,15 @@ impl ZenService {
         target_type: EntityType,
         target_id: &str,
     ) -> Result<Vec<EntityLink>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE target_type = ?1 AND target_id = ?2",
-            libsql::params![target_type.as_str(), target_id],
-        ).await?;
+                libsql::params![target_type.as_str(), target_id],
+            )
+            .await?;
 
         let mut links = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -190,11 +204,15 @@ impl ZenService {
         source_id: &str,
         target_type: EntityType,
     ) -> Result<Vec<String>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT target_id FROM entity_links
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT target_id FROM entity_links
              WHERE source_type = ?1 AND source_id = ?2 AND target_type = ?3",
-            libsql::params![source_type.as_str(), source_id, target_type.as_str()],
-        ).await?;
+                libsql::params![source_type.as_str(), source_id, target_type.as_str()],
+            )
+            .await?;
 
         let mut ids = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -246,7 +264,14 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let link = svc
-            .create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-1", Relation::RelatesTo)
+            .create_link(
+                &sid,
+                EntityType::Study,
+                "stu-1",
+                EntityType::Hypothesis,
+                "hyp-1",
+                Relation::RelatesTo,
+            )
             .await
             .unwrap();
 
@@ -261,14 +286,31 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-1", Relation::RelatesTo)
-            .await
-            .unwrap();
-        svc.create_link(&sid, EntityType::Study, "stu-1", EntityType::Finding, "fnd-1", Relation::RelatesTo)
-            .await
-            .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Study,
+            "stu-1",
+            EntityType::Hypothesis,
+            "hyp-1",
+            Relation::RelatesTo,
+        )
+        .await
+        .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Study,
+            "stu-1",
+            EntityType::Finding,
+            "fnd-1",
+            Relation::RelatesTo,
+        )
+        .await
+        .unwrap();
 
-        let links = svc.get_links_from(EntityType::Study, "stu-1").await.unwrap();
+        let links = svc
+            .get_links_from(EntityType::Study, "stu-1")
+            .await
+            .unwrap();
         assert_eq!(links.len(), 2);
     }
 
@@ -277,14 +319,31 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-1", Relation::RelatesTo)
-            .await
-            .unwrap();
-        svc.create_link(&sid, EntityType::Finding, "fnd-1", EntityType::Hypothesis, "hyp-1", Relation::Validates)
-            .await
-            .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Study,
+            "stu-1",
+            EntityType::Hypothesis,
+            "hyp-1",
+            Relation::RelatesTo,
+        )
+        .await
+        .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Finding,
+            "fnd-1",
+            EntityType::Hypothesis,
+            "hyp-1",
+            Relation::Validates,
+        )
+        .await
+        .unwrap();
 
-        let links = svc.get_links_to(EntityType::Hypothesis, "hyp-1").await.unwrap();
+        let links = svc
+            .get_links_to(EntityType::Hypothesis, "hyp-1")
+            .await
+            .unwrap();
         assert_eq!(links.len(), 2);
     }
 
@@ -293,14 +352,31 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-1", Relation::RelatesTo)
-            .await
-            .unwrap();
-        svc.create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-2", Relation::RelatesTo)
-            .await
-            .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Study,
+            "stu-1",
+            EntityType::Hypothesis,
+            "hyp-1",
+            Relation::RelatesTo,
+        )
+        .await
+        .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Study,
+            "stu-1",
+            EntityType::Hypothesis,
+            "hyp-2",
+            Relation::RelatesTo,
+        )
+        .await
+        .unwrap();
 
-        let ids = svc.get_linked_ids(EntityType::Study, "stu-1", EntityType::Hypothesis).await.unwrap();
+        let ids = svc
+            .get_linked_ids(EntityType::Study, "stu-1", EntityType::Hypothesis)
+            .await
+            .unwrap();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&"hyp-1".to_string()));
         assert!(ids.contains(&"hyp-2".to_string()));
@@ -311,12 +387,26 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_link(&sid, EntityType::Finding, "fnd-1", EntityType::Hypothesis, "hyp-1", Relation::Validates)
-            .await
-            .unwrap();
+        svc.create_link(
+            &sid,
+            EntityType::Finding,
+            "fnd-1",
+            EntityType::Hypothesis,
+            "hyp-1",
+            Relation::Validates,
+        )
+        .await
+        .unwrap();
 
         let result = svc
-            .create_link(&sid, EntityType::Finding, "fnd-1", EntityType::Hypothesis, "hyp-1", Relation::Validates)
+            .create_link(
+                &sid,
+                EntityType::Finding,
+                "fnd-1",
+                EntityType::Hypothesis,
+                "hyp-1",
+                Relation::Validates,
+            )
             .await;
         assert!(result.is_err());
     }
@@ -327,7 +417,14 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let link = svc
-            .create_link(&sid, EntityType::Study, "stu-1", EntityType::Hypothesis, "hyp-1", Relation::RelatesTo)
+            .create_link(
+                &sid,
+                EntityType::Study,
+                "stu-1",
+                EntityType::Hypothesis,
+                "hyp-1",
+                Relation::RelatesTo,
+            )
             .await
             .unwrap();
 

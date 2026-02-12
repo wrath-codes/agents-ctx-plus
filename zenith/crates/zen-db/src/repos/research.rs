@@ -71,7 +71,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -92,11 +93,15 @@ impl ZenService {
     ///
     /// Returns `DatabaseError::NoResult` if the research item does not exist.
     pub async fn get_research(&self, id: &str) -> Result<ResearchItem, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT id, session_id, title, description, status, created_at, updated_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT id, session_id, title, description, status, created_at, updated_at
              FROM research_items WHERE id = ?1",
-            [id],
-        ).await?;
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_research(&row)
     }
@@ -146,7 +151,10 @@ impl ZenService {
             sets.join(", ")
         );
 
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let updated = self.get_research(research_id).await?;
 
@@ -159,7 +167,8 @@ impl ZenService {
             action: AuditAction::Updated,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -186,10 +195,10 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM research_items WHERE id = ?1",
-            [research_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM research_items WHERE id = ?1", [research_id])
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -200,7 +209,8 @@ impl ZenService {
             action: AuditAction::StatusChanged,
             detail: Some(serde_json::json!({ "action": "deleted" })),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -221,13 +231,17 @@ impl ZenService {
     ///
     /// Returns `DatabaseError` if the query fails.
     pub async fn list_research(&self, limit: u32) -> Result<Vec<ResearchItem>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT id, session_id, title, description, status, created_at, updated_at
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!(
+                    "SELECT id, session_id, title, description, status, created_at, updated_at
                  FROM research_items ORDER BY created_at DESC LIMIT {limit}"
-            ),
-            (),
-        ).await?;
+                ),
+                (),
+            )
+            .await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -285,10 +299,13 @@ impl ZenService {
         }
 
         let now = Utc::now();
-        self.db().conn().execute(
-            "UPDATE research_items SET status = ?1, updated_at = ?2 WHERE id = ?3",
-            libsql::params![new_status.as_str(), now.to_rfc3339(), research_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "UPDATE research_items SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                libsql::params![new_status.as_str(), now.to_rfc3339(), research_id],
+            )
+            .await?;
 
         let updated = ResearchItem {
             status: new_status,
@@ -309,9 +326,12 @@ impl ZenService {
             entity_type: EntityType::Research,
             entity_id: research_id.to_string(),
             action: AuditAction::StatusChanged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -339,7 +359,11 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let res = svc
-            .create_research(&sid, "HTTP client comparison", Some("Compare reqwest vs hyper"))
+            .create_research(
+                &sid,
+                "HTTP client comparison",
+                Some("Compare reqwest vs hyper"),
+            )
             .await
             .unwrap();
 

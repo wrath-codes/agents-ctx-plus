@@ -26,10 +26,10 @@ mod tests {
     use rustworkx_core::centrality::betweenness_centrality;
     use rustworkx_core::connectivity::{connected_components, find_cycle};
     use rustworkx_core::dictmap::{DictMap, InitWithHasher};
+    use rustworkx_core::petgraph::Direction;
     use rustworkx_core::petgraph::algo::toposort;
     use rustworkx_core::petgraph::graph::{DiGraph, NodeIndex};
     use rustworkx_core::petgraph::visit::EdgeRef;
-    use rustworkx_core::petgraph::Direction;
     use rustworkx_core::shortest_path::dijkstra;
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
     use std::hash::{DefaultHasher, Hash, Hasher};
@@ -177,19 +177,19 @@ mod tests {
         for &id in node_ids {
             if graph.node_count() >= budget.node_limit {
                 truncated = true;
-                truncation_reason =
-                    Some(format!("max_nodes ({}) exceeded", budget.node_limit));
+                truncation_reason = Some(format!("max_nodes ({}) exceeded", budget.node_limit));
                 break;
             }
             let s = id.to_string();
-            index_map.entry(s.clone()).or_insert_with(|| graph.add_node(s));
+            index_map
+                .entry(s.clone())
+                .or_insert_with(|| graph.add_node(s));
         }
 
         for (src, dst) in edges {
             if graph.edge_count() >= budget.edge_limit {
                 truncated = true;
-                truncation_reason =
-                    Some(format!("max_edges ({}) exceeded", budget.edge_limit));
+                truncation_reason = Some(format!("max_edges ({}) exceeded", budget.edge_limit));
                 break;
             }
             let Some(&src_idx) = index_map.get(*src) else {
@@ -427,16 +427,23 @@ mod tests {
         index_map.insert(iso, iso_idx);
 
         let components = connected_components(&graph);
-        assert_eq!(components.len(), 3, "should have 3 weakly connected components");
+        assert_eq!(
+            components.len(),
+            3,
+            "should have 3 weakly connected components"
+        );
 
         let cluster_labels: Vec<BTreeSet<String>> = components
             .iter()
-            .map(|c| c.iter().map(|idx| graph[*idx].clone()).collect::<BTreeSet<String>>())
+            .map(|c| {
+                c.iter()
+                    .map(|idx| graph[*idx].clone())
+                    .collect::<BTreeSet<String>>()
+            })
             .collect();
 
         let has_cluster = |members: &[&str]| {
-            let target: BTreeSet<String> =
-                members.iter().map(|s| (*s).to_string()).collect();
+            let target: BTreeSet<String> = members.iter().map(|s| (*s).to_string()).collect();
             cluster_labels.contains(&target)
         };
 
@@ -504,8 +511,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn spike_graph_budget_max_edges_enforced() {
         let node_ids = [
-            "tsk-000", "tsk-001", "tsk-002", "tsk-003", "tsk-004", "tsk-005", "tsk-006",
-            "tsk-007", "tsk-008", "tsk-009",
+            "tsk-000", "tsk-001", "tsk-002", "tsk-003", "tsk-004", "tsk-005", "tsk-006", "tsk-007",
+            "tsk-008", "tsk-009",
         ];
         let edges: Vec<(&str, &str)> = (0..10)
             .flat_map(|i| (i + 1..10).map(move |j| (node_ids[i], node_ids[j])))

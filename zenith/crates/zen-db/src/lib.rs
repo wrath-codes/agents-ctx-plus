@@ -187,7 +187,11 @@ mod tests {
         let db = test_db().await;
         let id = db.generate_id("fnd").await.unwrap();
         assert!(id.starts_with("fnd-"), "ID should start with 'fnd-': {id}");
-        assert_eq!(id.len(), 12, "ID should be 12 chars (3 prefix + 1 dash + 8 hex): {id}");
+        assert_eq!(
+            id.len(),
+            12,
+            "ID should be 12 chars (3 prefix + 1 dash + 8 hex): {id}"
+        );
 
         // Verify hex characters
         let hex_part = &id[4..];
@@ -238,7 +242,10 @@ mod tests {
 
         let mut rows = db
             .conn()
-            .query("SELECT id, status FROM sessions WHERE id = ?1", [id.as_str()])
+            .query(
+                "SELECT id, status FROM sessions WHERE id = ?1",
+                [id.as_str()],
+            )
             .await
             .unwrap();
         let row = rows.next().await.unwrap().unwrap();
@@ -338,7 +345,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(rows.next().await.unwrap().is_some(), "FTS trigger should populate on INSERT");
+        assert!(
+            rows.next().await.unwrap().is_some(),
+            "FTS trigger should populate on INSERT"
+        );
     }
 
     #[tokio::test]
@@ -369,10 +379,19 @@ mod tests {
         let db = test_db().await;
 
         // Session (needed as FK for others)
-        db.conn().execute("INSERT INTO sessions (id) VALUES ('ses-t1')", ()).await.unwrap();
+        db.conn()
+            .execute("INSERT INTO sessions (id) VALUES ('ses-t1')", ())
+            .await
+            .unwrap();
 
         // Project meta
-        db.conn().execute("INSERT INTO project_meta (key, value) VALUES ('name', 'test-project')", ()).await.unwrap();
+        db.conn()
+            .execute(
+                "INSERT INTO project_meta (key, value) VALUES ('name', 'test-project')",
+                (),
+            )
+            .await
+            .unwrap();
 
         // Project dependency
         db.conn().execute("INSERT INTO project_dependencies (ecosystem, name, version, source) VALUES ('rust', 'tokio', '1.49', 'cargo.toml')", ()).await.unwrap();
@@ -384,7 +403,13 @@ mod tests {
         db.conn().execute("INSERT INTO findings (id, session_id, content) VALUES ('fnd-t1', 'ses-t1', 'Test finding')", ()).await.unwrap();
 
         // Finding tag
-        db.conn().execute("INSERT INTO finding_tags (finding_id, tag) VALUES ('fnd-t1', 'verified')", ()).await.unwrap();
+        db.conn()
+            .execute(
+                "INSERT INTO finding_tags (finding_id, tag) VALUES ('fnd-t1', 'verified')",
+                (),
+            )
+            .await
+            .unwrap();
 
         // Hypothesis
         db.conn().execute("INSERT INTO hypotheses (id, session_id, content) VALUES ('hyp-t1', 'ses-t1', 'Test hypothesis')", ()).await.unwrap();

@@ -34,7 +34,7 @@ fn impl_methods_as_separate_items() {
     let items = parse_and_extract(source);
     let methods: Vec<&ParsedItem> = items
         .iter()
-        .filter(|i| i.kind == SymbolKind::Method)
+        .filter(|i| i.kind == SymbolKind::Method || i.kind == SymbolKind::Constructor)
         .collect();
     let method_names: Vec<&str> = methods.iter().map(|m| m.name.as_str()).collect();
     assert!(
@@ -72,7 +72,9 @@ fn inherent_impl_methods_have_for_type_only() {
     let items = parse_and_extract(source);
     let new_method = items
         .iter()
-        .find(|i| i.kind == SymbolKind::Method && i.name == "new")
+        .find(|i| {
+            (i.kind == SymbolKind::Method || i.kind == SymbolKind::Constructor) && i.name == "new"
+        })
         .expect("should find new method");
     assert!(
         new_method.metadata.trait_name.is_none(),

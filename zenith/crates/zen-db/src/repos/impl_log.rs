@@ -40,22 +40,25 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_IMPL_LOG).await?;
 
-        self.db().conn().execute(
-            &format!(
-                "INSERT INTO implementation_log ({SELECT_COLS})
+        self.db()
+            .conn()
+            .execute(
+                &format!(
+                    "INSERT INTO implementation_log ({SELECT_COLS})
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
-            ),
-            libsql::params![
-                id.as_str(),
-                task_id,
-                session_id,
-                file_path,
-                start_line,
-                end_line,
-                description,
-                now.to_rfc3339()
-            ],
-        ).await?;
+                ),
+                libsql::params![
+                    id.as_str(),
+                    task_id,
+                    session_id,
+                    file_path,
+                    start_line,
+                    end_line,
+                    description,
+                    now.to_rfc3339()
+                ],
+            )
+            .await?;
 
         let log = ImplLog {
             id: id.clone(),
@@ -77,7 +80,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -93,10 +97,14 @@ impl ZenService {
     }
 
     pub async fn get_impl_log(&self, id: &str) -> Result<ImplLog, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!("SELECT {SELECT_COLS} FROM implementation_log WHERE id = ?1"),
-            [id],
-        ).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!("SELECT {SELECT_COLS} FROM implementation_log WHERE id = ?1"),
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_impl_log(&row)
     }
@@ -108,10 +116,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM implementation_log WHERE id = ?1",
-            [impl_log_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "DELETE FROM implementation_log WHERE id = ?1",
+                [impl_log_id],
+            )
+            .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -141,10 +152,7 @@ impl ZenService {
         Ok(logs)
     }
 
-    pub async fn get_logs_for_task(
-        &self,
-        task_id: &str,
-    ) -> Result<Vec<ImplLog>, DatabaseError> {
+    pub async fn get_logs_for_task(&self, task_id: &str) -> Result<Vec<ImplLog>, DatabaseError> {
         let mut rows = self.db().conn().query(
             &format!(
                 "SELECT {SELECT_COLS} FROM implementation_log WHERE task_id = ?1 ORDER BY created_at"
@@ -159,10 +167,7 @@ impl ZenService {
         Ok(logs)
     }
 
-    pub async fn get_logs_by_file(
-        &self,
-        file_path: &str,
-    ) -> Result<Vec<ImplLog>, DatabaseError> {
+    pub async fn get_logs_by_file(&self, file_path: &str) -> Result<Vec<ImplLog>, DatabaseError> {
         let mut rows = self.db().conn().query(
             &format!(
                 "SELECT {SELECT_COLS} FROM implementation_log WHERE file_path LIKE ?1 || '%' ORDER BY created_at"
@@ -199,7 +204,14 @@ mod tests {
         let task_id = create_test_task(&svc, &ses).await;
 
         let log = svc
-            .create_impl_log(&ses, &task_id, "src/main.rs", Some(10), Some(25), Some("Added handler"))
+            .create_impl_log(
+                &ses,
+                &task_id,
+                "src/main.rs",
+                Some(10),
+                Some(25),
+                Some("Added handler"),
+            )
             .await
             .unwrap();
 

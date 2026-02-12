@@ -9,7 +9,7 @@ use ast_grep_core::Node;
 
 use crate::types::ParsedItem;
 
-pub(super) use classes::process_class;
+pub(super) use classes::{process_class, process_class_members};
 pub(super) use declarations::{process_lexical_declaration, process_variable_declaration};
 pub(super) use functions::{process_function, process_generator_function};
 
@@ -40,6 +40,7 @@ pub(super) fn process_export_statement<D: ast_grep_core::Doc>(
                 if let Some(item) = process_class(&child, export_node, true, is_default) {
                     items.push(item);
                 }
+                items.extend(process_class_members(&child, true));
             }
             "lexical_declaration" => {
                 items.extend(process_lexical_declaration(&child, export_node, true));

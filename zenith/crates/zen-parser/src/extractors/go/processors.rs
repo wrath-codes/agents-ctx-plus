@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
@@ -85,7 +87,10 @@ pub(super) fn process_type_declaration<D: ast_grep_core::Doc>(node: &Node<D>) ->
         match k.as_ref() {
             "type_spec" => {
                 if let Some(item) = process_type_spec(&child, &doc) {
+                    let owner_name = item.name.clone();
+                    let owner_kind = item.kind;
                     items.push(item);
+                    items.extend(extract_type_member_items(&child, &owner_name, owner_kind));
                 }
             }
             "type_alias" => {
@@ -96,6 +101,58 @@ pub(super) fn process_type_declaration<D: ast_grep_core::Doc>(node: &Node<D>) ->
             _ => {}
         }
     }
+    items
+}
+
+fn extract_type_member_items<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+    owner_name: &str,
+    owner_kind: SymbolKind,
+) -> Vec<ParsedItem> {
+    let mut items = Vec::new();
+
+    for child in node.children() {
+        match child.kind().as_ref() {
+            "struct_type" => {
+                for field in extract_struct_fields(&child) {
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.owner_name = Some(owner_name.to_string());
+                    metadata.owner_kind = Some(owner_kind);
+                    items.push(ParsedItem {
+                        kind: SymbolKind::Field,
+                        name: format!("{owner_name}::{field}"),
+                        signature: field.clone(),
+                        source: None,
+                        doc_comment: String::new(),
+                        start_line: child.start_pos().line() as u32 + 1,
+                        end_line: child.end_pos().line() as u32 + 1,
+                        visibility: go_visibility(&field),
+                        metadata,
+                    });
+                }
+            }
+            "interface_type" => {
+                for method in extract_interface_methods(&child) {
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.owner_name = Some(owner_name.to_string());
+                    metadata.owner_kind = Some(owner_kind);
+                    items.push(ParsedItem {
+                        kind: SymbolKind::Method,
+                        name: format!("{owner_name}::{method}"),
+                        signature: method.clone(),
+                        source: None,
+                        doc_comment: String::new(),
+                        start_line: child.start_pos().line() as u32 + 1,
+                        end_line: child.end_pos().line() as u32 + 1,
+                        visibility: go_visibility(&method),
+                        metadata,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
     items
 }
 

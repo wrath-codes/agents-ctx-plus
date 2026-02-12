@@ -65,9 +65,9 @@
 
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use duckdb::Connection;
 use duckdb::arrow::array::Array as DuckdbArray;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // arrow 57 types (lancedb's world)
@@ -170,10 +170,7 @@ fn symbols_schema() -> Arc<Schema> {
         Field::new("attributes", DataType::Utf8, true),
         Field::new(
             "embedding",
-            DataType::FixedSizeList(
-                Arc::new(Field::new("item", DataType::Float32, true)),
-                384,
-            ),
+            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 384),
             true,
         ),
     ]))
@@ -194,7 +191,9 @@ fn synthetic_symbols_batch(count: usize) -> RecordBatch57 {
     let docs: Vec<String> = (0..count)
         .map(|i| format!("Documentation for func_{i}. Handles async spawning of tasks."))
         .collect();
-    let attrs: Vec<String> = (0..count).map(|_| "[\"#[tokio::main]\"]".to_string()).collect();
+    let attrs: Vec<String> = (0..count)
+        .map(|_| "[\"#[tokio::main]\"]".to_string())
+        .collect();
 
     let embeddings: Vec<Option<Vec<Option<f32>>>> = (0..count)
         .map(|i| {
@@ -236,9 +235,7 @@ fn synthetic_symbols_batch(count: usize) -> RecordBatch57 {
             )),
             Arc::new(BooleanArray::from(vec![Some(true); count])),
             Arc::new(StringArray::from(attrs)),
-            Arc::new(
-                FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(embeddings, 384),
-            ),
+            Arc::new(FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(embeddings, 384)),
         ],
     )
     .expect("Failed to create RecordBatch")
@@ -259,9 +256,7 @@ fn synthetic_symbols_batch(count: usize) -> RecordBatch57 {
 /// - Arrow IPC: duckdb's `arrow` doesn't enable the `ipc` feature.
 /// - serde_arrow cross-version: features are non-additive, can't enable both
 ///   `arrow-56` and `arrow-57` simultaneously.
-fn duckdb_batch_to_lance(
-    batch: &duckdb::arrow::record_batch::RecordBatch,
-) -> RecordBatch57 {
+fn duckdb_batch_to_lance(batch: &duckdb::arrow::record_batch::RecordBatch) -> RecordBatch57 {
     let schema56 = batch.schema();
 
     // Reconstruct each column first (may change types, e.g. List → FixedSizeList)
@@ -299,54 +294,102 @@ fn convert_column(
         DT56::Boolean => {
             let arr = col.as_any().downcast_ref::<a56::BooleanArray>().unwrap();
             let values: Vec<Option<bool>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(BooleanArray::from(values))
         }
         DT56::Int32 => {
             let arr = col.as_any().downcast_ref::<a56::Int32Array>().unwrap();
             let values: Vec<Option<i32>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(Int32Array::from(values))
         }
         DT56::Int64 => {
             let arr = col.as_any().downcast_ref::<a56::Int64Array>().unwrap();
             let values: Vec<Option<i64>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(arrow_array::Int64Array::from(values))
         }
         DT56::Float32 => {
             let arr = col.as_any().downcast_ref::<a56::Float32Array>().unwrap();
             let values: Vec<Option<f32>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(arrow_array::Float32Array::from(values))
         }
         DT56::Float64 => {
             let arr = col.as_any().downcast_ref::<a56::Float64Array>().unwrap();
             let values: Vec<Option<f64>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(arrow_array::Float64Array::from(values))
         }
         DT56::Utf8 => {
             let arr = col.as_any().downcast_ref::<a56::StringArray>().unwrap();
             let values: Vec<Option<&str>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(StringArray::from(values))
         }
         DT56::LargeUtf8 => {
-            let arr = col.as_any().downcast_ref::<a56::LargeStringArray>().unwrap();
+            let arr = col
+                .as_any()
+                .downcast_ref::<a56::LargeStringArray>()
+                .unwrap();
             let values: Vec<Option<&str>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(arrow_array::LargeStringArray::from(values))
         }
         DT56::FixedSizeList(inner_field, size) => {
-            let arr = col.as_any().downcast_ref::<a56::FixedSizeListArray>().unwrap();
+            let arr = col
+                .as_any()
+                .downcast_ref::<a56::FixedSizeListArray>()
+                .unwrap();
             match inner_field.data_type() {
                 DT56::Float32 => {
                     let values: Vec<Option<Vec<Option<f32>>>> = (0..arr.len())
@@ -355,14 +398,15 @@ fn convert_column(
                                 None
                             } else {
                                 let inner = arr.value(i);
-                                let f32_arr = inner.as_any().downcast_ref::<a56::Float32Array>().unwrap();
+                                let f32_arr =
+                                    inner.as_any().downcast_ref::<a56::Float32Array>().unwrap();
                                 Some((0..f32_arr.len()).map(|j| Some(f32_arr.value(j))).collect())
                             }
                         })
                         .collect();
-                    Arc::new(FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                        values, *size,
-                    ))
+                    Arc::new(
+                        FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(values, *size),
+                    )
                 }
                 _ => panic!("Unsupported FixedSizeList inner type: {inner_field:?}"),
             }
@@ -392,14 +436,21 @@ fn convert_column(
                                     None
                                 } else {
                                     let inner = arr.value(i);
-                                    let f32_arr = inner.as_any().downcast_ref::<a56::Float32Array>().unwrap();
-                                    Some((0..f32_arr.len()).map(|j| Some(f32_arr.value(j))).collect())
+                                    let f32_arr =
+                                        inner.as_any().downcast_ref::<a56::Float32Array>().unwrap();
+                                    Some(
+                                        (0..f32_arr.len())
+                                            .map(|j| Some(f32_arr.value(j)))
+                                            .collect(),
+                                    )
                                 }
                             })
                             .collect();
-                        Arc::new(FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
-                            values, size,
-                        ))
+                        Arc::new(
+                            FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
+                                values, size,
+                            ),
+                        )
                     } else {
                         // Variable-length lists — keep as List
                         // For now, panic. In production, we'd handle this properly.
@@ -411,9 +462,18 @@ fn convert_column(
         }
         DT56::Timestamp(_, _) => {
             // DuckDB timestamps come as microseconds typically
-            let arr = col.as_any().downcast_ref::<a56::TimestampMicrosecondArray>().unwrap();
+            let arr = col
+                .as_any()
+                .downcast_ref::<a56::TimestampMicrosecondArray>()
+                .unwrap();
             let values: Vec<Option<i64>> = (0..arr.len())
-                .map(|i| if arr.is_null(i) { None } else { Some(arr.value(i)) })
+                .map(|i| {
+                    if arr.is_null(i) {
+                        None
+                    } else {
+                        Some(arr.value(i))
+                    }
+                })
                 .collect();
             Arc::new(arrow_array::TimestampMicrosecondArray::from(values))
         }
@@ -505,13 +565,19 @@ fn spike_arrow_ffi_bridge() {
     )
     .unwrap();
 
-    let mut stmt = conn.prepare("SELECT * FROM test_bridge ORDER BY id").unwrap();
+    let mut stmt = conn
+        .prepare("SELECT * FROM test_bridge ORDER BY id")
+        .unwrap();
     let batches: Vec<duckdb::arrow::record_batch::RecordBatch> =
         stmt.query_arrow([]).unwrap().collect();
     assert_eq!(batches.len(), 1);
     let batch56 = &batches[0];
 
-    eprintln!("  arrow 56 batch: {} rows, {} cols", batch56.num_rows(), batch56.num_columns());
+    eprintln!(
+        "  arrow 56 batch: {} rows, {} cols",
+        batch56.num_rows(),
+        batch56.num_columns()
+    );
     eprintln!("  arrow 56 schema: {:?}", batch56.schema());
 
     // Convert via FFI
@@ -548,7 +614,11 @@ fn spike_arrow_ffi_bridge() {
     assert!(!flags.value(1));
     assert!(flags.value(2));
 
-    eprintln!("  arrow 57 batch: {} rows, {} cols", batch57.num_rows(), batch57.num_columns());
+    eprintln!(
+        "  arrow 57 batch: {} rows, {} cols",
+        batch57.num_rows(),
+        batch57.num_columns()
+    );
     eprintln!("  arrow 57 schema: {:?}", batch57.schema());
     eprintln!("  PASS: Arrow C FFI bridge works (arrow 56 → 57, zero-copy)");
 }
@@ -594,7 +664,9 @@ fn spike_lancedb_write_local() {
         ))
         .unwrap();
     let rows: Vec<(String, String, String, bool)> = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
@@ -736,7 +808,10 @@ fn spike_lancedb_create_indexes() {
         .collect::<Result<_, _>>()
         .unwrap();
 
-    assert!(!vec_results.is_empty(), "Vector search should return results");
+    assert!(
+        !vec_results.is_empty(),
+        "Vector search should return results"
+    );
     assert_eq!(
         vec_results[0].0, "func_5",
         "Nearest should be func_5, got {}",
@@ -866,7 +941,10 @@ fn spike_lancedb_incremental_add() {
     // from seed 20 (since synthetic_symbols_batch uses 0..count as seeds).
     // The second batch has seeds 0..50 for embeddings but IDs 100..149.
     // So the query for seed 120 won't find an exact match — but it should return results.
-    assert!(!results.is_empty(), "Should find results from combined dataset");
+    assert!(
+        !results.is_empty(),
+        "Should find results from combined dataset"
+    );
 
     eprintln!("  PASS: incremental add — 100 + 50 = 150 rows, search works across both");
 }
@@ -956,13 +1034,15 @@ fn spike_duckdb_to_lance_local() {
     let batches57: Vec<RecordBatch57> = batches56.iter().map(duckdb_batch_to_lance).collect();
 
     let schema57 = batches57[0].schema();
-    eprintln!("  FFI bridge: schema has {} fields", schema57.fields().len());
+    eprintln!(
+        "  FFI bridge: schema has {} fields",
+        schema57.fields().len()
+    );
 
     // Write via lancedb
     rt.block_on(async {
         let db = lancedb::connect(lance_uri).execute().await.unwrap();
-        let batch_iter =
-            RecordBatchIterator::new(batches57.into_iter().map(Ok), schema57);
+        let batch_iter = RecordBatchIterator::new(batches57.into_iter().map(Ok), schema57);
         db.create_table("symbols", Box::new(batch_iter))
             .execute()
             .await
@@ -1059,8 +1139,7 @@ fn spike_duckdb_to_lance_r2() {
 
     rt.block_on(async {
         let db = lancedb_connect_r2(&lance_uri).await;
-        let batch_iter =
-            RecordBatchIterator::new(batches57.into_iter().map(Ok), schema57);
+        let batch_iter = RecordBatchIterator::new(batches57.into_iter().map(Ok), schema57);
         db.create_table("symbols", Box::new(batch_iter))
             .execute()
             .await
@@ -1335,11 +1414,15 @@ fn spike_serde_arrow_production_path() {
 
     eprintln!("  serde_arrow schema ({} fields):", fields.len());
     for f in &fields {
-        eprintln!("    {}: {:?} (nullable={})", f.name(), f.data_type(), f.is_nullable());
+        eprintln!(
+            "    {}: {:?} (nullable={})",
+            f.name(),
+            f.data_type(),
+            f.is_nullable()
+        );
     }
 
-    let batch =
-        serde_arrow::to_record_batch(&fields, &symbols).expect("serialize to RecordBatch");
+    let batch = serde_arrow::to_record_batch(&fields, &symbols).expect("serialize to RecordBatch");
 
     assert_eq!(batch.num_rows(), 50);
     assert_eq!(batch.num_columns(), fields.len());
@@ -1378,7 +1461,9 @@ fn spike_serde_arrow_production_path() {
         ))
         .unwrap();
     let (id, name, is_async, doc): (String, String, bool, String) = stmt
-        .query_row([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+        .query_row([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
         .unwrap();
 
     assert_eq!(id, "sym-00000");
@@ -1406,12 +1491,17 @@ fn spike_serde_arrow_production_path() {
     assert_eq!(results[0].0, "func_10", "Nearest should be func_10");
     assert!(results[0].1 < 0.01, "Self-distance should be ~0");
 
-    eprintln!("  Vector search: {} → distance={:.6}", results[0].0, results[0].1);
+    eprintln!(
+        "  Vector search: {} → distance={:.6}",
+        results[0].0, results[0].1
+    );
 
     // 5. Deserialize back from Arrow to Rust structs (round-trip proof)
     let read_batch = {
         let mut stmt = conn
-            .prepare(&format!("SELECT * FROM '{dataset_uri}' ORDER BY id LIMIT 5"))
+            .prepare(&format!(
+                "SELECT * FROM '{dataset_uri}' ORDER BY id LIMIT 5"
+            ))
             .unwrap();
         let arrow_batches: Vec<duckdb::arrow::record_batch::RecordBatch> =
             stmt.query_arrow([]).unwrap().collect();
@@ -1420,8 +1510,7 @@ fn spike_serde_arrow_production_path() {
     };
 
     let round_tripped: Vec<ApiSymbol> =
-        serde_arrow::from_record_batch(&read_batch)
-            .expect("deserialize from RecordBatch");
+        serde_arrow::from_record_batch(&read_batch).expect("deserialize from RecordBatch");
 
     assert_eq!(round_tripped.len(), 5);
     assert_eq!(round_tripped[0].id, "sym-00000");
@@ -1437,5 +1526,7 @@ fn spike_serde_arrow_production_path() {
         "  Round-trip: {} symbols deserialized back to Rust structs",
         round_tripped.len()
     );
-    eprintln!("  PASS: serde_arrow production path — Rust structs → arrow-57 → lancedb → DuckDB → Rust structs");
+    eprintln!(
+        "  PASS: serde_arrow production path — Rust structs → arrow-57 → lancedb → DuckDB → Rust structs"
+    );
 }

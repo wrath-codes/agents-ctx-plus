@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::DocSections;
+use super::{DocSections, SymbolKind};
 
 pub mod bash;
 pub mod c;
@@ -27,6 +27,9 @@ pub struct SymbolMetadata {
     pub generics: Option<String>,
     pub attributes: Vec<String>,
     pub parameters: Vec<String>,
+    pub owner_name: Option<String>,
+    pub owner_kind: Option<SymbolKind>,
+    pub is_static_member: bool,
 
     // Rust-specific
     pub lifetimes: Vec<String>,

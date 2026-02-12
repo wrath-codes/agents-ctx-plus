@@ -2,9 +2,9 @@
 
 #[cfg(test)]
 pub(crate) mod helpers {
+    use crate::ZenDb;
     use crate::service::ZenService;
     use crate::trail::writer::TrailWriter;
-    use crate::ZenDb;
 
     /// Create an in-memory ZenService with trail disabled (for pure DB tests).
     pub async fn test_service() -> ZenService {

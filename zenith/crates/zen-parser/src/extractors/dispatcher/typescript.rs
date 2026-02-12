@@ -60,11 +60,13 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
                 if let Some(item) = processors::process_class(&node, &node, false, false) {
                     items.push(item);
                 }
+                items.extend(processors::process_class_members(&node, false));
             }
             "interface_declaration" => {
                 if let Some(item) = processors::process_interface(&node, &node, false) {
                     items.push(item);
                 }
+                items.extend(processors::process_interface_members(&node, false));
             }
             "type_alias_declaration" => {
                 if let Some(item) = processors::process_type_alias(&node, &node, false) {

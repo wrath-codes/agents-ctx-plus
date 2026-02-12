@@ -5,10 +5,10 @@ use zen_core::responses::RebuildResponse;
 use zen_core::trail::TrailOperation;
 use zen_schema::SchemaRegistry;
 
+use crate::ZenDb;
 use crate::error::DatabaseError;
 use crate::helpers::entity_type_to_table;
 use crate::service::ZenService;
-use crate::ZenDb;
 
 pub struct TrailReplayer;
 
@@ -25,8 +25,7 @@ impl TrailReplayer {
         let mut trail_files = 0u32;
         let mut all_ops: Vec<TrailOperation> = Vec::new();
 
-        let entries = std::fs::read_dir(trail_dir)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
+        let entries = std::fs::read_dir(trail_dir).map_err(|e| DatabaseError::Other(e.into()))?;
 
         for entry in entries {
             let entry = entry.map_err(|e| DatabaseError::Other(e.into()))?;
@@ -36,11 +35,10 @@ impl TrailReplayer {
             }
             trail_files += 1;
 
-            let ops: Vec<TrailOperation> =
-                serde_jsonlines::json_lines(&path)
-                    .map_err(|e| DatabaseError::Other(e.into()))?
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| DatabaseError::Other(e.into()))?;
+            let ops: Vec<TrailOperation> = serde_jsonlines::json_lines(&path)
+                .map_err(|e| DatabaseError::Other(e.into()))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| DatabaseError::Other(e.into()))?;
             all_ops.extend(ops);
         }
 
@@ -70,7 +68,9 @@ impl TrailReplayer {
                         if let Err(e) = s.validate(schema_name, &op.data) {
                             tracing::warn!(
                                 "Schema validation failed for {} {}: {:?}",
-                                op.entity, op.id, e
+                                op.entity,
+                                op.id,
+                                e
                             );
                         }
                     }
@@ -216,11 +216,15 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Issue) => {
-            let issue_type = op.data.get("issue_type")
+            let issue_type = op
+                .data
+                .get("issue_type")
                 .or_else(|| op.data.get("type"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("bug");
-            let priority = op.data.get("priority")
+            let priority = op
+                .data
+                .get("priority")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(3);
 
@@ -325,13 +329,17 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
 
         (TrailOp::Transition, entity) => {
             let table = entity_type_to_table(entity);
-            let new_status = op.data["to"]
-                .as_str()
-                .ok_or_else(|| DatabaseError::InvalidState("Transition missing 'to' field".into()))?;
+            let new_status = op.data["to"].as_str().ok_or_else(|| {
+                DatabaseError::InvalidState("Transition missing 'to' field".into())
+            })?;
 
             match entity {
                 EntityType::Session => {
-                    let ended_at = op.data.get("ended_at").and_then(|v| v.as_str()).unwrap_or(&op.ts);
+                    let ended_at = op
+                        .data
+                        .get("ended_at")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&op.ts);
                     let summary = json_to_value(&op.data, "summary");
                     db.conn()
                         .execute(
@@ -362,7 +370,9 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                 _ => {
                     db.conn()
                         .execute(
-                            &format!("UPDATE {table} SET status = ?1, updated_at = ?2 WHERE id = ?3"),
+                            &format!(
+                                "UPDATE {table} SET status = ?1, updated_at = ?2 WHERE id = ?3"
+                            ),
                             libsql::params![new_status, op.ts.as_str(), op.id.as_str()],
                         )
                         .await?;
@@ -419,17 +429,16 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
 
         (TrailOp::Unlink, EntityType::EntityLink) => {
             db.conn()
-                .execute(
-                    "DELETE FROM entity_links WHERE id = ?1",
-                    [op.id.as_str()],
-                )
+                .execute("DELETE FROM entity_links WHERE id = ?1", [op.id.as_str()])
                 .await?;
         }
 
         (trail_op, entity) => {
             tracing::warn!(
                 "Unhandled trail replay: op={}, entity={}, id={}",
-                trail_op, entity, op.id
+                trail_op,
+                entity,
+                op.id
             );
         }
     }
@@ -524,7 +533,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let finding = svc
-            .create_finding(&sid, "tokio runtime analysis", Some("docs"), Confidence::High, None)
+            .create_finding(
+                &sid,
+                "tokio runtime analysis",
+                Some("docs"),
+                Confidence::High,
+                None,
+            )
             .await
             .unwrap();
         let task = svc
@@ -560,7 +575,13 @@ mod tests {
         let svc1 = test_service_with_trail(trail_dir.path().to_path_buf()).await;
         let sid1 = start_test_session(&svc1).await;
         let f1 = svc1
-            .create_finding(&sid1, "finding from session 1", None, Confidence::Medium, None)
+            .create_finding(
+                &sid1,
+                "finding from session 1",
+                None,
+                Confidence::Medium,
+                None,
+            )
             .await
             .unwrap();
 
@@ -591,9 +612,15 @@ mod tests {
         let svc = test_service_with_trail(trail_dir.path().to_path_buf()).await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_finding(&sid, "tokio async runtime compatibility", None, Confidence::High, None)
-            .await
-            .unwrap();
+        svc.create_finding(
+            &sid,
+            "tokio async runtime compatibility",
+            None,
+            Confidence::High,
+            None,
+        )
+        .await
+        .unwrap();
 
         let mut svc2 = test_service_with_trail(trail_dir.path().to_path_buf()).await;
         TrailReplayer::rebuild(&mut svc2, trail_dir.path(), false)
@@ -654,9 +681,15 @@ mod tests {
             .create_finding(&sid, "tagged finding", None, Confidence::High, None)
             .await
             .unwrap();
-        svc.tag_finding(&sid, &finding.id, "important").await.unwrap();
-        svc.tag_finding(&sid, &finding.id, "verified").await.unwrap();
-        svc.untag_finding(&sid, &finding.id, "verified").await.unwrap();
+        svc.tag_finding(&sid, &finding.id, "important")
+            .await
+            .unwrap();
+        svc.tag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
+        svc.untag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
 
         let mut svc2 = test_service_with_trail(trail_dir.path().to_path_buf()).await;
         TrailReplayer::rebuild(&mut svc2, trail_dir.path(), false)
@@ -677,8 +710,10 @@ mod tests {
         let link = svc
             .create_link(
                 &sid,
-                EntityType::Finding, "fnd-001",
-                EntityType::Hypothesis, "hyp-001",
+                EntityType::Finding,
+                "fnd-001",
+                EntityType::Hypothesis,
+                "hyp-001",
                 Relation::Validates,
             )
             .await
@@ -708,9 +743,14 @@ mod tests {
         svc.transition_hypothesis(&sid, &hyp.id, HypothesisStatus::Analyzing, None)
             .await
             .unwrap();
-        svc.transition_hypothesis(&sid, &hyp.id, HypothesisStatus::Confirmed, Some("evidence found"))
-            .await
-            .unwrap();
+        svc.transition_hypothesis(
+            &sid,
+            &hyp.id,
+            HypothesisStatus::Confirmed,
+            Some("evidence found"),
+        )
+        .await
+        .unwrap();
 
         let mut svc2 = test_service_with_trail(trail_dir.path().to_path_buf()).await;
         TrailReplayer::rebuild(&mut svc2, trail_dir.path(), false)

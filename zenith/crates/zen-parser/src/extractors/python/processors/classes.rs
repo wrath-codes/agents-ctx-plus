@@ -1,9 +1,11 @@
+#![allow(clippy::field_reassign_with_default, clippy::uninlined_format_args)]
+
 //! Class definition processing for Python extraction.
 
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
-use crate::types::{ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata};
+use crate::types::{ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata, Visibility};
 
 use super::super::doc::{extract_docstring, parse_python_doc_sections};
 use super::super::pyhelpers::{decorator_matches_any, is_exception_subclass, python_visibility};
@@ -110,6 +112,49 @@ pub fn process_class<D: ast_grep_core::Doc>(
     })
 }
 
+pub fn process_class_member_items<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedItem> {
+    let Some(owner_name) = node.field("name").map(|n| n.text().to_string()) else {
+        return Vec::new();
+    };
+    let Some(body) = node.field("body") else {
+        return Vec::new();
+    };
+
+    let mut items = Vec::new();
+    for child in body.children() {
+        match child.kind().as_ref() {
+            "function_definition" => {
+                if let Some(member) = build_function_member_item(&child, &owner_name, &[]) {
+                    items.push(member);
+                }
+            }
+            "decorated_definition" => {
+                let decorators: Vec<String> = child
+                    .children()
+                    .filter(|c| c.kind().as_ref() == "decorator")
+                    .map(|c| c.text().trim_start_matches('@').trim().to_string())
+                    .collect();
+                if let Some(func) = child
+                    .children()
+                    .find(|c| c.kind().as_ref() == "function_definition")
+                    && let Some(member) =
+                        build_function_member_item(&func, &owner_name, &decorators)
+                {
+                    items.push(member);
+                }
+            }
+            "expression_statement" => {
+                if let Some(field_item) = build_field_member_item(&child, &owner_name) {
+                    items.push(field_item);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    items
+}
+
 /// Extract base classes, filtering out metaclass keyword arguments.
 fn extract_base_classes<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
     let Some(superclasses) = node.field("superclasses") else {
@@ -206,4 +251,77 @@ fn extract_instance_vars<D: ast_grep_core::Doc>(init_node: &Node<D>, fields: &mu
             }
         }
     }
+}
+
+fn build_function_member_item<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+    owner_name: &str,
+    decorators: &[String],
+) -> Option<ParsedItem> {
+    let name = node.field("name").map(|n| n.text().to_string())?;
+    let mut metadata = SymbolMetadata::default();
+    metadata.owner_name = Some(owner_name.to_string());
+    metadata.owner_kind = Some(SymbolKind::Class);
+    metadata.parameters = super::super::pyhelpers::extract_python_parameters(node);
+    metadata.return_type = node.field("return_type").map(|rt| rt.text().to_string());
+
+    let kind = if name == "__init__" {
+        SymbolKind::Constructor
+    } else if super::super::pyhelpers::decorator_matches_any(
+        decorators,
+        &["property", "cached_property"],
+    ) {
+        SymbolKind::Property
+    } else {
+        SymbolKind::Method
+    };
+
+    Some(ParsedItem {
+        kind,
+        name: format!("{owner_name}::{}", name),
+        signature: helpers::extract_signature_python(node),
+        source: helpers::extract_source(node, 30),
+        doc_comment: extract_docstring(node),
+        start_line: node.start_pos().line() as u32 + 1,
+        end_line: node.end_pos().line() as u32 + 1,
+        visibility: python_visibility(&name),
+        metadata,
+    })
+}
+
+fn build_field_member_item<D: ast_grep_core::Doc>(
+    expr_stmt: &Node<D>,
+    owner_name: &str,
+) -> Option<ParsedItem> {
+    let text = expr_stmt.text().to_string();
+    let trimmed = text.trim();
+    if trimmed.starts_with("\"\"\"")
+        || trimmed.starts_with("'''")
+        || trimmed.starts_with('"')
+        || trimmed.starts_with('\'')
+    {
+        return None;
+    }
+
+    let raw_name = trimmed.split([':', '=']).next()?.trim();
+    if raw_name.is_empty() {
+        return None;
+    }
+
+    let mut metadata = SymbolMetadata::default();
+    metadata.owner_name = Some(owner_name.to_string());
+    metadata.owner_kind = Some(SymbolKind::Class);
+    metadata.is_static_member = true;
+
+    Some(ParsedItem {
+        kind: SymbolKind::Field,
+        name: format!("{owner_name}::{raw_name}"),
+        signature: text.clone(),
+        source: Some(text),
+        doc_comment: String::new(),
+        start_line: expr_stmt.start_pos().line() as u32 + 1,
+        end_line: expr_stmt.end_pos().line() as u32 + 1,
+        visibility: Visibility::Private,
+        metadata,
+    })
 }

@@ -27,3 +27,15 @@ fn interface_members_extracted() {
     assert!(i.metadata.methods.contains(&"handle".to_string()));
     assert!(i.metadata.methods.contains(&"name".to_string()));
 }
+
+#[test]
+fn interface_member_items_emitted() {
+    let source = include_str!("../../../../tests/fixtures/sample.ts");
+    let items = parse_and_extract(source);
+
+    let handle = find_by_name(&items, "Handler::handle");
+    assert_eq!(handle.kind, SymbolKind::Method);
+
+    let name = find_by_name(&items, "Handler::name");
+    assert_eq!(name.kind, SymbolKind::Property);
+}

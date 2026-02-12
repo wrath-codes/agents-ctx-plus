@@ -1,9 +1,13 @@
+#![allow(clippy::field_reassign_with_default, clippy::uninlined_format_args)]
+
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
 use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, TypeScriptMetadataExt, Visibility};
 
-use super::super::ts_helpers::{extract_jsdoc_before, parse_jsdoc_sections};
+use super::super::ts_helpers::{
+    extract_jsdoc_before, extract_ts_parameters, extract_ts_return_type, parse_jsdoc_sections,
+};
 
 // ── interface_declaration ──────────────────────────────────────────
 
@@ -48,6 +52,102 @@ pub fn process_interface<D: ast_grep_core::Doc>(
         visibility,
         metadata,
     })
+}
+
+pub fn process_interface_members<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+    is_exported: bool,
+) -> Vec<ParsedItem> {
+    let Some(owner_name) = node.field("name").map(|n| n.text().to_string()) else {
+        return Vec::new();
+    };
+
+    let visibility = if is_exported {
+        Visibility::Export
+    } else {
+        Visibility::Private
+    };
+
+    let mut items = Vec::new();
+    for child in node.children() {
+        if child.kind().as_ref() != "interface_body" && child.kind().as_ref() != "object_type" {
+            continue;
+        }
+
+        for member in child.children() {
+            match member.kind().as_ref() {
+                "method_signature" => {
+                    if let Some(name_node) = member.field("name") {
+                        let mut metadata = SymbolMetadata::default();
+                        metadata.owner_name = Some(owner_name.clone());
+                        metadata.owner_kind = Some(SymbolKind::Interface);
+                        metadata.return_type = extract_ts_return_type(&member);
+                        metadata.parameters = extract_ts_parameters(&member);
+
+                        items.push(ParsedItem {
+                            kind: SymbolKind::Method,
+                            name: format!("{}::{}", owner_name, name_node.text()),
+                            signature: helpers::extract_signature(&member),
+                            source: helpers::extract_source(&member, 10),
+                            doc_comment: String::new(),
+                            start_line: member.start_pos().line() as u32 + 1,
+                            end_line: member.end_pos().line() as u32 + 1,
+                            visibility: visibility.clone(),
+                            metadata,
+                        });
+                    }
+                }
+                "property_signature" => {
+                    if let Some(name_node) = member.field("name") {
+                        let mut metadata = SymbolMetadata::default();
+                        metadata.owner_name = Some(owner_name.clone());
+                        metadata.owner_kind = Some(SymbolKind::Interface);
+                        metadata.return_type = member
+                            .children()
+                            .find(|c| c.kind().as_ref() == "type_annotation")
+                            .map(|ta| {
+                                ta.text()
+                                    .to_string()
+                                    .trim_start_matches(':')
+                                    .trim()
+                                    .to_string()
+                            });
+
+                        items.push(ParsedItem {
+                            kind: SymbolKind::Property,
+                            name: format!("{}::{}", owner_name, name_node.text()),
+                            signature: helpers::extract_signature(&member),
+                            source: helpers::extract_source(&member, 10),
+                            doc_comment: String::new(),
+                            start_line: member.start_pos().line() as u32 + 1,
+                            end_line: member.end_pos().line() as u32 + 1,
+                            visibility: visibility.clone(),
+                            metadata,
+                        });
+                    }
+                }
+                "index_signature" => {
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.owner_name = Some(owner_name.clone());
+                    metadata.owner_kind = Some(SymbolKind::Interface);
+                    items.push(ParsedItem {
+                        kind: SymbolKind::Indexer,
+                        name: format!("{}[]", owner_name),
+                        signature: helpers::extract_signature(&member),
+                        source: helpers::extract_source(&member, 10),
+                        doc_comment: String::new(),
+                        start_line: member.start_pos().line() as u32 + 1,
+                        end_line: member.end_pos().line() as u32 + 1,
+                        visibility: visibility.clone(),
+                        metadata,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+
+    items
 }
 
 fn extract_interface_heritage<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {

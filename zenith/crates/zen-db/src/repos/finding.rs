@@ -73,7 +73,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -133,13 +134,13 @@ impl ZenService {
         params.push(now.to_rfc3339().into());
         idx += 1;
 
-        let sql = format!(
-            "UPDATE findings SET {} WHERE id = ?{idx}",
-            sets.join(", ")
-        );
+        let sql = format!("UPDATE findings SET {} WHERE id = ?{idx}", sets.join(", "));
         params.push(finding_id.into());
 
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let finding = self.get_finding(finding_id).await?;
 
@@ -150,9 +151,12 @@ impl ZenService {
             entity_type: EntityType::Finding,
             entity_id: finding_id.to_string(),
             action: AuditAction::Updated,
-            detail: Some(serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -174,15 +178,18 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM finding_tags WHERE finding_id = ?1",
-            [finding_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "DELETE FROM finding_tags WHERE finding_id = ?1",
+                [finding_id],
+            )
+            .await?;
 
-        self.db().conn().execute(
-            "DELETE FROM findings WHERE id = ?1",
-            [finding_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM findings WHERE id = ?1", [finding_id])
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -193,7 +200,8 @@ impl ZenService {
             action: AuditAction::Deleted,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -253,12 +261,17 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
-            libsql::params![finding_id, tag],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
+                libsql::params![finding_id, tag],
+            )
+            .await?;
 
-        let detail = TaggedDetail { tag: tag.to_string() };
+        let detail = TaggedDetail {
+            tag: tag.to_string(),
+        };
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -267,9 +280,12 @@ impl ZenService {
             entity_type: EntityType::Finding,
             entity_id: finding_id.to_string(),
             action: AuditAction::Tagged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -292,12 +308,17 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
-            libsql::params![finding_id, tag],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
+                libsql::params![finding_id, tag],
+            )
+            .await?;
 
-        let detail = TaggedDetail { tag: tag.to_string() };
+        let detail = TaggedDetail {
+            tag: tag.to_string(),
+        };
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -306,9 +327,12 @@ impl ZenService {
             entity_type: EntityType::Finding,
             entity_id: finding_id.to_string(),
             action: AuditAction::Untagged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -324,10 +348,14 @@ impl ZenService {
     }
 
     pub async fn get_finding_tags(&self, finding_id: &str) -> Result<Vec<String>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT tag FROM finding_tags WHERE finding_id = ?1 ORDER BY tag",
-            [finding_id],
-        ).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT tag FROM finding_tags WHERE finding_id = ?1 ORDER BY tag",
+                [finding_id],
+            )
+            .await?;
 
         let mut tags = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -350,7 +378,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let finding = svc
-            .create_finding(&sid, "Tokio uses work-stealing scheduler", Some("docs.rs"), Confidence::High, None)
+            .create_finding(
+                &sid,
+                "Tokio uses work-stealing scheduler",
+                Some("docs.rs"),
+                Confidence::High,
+                None,
+            )
             .await
             .unwrap();
 
@@ -378,7 +412,9 @@ mod tests {
             .await
             .unwrap();
 
-        let update = FindingUpdateBuilder::new().content("updated content").build();
+        let update = FindingUpdateBuilder::new()
+            .content("updated content")
+            .build();
         let updated = svc.update_finding(&sid, &finding.id, update).await.unwrap();
 
         assert_eq!(updated.content, "updated content");
@@ -392,7 +428,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let finding = svc
-            .create_finding(&sid, "content", Some("will-be-removed"), Confidence::Medium, None)
+            .create_finding(
+                &sid,
+                "content",
+                Some("will-be-removed"),
+                Confidence::Medium,
+                None,
+            )
             .await
             .unwrap();
 
@@ -424,9 +466,15 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         for i in 0..3 {
-            svc.create_finding(&sid, &format!("finding {i}"), None, Confidence::Medium, None)
-                .await
-                .unwrap();
+            svc.create_finding(
+                &sid,
+                &format!("finding {i}"),
+                None,
+                Confidence::Medium,
+                None,
+            )
+            .await
+            .unwrap();
         }
 
         let findings = svc.list_findings(10).await.unwrap();
@@ -460,7 +508,9 @@ mod tests {
             .await
             .unwrap();
 
-        svc.tag_finding(&sid, &finding.id, "verified").await.unwrap();
+        svc.tag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
 
         let tags = svc.get_finding_tags(&finding.id).await.unwrap();
         assert_eq!(tags, vec!["verified"]);
@@ -476,8 +526,12 @@ mod tests {
             .await
             .unwrap();
 
-        svc.tag_finding(&sid, &finding.id, "verified").await.unwrap();
-        svc.tag_finding(&sid, &finding.id, "verified").await.unwrap();
+        svc.tag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
+        svc.tag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
 
         let tags = svc.get_finding_tags(&finding.id).await.unwrap();
         assert_eq!(tags, vec!["verified"]);
@@ -493,8 +547,12 @@ mod tests {
             .await
             .unwrap();
 
-        svc.tag_finding(&sid, &finding.id, "verified").await.unwrap();
-        svc.untag_finding(&sid, &finding.id, "verified").await.unwrap();
+        svc.tag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
+        svc.untag_finding(&sid, &finding.id, "verified")
+            .await
+            .unwrap();
 
         let tags = svc.get_finding_tags(&finding.id).await.unwrap();
         assert!(tags.is_empty());

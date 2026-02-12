@@ -61,8 +61,12 @@ fn enrich_recursive<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parse
                                 if let Some(item) = items.iter_mut().find(|i| {
                                     i.start_line == start_line
                                         && (i.kind == SymbolKind::Function
+                                            || i.kind == SymbolKind::Method
+                                            || i.kind == SymbolKind::Constructor
                                             || i.kind == SymbolKind::Const
-                                            || i.kind == SymbolKind::Static)
+                                            || i.kind == SymbolKind::Static
+                                            || i.kind == SymbolKind::Field
+                                            || i.kind == SymbolKind::Property)
                                 }) {
                                     item.metadata.return_type = Some(rt_text);
                                 }

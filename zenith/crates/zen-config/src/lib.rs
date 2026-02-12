@@ -46,8 +46,8 @@ pub use r2::R2Config;
 pub use turso::TursoConfig;
 
 use figment::{
-    providers::{Env, Format, Serialized, Toml},
     Figment,
+    providers::{Env, Format, Serialized, Toml},
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

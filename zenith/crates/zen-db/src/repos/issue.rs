@@ -44,24 +44,27 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_ISSUE).await?;
 
-        self.db().conn().execute(
-            &format!(
-                "INSERT INTO issues ({SELECT_COLS})
+        self.db()
+            .conn()
+            .execute(
+                &format!(
+                    "INSERT INTO issues ({SELECT_COLS})
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
-            ),
-            libsql::params![
-                id.as_str(),
-                issue_type.as_str(),
-                parent_id,
-                title,
-                description,
-                IssueStatus::Open.as_str(),
-                priority as i64,
-                session_id,
-                now.to_rfc3339(),
-                now.to_rfc3339()
-            ],
-        ).await?;
+                ),
+                libsql::params![
+                    id.as_str(),
+                    issue_type.as_str(),
+                    parent_id,
+                    title,
+                    description,
+                    IssueStatus::Open.as_str(),
+                    priority as i64,
+                    session_id,
+                    now.to_rfc3339(),
+                    now.to_rfc3339()
+                ],
+            )
+            .await?;
 
         let issue = Issue {
             id: id.clone(),
@@ -85,7 +88,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -101,10 +105,14 @@ impl ZenService {
     }
 
     pub async fn get_issue(&self, id: &str) -> Result<Issue, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!("SELECT {SELECT_COLS} FROM issues WHERE id = ?1"),
-            [id],
-        ).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!("SELECT {SELECT_COLS} FROM issues WHERE id = ?1"),
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_issue(&row)
     }
@@ -160,11 +168,11 @@ impl ZenService {
         idx += 1;
 
         params.push(issue_id.into());
-        let sql = format!(
-            "UPDATE issues SET {} WHERE id = ?{idx}",
-            sets.join(", ")
-        );
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        let sql = format!("UPDATE issues SET {} WHERE id = ?{idx}", sets.join(", "));
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let updated = self.get_issue(issue_id).await?;
 
@@ -175,9 +183,12 @@ impl ZenService {
             entity_type: EntityType::Issue,
             entity_id: issue_id.to_string(),
             action: AuditAction::Updated,
-            detail: Some(serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -199,10 +210,10 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM issues WHERE id = ?1",
-            [issue_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM issues WHERE id = ?1", [issue_id])
+            .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -237,15 +248,19 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<Issue>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            "SELECT i.id, i.type, i.parent_id, i.title, i.description, i.status, \
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT i.id, i.type, i.parent_id, i.title, i.description, i.status, \
              i.priority, i.session_id, i.created_at, i.updated_at \
              FROM issues_fts \
              JOIN issues i ON i.rowid = issues_fts.rowid \
              WHERE issues_fts MATCH ?1 \
              ORDER BY rank LIMIT ?2",
-            libsql::params![query, limit],
-        ).await?;
+                libsql::params![query, limit],
+            )
+            .await?;
 
         let mut issues = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -270,10 +285,13 @@ impl ZenService {
         }
 
         let now = Utc::now();
-        self.db().conn().execute(
-            "UPDATE issues SET status = ?1, updated_at = ?2 WHERE id = ?3",
-            libsql::params![new_status.as_str(), now.to_rfc3339(), issue_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "UPDATE issues SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                libsql::params![new_status.as_str(), now.to_rfc3339(), issue_id],
+            )
+            .await?;
 
         let updated = Issue {
             status: new_status,
@@ -294,9 +312,12 @@ impl ZenService {
             entity_type: EntityType::Issue,
             entity_id: issue_id.to_string(),
             action: AuditAction::StatusChanged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -348,7 +369,14 @@ mod tests {
         let ses = start_test_session(&svc).await;
 
         let issue = svc
-            .create_issue(&ses, "Fix login bug", IssueType::Bug, 2, Some("Login fails"), None)
+            .create_issue(
+                &ses,
+                "Fix login bug",
+                IssueType::Bug,
+                2,
+                Some("Login fails"),
+                None,
+            )
             .await
             .unwrap();
 
@@ -399,8 +427,12 @@ mod tests {
         let svc = test_service().await;
         let ses = start_test_session(&svc).await;
 
-        svc.create_issue(&ses, "Issue A", IssueType::Bug, 1, None, None).await.unwrap();
-        svc.create_issue(&ses, "Issue B", IssueType::Feature, 2, None, None).await.unwrap();
+        svc.create_issue(&ses, "Issue A", IssueType::Bug, 1, None, None)
+            .await
+            .unwrap();
+        svc.create_issue(&ses, "Issue B", IssueType::Feature, 2, None, None)
+            .await
+            .unwrap();
 
         let issues = svc.list_issues(10).await.unwrap();
         assert_eq!(issues.len(), 2);
@@ -411,9 +443,16 @@ mod tests {
         let svc = test_service().await;
         let ses = start_test_session(&svc).await;
 
-        svc.create_issue(&ses, "Authentication refactor", IssueType::Feature, 3, None, None)
-            .await
-            .unwrap();
+        svc.create_issue(
+            &ses,
+            "Authentication refactor",
+            IssueType::Feature,
+            3,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         svc.create_issue(&ses, "Database migration", IssueType::Spike, 3, None, None)
             .await
             .unwrap();
@@ -467,7 +506,14 @@ mod tests {
             .unwrap();
 
         let child = svc
-            .create_issue(&ses, "Child task", IssueType::Bug, 2, None, Some(&parent.id))
+            .create_issue(
+                &ses,
+                "Child task",
+                IssueType::Bug,
+                2,
+                None,
+                Some(&parent.id),
+            )
             .await
             .unwrap();
 

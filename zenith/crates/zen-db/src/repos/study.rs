@@ -33,8 +33,7 @@ fn row_to_study(row: &libsql::Row) -> Result<Study, DatabaseError> {
     })
 }
 
-const STUDY_COLS: &str =
-    "id, session_id, research_id, topic, library, methodology, status, summary, created_at, updated_at";
+const STUDY_COLS: &str = "id, session_id, research_id, topic, library, methodology, status, summary, created_at, updated_at";
 
 /// Full study state including linked entities.
 #[derive(Debug)]
@@ -200,10 +199,7 @@ impl ZenService {
         params.push(Utc::now().to_rfc3339().into());
         idx += 1;
 
-        let sql = format!(
-            "UPDATE studies SET {} WHERE id = ?{idx}",
-            sets.join(", ")
-        );
+        let sql = format!("UPDATE studies SET {} WHERE id = ?{idx}", sets.join(", "));
         params.push(study_id.into());
 
         self.db()
@@ -279,9 +275,7 @@ impl ZenService {
             .db()
             .conn()
             .query(
-                &format!(
-                    "SELECT {STUDY_COLS} FROM studies ORDER BY created_at DESC LIMIT {limit}"
-                ),
+                &format!("SELECT {STUDY_COLS} FROM studies ORDER BY created_at DESC LIMIT {limit}"),
                 (),
             )
             .await?;
@@ -690,10 +684,7 @@ impl ZenService {
     }
 
     /// Progress tracking: count hypotheses by status for a study.
-    pub async fn study_progress(
-        &self,
-        study_id: &str,
-    ) -> Result<StudyProgress, DatabaseError> {
+    pub async fn study_progress(&self, study_id: &str) -> Result<StudyProgress, DatabaseError> {
         let mut rows = self
             .db()
             .conn()
@@ -733,7 +724,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let study = svc
-            .create_study(&sid, "tokio runtime", Some("tokio"), StudyMethodology::TestDriven, None)
+            .create_study(
+                &sid,
+                "tokio runtime",
+                Some("tokio"),
+                StudyMethodology::TestDriven,
+                None,
+            )
             .await
             .unwrap();
 
@@ -755,7 +752,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let study = svc
-            .create_study(&sid, "original topic", None, StudyMethodology::Explore, None)
+            .create_study(
+                &sid,
+                "original topic",
+                None,
+                StudyMethodology::Explore,
+                None,
+            )
             .await
             .unwrap();
 
@@ -788,9 +791,15 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         for i in 0..3 {
-            svc.create_study(&sid, &format!("study {i}"), None, StudyMethodology::Explore, None)
-                .await
-                .unwrap();
+            svc.create_study(
+                &sid,
+                &format!("study {i}"),
+                None,
+                StudyMethodology::Explore,
+                None,
+            )
+            .await
+            .unwrap();
         }
 
         let studies = svc.list_studies(10).await.unwrap();
@@ -802,12 +811,24 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_study(&sid, "tokio async runtime", None, StudyMethodology::Explore, None)
-            .await
-            .unwrap();
-        svc.create_study(&sid, "database comparison", None, StudyMethodology::Compare, None)
-            .await
-            .unwrap();
+        svc.create_study(
+            &sid,
+            "tokio async runtime",
+            None,
+            StudyMethodology::Explore,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.create_study(
+            &sid,
+            "database comparison",
+            None,
+            StudyMethodology::Compare,
+            None,
+        )
+        .await
+        .unwrap();
 
         let results = svc.search_studies("tokio", 10).await.unwrap();
         assert_eq!(results.len(), 1);
@@ -890,7 +911,13 @@ mod tests {
             .unwrap();
 
         let fnd_id = svc
-            .record_test_result(&sid, &study.id, &hyp_id, "confirmed via testing", Confidence::High)
+            .record_test_result(
+                &sid,
+                &study.id,
+                &hyp_id,
+                "confirmed via testing",
+                Confidence::High,
+            )
             .await
             .unwrap();
 
@@ -907,7 +934,11 @@ mod tests {
             .get_links_to(EntityType::Hypothesis, &hyp_id)
             .await
             .unwrap();
-        assert!(hyp_findings.iter().any(|l| l.source_id == fnd_id && l.relation == Relation::Validates));
+        assert!(
+            hyp_findings
+                .iter()
+                .any(|l| l.source_id == fnd_id && l.relation == Relation::Validates)
+        );
     }
 
     #[tokio::test]
@@ -930,7 +961,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(concluded.status, StudyStatus::Completed);
-        assert_eq!(concluded.summary.as_deref(), Some("Study conclusion summary"));
+        assert_eq!(
+            concluded.summary.as_deref(),
+            Some("Study conclusion summary")
+        );
 
         let insight_ids = svc
             .get_linked_ids(EntityType::Study, &study.id, EntityType::Insight)
@@ -945,7 +979,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let study = svc
-            .create_study(&sid, "progress test", None, StudyMethodology::TestDriven, None)
+            .create_study(
+                &sid,
+                "progress test",
+                None,
+                StudyMethodology::TestDriven,
+                None,
+            )
             .await
             .unwrap();
 
@@ -969,7 +1009,13 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let study = svc
-            .create_study(&sid, "full state test", None, StudyMethodology::TestDriven, None)
+            .create_study(
+                &sid,
+                "full state test",
+                None,
+                StudyMethodology::TestDriven,
+                None,
+            )
             .await
             .unwrap();
 

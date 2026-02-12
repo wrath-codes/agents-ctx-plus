@@ -42,23 +42,26 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_TASK).await?;
 
-        self.db().conn().execute(
-            &format!(
-                "INSERT INTO tasks ({SELECT_COLS})
+        self.db()
+            .conn()
+            .execute(
+                &format!(
+                    "INSERT INTO tasks ({SELECT_COLS})
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
-            ),
-            libsql::params![
-                id.as_str(),
-                research_id,
-                issue_id,
-                session_id,
-                title,
-                description,
-                TaskStatus::Open.as_str(),
-                now.to_rfc3339(),
-                now.to_rfc3339()
-            ],
-        ).await?;
+                ),
+                libsql::params![
+                    id.as_str(),
+                    research_id,
+                    issue_id,
+                    session_id,
+                    title,
+                    description,
+                    TaskStatus::Open.as_str(),
+                    now.to_rfc3339(),
+                    now.to_rfc3339()
+                ],
+            )
+            .await?;
 
         let task = Task {
             id: id.clone(),
@@ -81,7 +84,8 @@ impl ZenService {
             action: AuditAction::Created,
             detail: None,
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -97,10 +101,14 @@ impl ZenService {
     }
 
     pub async fn get_task(&self, id: &str) -> Result<Task, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!("SELECT {SELECT_COLS} FROM tasks WHERE id = ?1"),
-            [id],
-        ).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!("SELECT {SELECT_COLS} FROM tasks WHERE id = ?1"),
+                [id],
+            )
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_task(&row)
     }
@@ -151,11 +159,11 @@ impl ZenService {
         idx += 1;
 
         params.push(task_id.into());
-        let sql = format!(
-            "UPDATE tasks SET {} WHERE id = ?{idx}",
-            sets.join(", ")
-        );
-        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
+        let sql = format!("UPDATE tasks SET {} WHERE id = ?{idx}", sets.join(", "));
+        self.db()
+            .conn()
+            .execute(&sql, libsql::params_from_iter(params))
+            .await?;
 
         let updated = self.get_task(task_id).await?;
 
@@ -166,9 +174,12 @@ impl ZenService {
             entity_type: EntityType::Task,
             entity_id: task_id.to_string(),
             action: AuditAction::Updated,
-            detail: Some(serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&update).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -183,17 +194,13 @@ impl ZenService {
         Ok(updated)
     }
 
-    pub async fn delete_task(
-        &self,
-        session_id: &str,
-        task_id: &str,
-    ) -> Result<(), DatabaseError> {
+    pub async fn delete_task(&self, session_id: &str, task_id: &str) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
-        self.db().conn().execute(
-            "DELETE FROM tasks WHERE id = ?1",
-            [task_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute("DELETE FROM tasks WHERE id = ?1", [task_id])
+            .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -209,12 +216,16 @@ impl ZenService {
     }
 
     pub async fn list_tasks(&self, limit: u32) -> Result<Vec<Task>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM tasks ORDER BY status, created_at DESC LIMIT {limit}"
-            ),
-            (),
-        ).await?;
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!(
+                    "SELECT {SELECT_COLS} FROM tasks ORDER BY status, created_at DESC LIMIT {limit}"
+                ),
+                (),
+            )
+            .await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -223,22 +234,22 @@ impl ZenService {
         Ok(tasks)
     }
 
-    pub async fn search_tasks(
-        &self,
-        query: &str,
-        limit: u32,
-    ) -> Result<Vec<Task>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT t.id, t.research_id, t.issue_id, t.session_id, t.title, t.description, \
+    pub async fn search_tasks(&self, query: &str, limit: u32) -> Result<Vec<Task>, DatabaseError> {
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                &format!(
+                    "SELECT t.id, t.research_id, t.issue_id, t.session_id, t.title, t.description, \
                  t.status, t.created_at, t.updated_at \
                  FROM tasks_fts \
                  JOIN tasks t ON t.rowid = tasks_fts.rowid \
                  WHERE tasks_fts MATCH ?1 \
                  ORDER BY rank LIMIT ?2"
-            ),
-            libsql::params![query, limit],
-        ).await?;
+                ),
+                libsql::params![query, limit],
+            )
+            .await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -263,10 +274,13 @@ impl ZenService {
         }
 
         let now = Utc::now();
-        self.db().conn().execute(
-            "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
-            libsql::params![new_status.as_str(), now.to_rfc3339(), task_id],
-        ).await?;
+        self.db()
+            .conn()
+            .execute(
+                "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                libsql::params![new_status.as_str(), now.to_rfc3339(), task_id],
+            )
+            .await?;
 
         let updated = Task {
             status: new_status,
@@ -287,9 +301,12 @@ impl ZenService {
             entity_type: EntityType::Task,
             entity_id: task_id.to_string(),
             action: AuditAction::StatusChanged,
-            detail: Some(serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?),
+            detail: Some(
+                serde_json::to_value(&detail).map_err(|e| DatabaseError::Other(e.into()))?,
+            ),
             created_at: now,
-        }).await?;
+        })
+        .await?;
 
         self.trail().append(&TrailOperation {
             v: 1,
@@ -304,10 +321,7 @@ impl ZenService {
         Ok(updated)
     }
 
-    pub async fn get_tasks_for_issue(
-        &self,
-        issue_id: &str,
-    ) -> Result<Vec<Task>, DatabaseError> {
+    pub async fn get_tasks_for_issue(&self, issue_id: &str) -> Result<Vec<Task>, DatabaseError> {
         let mut rows = self.db().conn().query(
             &format!(
                 "SELECT {SELECT_COLS} FROM tasks WHERE issue_id = ?1 ORDER BY status, created_at"
@@ -337,7 +351,13 @@ mod tests {
         let ses = start_test_session(&svc).await;
 
         let task = svc
-            .create_task(&ses, "Implement auth", Some("Add JWT middleware"), None, None)
+            .create_task(
+                &ses,
+                "Implement auth",
+                Some("Add JWT middleware"),
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -385,8 +405,12 @@ mod tests {
         let svc = test_service().await;
         let ses = start_test_session(&svc).await;
 
-        svc.create_task(&ses, "Task A", None, None, None).await.unwrap();
-        svc.create_task(&ses, "Task B", None, None, None).await.unwrap();
+        svc.create_task(&ses, "Task A", None, None, None)
+            .await
+            .unwrap();
+        svc.create_task(&ses, "Task B", None, None, None)
+            .await
+            .unwrap();
 
         let tasks = svc.list_tasks(10).await.unwrap();
         assert_eq!(tasks.len(), 2);
@@ -436,9 +460,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = svc
-            .transition_task(&ses, &task.id, TaskStatus::Done)
-            .await;
+        let result = svc.transition_task(&ses, &task.id, TaskStatus::Done).await;
         assert!(matches!(result, Err(DatabaseError::InvalidState(_))));
     }
 

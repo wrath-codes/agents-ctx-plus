@@ -15,7 +15,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};
-    use schemars::{schema_for, JsonSchema};
+    use schemars::{JsonSchema, schema_for};
     use serde::{Deserialize, Serialize};
     use serde_json::json;
     use std::collections::HashMap;
@@ -1395,28 +1395,34 @@ mod tests {
         assert!(
             validate_with_schema(&status_schema, &json!({"from": "open", "to": "done"})).is_ok()
         );
-        assert!(validate_with_schema(
-            &status_schema,
-            &json!({"from": "open", "to": "done", "reason": "completed task"})
-        )
-        .is_ok());
-        assert!(validate_with_schema(
-            &linked_schema,
-            &json!({
-                "source_type": "finding", "source_id": "fnd-001",
-                "target_type": "hypothesis", "target_id": "hyp-001",
-                "relation": "validates"
-            })
-        )
-        .is_ok());
+        assert!(
+            validate_with_schema(
+                &status_schema,
+                &json!({"from": "open", "to": "done", "reason": "completed task"})
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_with_schema(
+                &linked_schema,
+                &json!({
+                    "source_type": "finding", "source_id": "fnd-001",
+                    "target_type": "hypothesis", "target_id": "hyp-001",
+                    "relation": "validates"
+                })
+            )
+            .is_ok()
+        );
         assert!(validate_with_schema(&tagged_schema, &json!({"tag": "verified"})).is_ok());
-        assert!(validate_with_schema(
-            &indexed_schema,
-            &json!({
-                "package": "tokio", "ecosystem": "rust", "symbols": 450, "duration_ms": 1200
-            })
-        )
-        .is_ok());
+        assert!(
+            validate_with_schema(
+                &indexed_schema,
+                &json!({
+                    "package": "tokio", "ecosystem": "rust", "symbols": 450, "duration_ms": 1200
+                })
+            )
+            .is_ok()
+        );
 
         // Missing required field
         assert!(validate_with_schema(&status_schema, &json!({"from": "open"})).is_err());

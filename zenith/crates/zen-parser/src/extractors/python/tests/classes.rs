@@ -402,6 +402,18 @@ fn async_resource_methods() {
     assert!(resource.metadata.methods.contains(&"fetch".to_string()));
 }
 
+#[test]
+fn constructor_and_property_member_items_emitted() {
+    let source = include_str!("../../../../tests/fixtures/sample.py");
+    let items = parse_and_extract(source);
+
+    let ctor = find_by_name(&items, "Container::__init__");
+    assert_eq!(ctor.kind, SymbolKind::Constructor);
+
+    let prop = find_by_name(&items, "PropertyExample::value");
+    assert_eq!(prop.kind, SymbolKind::Property);
+}
+
 // ── Visibility example class ───────────────────────────────────
 
 #[test]

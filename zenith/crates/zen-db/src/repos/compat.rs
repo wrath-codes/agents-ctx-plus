@@ -99,9 +99,7 @@ impl ZenService {
     }
 
     pub async fn get_compat_by_id(&self, id: &str) -> Result<CompatCheck, DatabaseError> {
-        let sql = format!(
-            "SELECT {SELECT_COLS} FROM compatibility_checks WHERE id = ?1"
-        );
+        let sql = format!("SELECT {SELECT_COLS} FROM compatibility_checks WHERE id = ?1");
         let mut rows = self.db().conn().query(&sql, [id]).await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_compat(&row)
@@ -289,7 +287,14 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let c = svc
-            .create_compat(&sid, "rust:a:1", "rust:b:2", CompatStatus::Unknown, None, None)
+            .create_compat(
+                &sid,
+                "rust:a:1",
+                "rust:b:2",
+                CompatStatus::Unknown,
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -344,7 +349,14 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let c = svc
-            .create_compat(&sid, "rust:a:1", "rust:b:2", CompatStatus::Unknown, None, None)
+            .create_compat(
+                &sid,
+                "rust:a:1",
+                "rust:b:2",
+                CompatStatus::Unknown,
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -359,12 +371,26 @@ mod tests {
         let svc = test_service().await;
         let sid = start_test_session(&svc).await;
 
-        svc.create_compat(&sid, "rust:a:1", "rust:b:1", CompatStatus::Compatible, None, None)
-            .await
-            .unwrap();
-        svc.create_compat(&sid, "rust:c:1", "rust:d:1", CompatStatus::Incompatible, None, None)
-            .await
-            .unwrap();
+        svc.create_compat(
+            &sid,
+            "rust:a:1",
+            "rust:b:1",
+            CompatStatus::Compatible,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.create_compat(
+            &sid,
+            "rust:c:1",
+            "rust:d:1",
+            CompatStatus::Incompatible,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let list = svc.list_compat(10).await.unwrap();
         assert_eq!(list.len(), 2);
@@ -401,7 +427,14 @@ mod tests {
         let sid = start_test_session(&svc).await;
 
         let c = svc
-            .create_compat(&sid, "rust:a:1", "rust:b:1", CompatStatus::Unknown, None, None)
+            .create_compat(
+                &sid,
+                "rust:a:1",
+                "rust:b:1",
+                CompatStatus::Unknown,
+                None,
+                None,
+            )
             .await
             .unwrap();
 

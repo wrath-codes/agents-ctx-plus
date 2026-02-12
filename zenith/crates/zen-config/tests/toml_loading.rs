@@ -4,8 +4,8 @@
 //! Pattern from: aether `aether-config/tests/toml_loading.rs`.
 
 use figment::{
-    providers::{Env, Format, Serialized, Toml},
     Figment, Jail,
+    providers::{Env, Format, Serialized, Toml},
 };
 use zen_config::ZenConfig;
 
