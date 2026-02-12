@@ -594,7 +594,14 @@ mod tests {
         let enums: Vec<_> = root.root().find_all(enum_matcher).collect();
         assert!(!enums.is_empty(), "Should find at least one enum");
 
-        let body = enums[0].field("body");
+        let status_enum = enums
+            .iter()
+            .find(|e| {
+                e.field("name")
+                    .is_some_and(|n| n.text().as_ref() == "Status")
+            })
+            .expect("Should find Status enum");
+        let body = status_enum.field("body");
         assert!(body.is_some(), "Enum should have a body");
         let variants: Vec<String> = body
             .unwrap()
