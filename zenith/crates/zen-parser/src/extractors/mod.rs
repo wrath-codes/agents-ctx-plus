@@ -1,10 +1,10 @@
 //! Extraction orchestrator — two-tier fallback: ast-grep → regex.
 
-pub mod cpp;
 pub mod dispatcher;
 pub(crate) mod helpers;
 pub use dispatcher::bash;
 pub use dispatcher::c;
+pub use dispatcher::cpp;
 pub use dispatcher::css;
 pub use dispatcher::elixir;
 pub use dispatcher::go;
