@@ -154,10 +154,7 @@ fn process_rule_set<D: ast_grep_core::Doc>(
 
 // ── @media processing ──────────────────────────────────────────────
 
-fn process_media_statement<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_media_statement<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
 
     let query = extract_media_query_text(&children);
@@ -193,10 +190,7 @@ fn process_media_statement<D: ast_grep_core::Doc>(
 
 // ── @keyframes processing ──────────────────────────────────────────
 
-fn process_keyframes<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_keyframes<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
 
     let anim_name = children
@@ -225,12 +219,8 @@ fn process_keyframes<D: ast_grep_core::Doc>(
 
 // ── @import processing ─────────────────────────────────────────────
 
-fn process_import<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
-    let url = extract_url_from_node(node)
-        .unwrap_or_else(|| "unknown".to_string());
+fn process_import<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
+    let url = extract_url_from_node(node).unwrap_or_else(|| "unknown".to_string());
 
     let name = url.clone();
     let signature = format!("@import url('{url}')");
@@ -253,10 +243,7 @@ fn process_import<D: ast_grep_core::Doc>(
 
 // ── @charset processing ────────────────────────────────────────────
 
-fn process_charset<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_charset<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
     let charset = children
         .iter()
@@ -289,18 +276,14 @@ fn process_charset<D: ast_grep_core::Doc>(
 
 // ── @namespace processing ──────────────────────────────────────────
 
-fn process_namespace<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_namespace<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
     let ns_name = children
         .iter()
         .find(|c| c.kind().as_ref() == "namespace_name")
         .map_or_else(|| "default".to_string(), |n| n.text().to_string());
 
-    let url = extract_url_from_node(node)
-        .unwrap_or_else(|| "unknown".to_string());
+    let url = extract_url_from_node(node).unwrap_or_else(|| "unknown".to_string());
 
     let name = format!("@namespace {ns_name}");
     let signature = format!("@namespace {ns_name} url({url})");
@@ -323,10 +306,7 @@ fn process_namespace<D: ast_grep_core::Doc>(
 
 // ── @supports processing ──────────────────────────────────────────
 
-fn process_supports<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_supports<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
 
     let query = children
@@ -367,10 +347,7 @@ fn process_supports<D: ast_grep_core::Doc>(
 
 // ── @scope processing ──────────────────────────────────────────────
 
-fn process_scope<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_scope<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
 
     // Build scope description from the selectors between parentheses.
@@ -386,7 +363,10 @@ fn process_scope<D: ast_grep_core::Doc>(
         match k.as_ref() {
             "to" => seen_to = true,
             ")" => seen_first_close = true,
-            "class_selector" | "id_selector" | "tag_name" | "pseudo_class_selector"
+            "class_selector"
+            | "id_selector"
+            | "tag_name"
+            | "pseudo_class_selector"
             | "universal_selector" => {
                 let text = child.text().to_string();
                 if seen_to {
@@ -436,10 +416,7 @@ fn process_scope<D: ast_grep_core::Doc>(
 
 // ── Generic @rule processing (font-face, layer, container, etc.) ──
 
-fn process_at_rule<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_at_rule<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let children: Vec<_> = node.children().collect();
 
     let at_keyword = children
@@ -550,9 +527,10 @@ fn process_container<D: ast_grep_core::Doc>(
         .map(|fq| fq.text().to_string())
         .unwrap_or_default();
 
-    let name = container_name
-        .as_ref()
-        .map_or_else(|| format!("@container {query}"), |cn| format!("@container {cn} {query}"));
+    let name = container_name.as_ref().map_or_else(
+        || format!("@container {query}"),
+        |cn| format!("@container {cn} {query}"),
+    );
     let signature = name.clone();
 
     items.push(ParsedItem {
@@ -695,15 +673,11 @@ fn extract_properties<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
 }
 
 /// Extract properties from children that include a block.
-fn extract_properties_from_block<D: ast_grep_core::Doc>(
-    children: &[Node<D>],
-) -> Vec<String> {
+fn extract_properties_from_block<D: ast_grep_core::Doc>(children: &[Node<D>]) -> Vec<String> {
     extract_properties_from_block_node(children)
 }
 
-fn extract_properties_from_block_node<D: ast_grep_core::Doc>(
-    children: &[Node<D>],
-) -> Vec<String> {
+fn extract_properties_from_block_node<D: ast_grep_core::Doc>(children: &[Node<D>]) -> Vec<String> {
     let mut properties = Vec::new();
     for child in children {
         if child.kind().as_ref() == "block" {
@@ -724,9 +698,7 @@ fn extract_properties_from_block_node<D: ast_grep_core::Doc>(
 /// Extract CSS custom property declarations (`--*`) from a rule set.
 ///
 /// Returns `(property_name, value)` pairs.
-fn extract_custom_properties<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> Vec<(String, String)> {
+fn extract_custom_properties<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<(String, String)> {
     let mut custom_props = Vec::new();
     let children: Vec<_> = node.children().collect();
     for child in &children {
@@ -841,19 +813,13 @@ mod tests {
     }
 
     fn find_by_name<'a>(items: &'a [ParsedItem], name: &str) -> &'a ParsedItem {
-        items
-            .iter()
-            .find(|i| i.name == name)
-            .unwrap_or_else(|| {
-                let names: Vec<_> = items.iter().map(|i| &i.name).collect();
-                panic!("should find item named '{name}', available: {names:?}")
-            })
+        items.iter().find(|i| i.name == name).unwrap_or_else(|| {
+            let names: Vec<_> = items.iter().map(|i| &i.name).collect();
+            panic!("should find item named '{name}', available: {names:?}")
+        })
     }
 
-    fn find_all_by_at_rule<'a>(
-        items: &'a [ParsedItem],
-        rule: &str,
-    ) -> Vec<&'a ParsedItem> {
+    fn find_all_by_at_rule<'a>(items: &'a [ParsedItem], rule: &str) -> Vec<&'a ParsedItem> {
         items
             .iter()
             .filter(|i| i.metadata.at_rule_name.as_deref() == Some(rule))
@@ -958,7 +924,10 @@ mod tests {
         let items = parse_and_extract(source);
         let b = find_by_name(&items, "body");
         assert!(
-            b.metadata.css_properties.iter().any(|p| p.starts_with("margin")),
+            b.metadata
+                .css_properties
+                .iter()
+                .any(|p| p.starts_with("margin")),
             "body should have margin property: {:?}",
             b.metadata.css_properties
         );
@@ -1118,10 +1087,7 @@ mod tests {
             .iter()
             .filter(|i| i.name.contains("@(max-width:"))
             .collect();
-        assert!(
-            !nested.is_empty(),
-            "should find nested rules inside @media"
-        );
+        assert!(!nested.is_empty(), "should find nested rules inside @media");
     }
 
     #[test]
@@ -1194,7 +1160,11 @@ mod tests {
         let ff = find_all_by_at_rule(&items, "font-face");
         let first = ff.first().expect("should have at least one @font-face");
         assert!(
-            first.metadata.css_properties.iter().any(|p| p.contains("font-family")),
+            first
+                .metadata
+                .css_properties
+                .iter()
+                .any(|p| p.contains("font-family")),
             "font-face should have font-family property: {:?}",
             first.metadata.css_properties
         );
@@ -1236,10 +1206,7 @@ mod tests {
             .iter()
             .filter(|i| i.name.contains("@base") || i.name.contains("@utilities"))
             .collect();
-        assert!(
-            !nested.is_empty(),
-            "should find nested rules inside @layer"
-        );
+        assert!(!nested.is_empty(), "should find nested rules inside @layer");
     }
 
     // ── @container tests ───────────────────────────────────────────
@@ -1371,7 +1338,12 @@ mod tests {
         let items = parse_and_extract(".btn { padding: 8px; }");
         let b = find_by_name(&items, ".btn");
         assert_eq!(b.kind, SymbolKind::Class);
-        assert!(b.metadata.css_properties.iter().any(|p| p.contains("padding")));
+        assert!(
+            b.metadata
+                .css_properties
+                .iter()
+                .any(|p| p.contains("padding"))
+        );
     }
 
     #[test]
@@ -1481,9 +1453,7 @@ mod tests {
 
     #[test]
     fn nesting_inline() {
-        let items = parse_and_extract(
-            ".card { color: black; & .title { font-size: 2rem; } }",
-        );
+        let items = parse_and_extract(".card { color: black; & .title { font-size: 2rem; } }");
         let c = find_by_name(&items, ".card");
         assert_eq!(c.kind, SymbolKind::Class);
         // Nested rule should also be extracted (it's a rule_set inside block)
@@ -1506,7 +1476,10 @@ mod tests {
         let items = parse_and_extract(source);
         let p = find_by_name(&items, "@page");
         assert!(
-            p.metadata.css_properties.iter().any(|prop| prop.contains("margin")),
+            p.metadata
+                .css_properties
+                .iter()
+                .any(|prop| prop.contains("margin")),
             "page should have margin property: {:?}",
             p.metadata.css_properties
         );
@@ -1529,7 +1502,10 @@ mod tests {
         let items = parse_and_extract(source);
         let p = find_by_name(&items, "@property --gradient-angle");
         assert!(
-            p.metadata.css_properties.iter().any(|prop| prop.contains("syntax")),
+            p.metadata
+                .css_properties
+                .iter()
+                .any(|prop| prop.contains("syntax")),
             "property should have syntax declaration: {:?}",
             p.metadata.css_properties
         );
@@ -1552,7 +1528,10 @@ mod tests {
         let items = parse_and_extract(source);
         let cs = find_by_name(&items, "@counter-style thumbs");
         assert!(
-            cs.metadata.css_properties.iter().any(|prop| prop.contains("system")),
+            cs.metadata
+                .css_properties
+                .iter()
+                .any(|prop| prop.contains("system")),
             "counter-style should have system property: {:?}",
             cs.metadata.css_properties
         );
@@ -1595,17 +1574,12 @@ mod tests {
             .iter()
             .filter(|i| i.name.contains("@.card") || i.name.contains("@.hero"))
             .collect();
-        assert!(
-            !nested.is_empty(),
-            "should find nested rules inside @scope"
-        );
+        assert!(!nested.is_empty(), "should find nested rules inside @scope");
     }
 
     #[test]
     fn scope_inline() {
-        let items = parse_and_extract(
-            "@scope (.panel) { h2 { font-size: 1.5rem; } }",
-        );
+        let items = parse_and_extract("@scope (.panel) { h2 { font-size: 1.5rem; } }");
         let s = find_by_name(&items, "@scope (.panel)");
         assert_eq!(s.kind, SymbolKind::Module);
     }
@@ -1656,27 +1630,21 @@ mod tests {
 
     #[test]
     fn inline_counter_style() {
-        let items = parse_and_extract(
-            "@counter-style stars { system: cyclic; symbols: \"★\"; }",
-        );
+        let items = parse_and_extract("@counter-style stars { system: cyclic; symbols: \"★\"; }");
         let cs = find_by_name(&items, "@counter-style stars");
         assert_eq!(cs.kind, SymbolKind::Module);
     }
 
     #[test]
     fn inline_scope() {
-        let items = parse_and_extract(
-            "@scope (.wrapper) to (.inner) { div { padding: 1rem; } }",
-        );
+        let items = parse_and_extract("@scope (.wrapper) to (.inner) { div { padding: 1rem; } }");
         let s = find_by_name(&items, "@scope (.wrapper) to (.inner)");
         assert_eq!(s.kind, SymbolKind::Module);
     }
 
     #[test]
     fn inline_starting_style() {
-        let items = parse_and_extract(
-            "@starting-style { .box { scale: 0; } }",
-        );
+        let items = parse_and_extract("@starting-style { .box { scale: 0; } }");
         let ss = find_by_name(&items, "@starting-style");
         assert_eq!(ss.kind, SymbolKind::Module);
     }

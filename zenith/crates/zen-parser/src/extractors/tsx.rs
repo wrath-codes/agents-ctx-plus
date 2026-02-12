@@ -88,11 +88,7 @@ struct ClassInfo {
     props_type: Option<String>,
 }
 
-fn enrich_item(
-    item: &mut ParsedItem,
-    bodies: &[FnBody],
-    class_infos: &[ClassInfo],
-) {
+fn enrich_item(item: &mut ParsedItem, bodies: &[FnBody], class_infos: &[ClassInfo]) {
     match item.kind {
         SymbolKind::Function | SymbolKind::Const => enrich_fn_item(item, bodies),
         SymbolKind::Class => enrich_class_item(item, class_infos),
@@ -159,8 +155,7 @@ fn enrich_class_item(item: &mut ParsedItem, class_infos: &[ClassInfo]) {
     };
 
     let is_class_component = ci.extends_react_component || ci.extends_pure_component;
-    let is_error_boundary =
-        ci.has_derived_state_from_error || ci.has_component_did_catch;
+    let is_error_boundary = ci.has_derived_state_from_error || ci.has_component_did_catch;
 
     item.metadata.is_class_component = is_class_component;
     item.metadata.is_error_boundary = is_error_boundary;
@@ -262,10 +257,7 @@ fn collect_from_lexical<D: ast_grep_core::Doc>(
 }
 
 /// Analyze a `function_declaration` node.
-fn analyze_function<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    anchor: &Node<D>,
-) -> Option<FnBody> {
+fn analyze_function<D: ast_grep_core::Doc>(node: &Node<D>, anchor: &Node<D>) -> Option<FnBody> {
     let name = node.field("name").map(|n| n.text().to_string())?;
     let body = node.field("body")?;
 
@@ -337,7 +329,10 @@ fn analyze_variable_declarator<D: ast_grep_core::Doc>(
         })
     } else if vk == "call_expression" {
         let callee_name = extract_callee_name(&value);
-        let is_fwd = matches!(callee_name.as_deref(), Some("React.forwardRef" | "forwardRef"));
+        let is_fwd = matches!(
+            callee_name.as_deref(),
+            Some("React.forwardRef" | "forwardRef")
+        );
         let is_memo = matches!(callee_name.as_deref(), Some("React.memo" | "memo"));
         let is_lazy = matches!(callee_name.as_deref(), Some("React.lazy" | "lazy"));
 
@@ -368,10 +363,7 @@ fn analyze_variable_declarator<D: ast_grep_core::Doc>(
 
 // ── Class component collection ─────────────────────────────────────
 
-fn collect_class_components<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    out: &mut Vec<ClassInfo>,
-) {
+fn collect_class_components<D: ast_grep_core::Doc>(node: &Node<D>, out: &mut Vec<ClassInfo>) {
     let kind = node.kind();
     match kind.as_ref() {
         "export_statement" => {
@@ -398,10 +390,7 @@ fn collect_class_components<D: ast_grep_core::Doc>(
     }
 }
 
-fn analyze_class<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    anchor: &Node<D>,
-) -> Option<ClassInfo> {
+fn analyze_class<D: ast_grep_core::Doc>(node: &Node<D>, anchor: &Node<D>) -> Option<ClassInfo> {
     let name = node.field("name").map(|n| n.text().to_string())?;
 
     // Check extends clause for React.Component / React.PureComponent.
@@ -453,9 +442,7 @@ fn analyze_class<D: ast_grep_core::Doc>(
 
 /// Check if a class extends `React.Component` or `React.PureComponent`.
 /// Also extracts the props type parameter if present.
-fn check_class_heritage<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (bool, bool, Option<String>) {
+fn check_class_heritage<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool, Option<String>) {
     let children: Vec<_> = node.children().collect();
     for child in &children {
         if child.kind().as_ref() == "class_heritage" {
@@ -467,10 +454,8 @@ fn check_class_heritage<D: ast_grep_core::Doc>(
                         let ck = cc.kind();
                         if ck.as_ref() == "member_expression" {
                             let text = cc.text().to_string();
-                            let is_component = text == "React.Component"
-                                || text == "Component";
-                            let is_pure = text == "React.PureComponent"
-                                || text == "PureComponent";
+                            let is_component = text == "React.Component" || text == "Component";
+                            let is_pure = text == "React.PureComponent" || text == "PureComponent";
 
                             // Extract props type from type_arguments: <Props, State>
                             let props = clause_children
@@ -500,9 +485,7 @@ fn check_class_heritage<D: ast_grep_core::Doc>(
 // ── Body content analysis ──────────────────────────────────────────
 
 /// Analyze a node (arrow function or `statement_block`) for JSX/hooks content.
-fn analyze_node_content<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (bool, Vec<String>, Vec<String>) {
+fn analyze_node_content<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, Vec<String>, Vec<String>) {
     let target = node.field("body");
     let scan = target.as_ref().unwrap_or(node);
     let has = has_jsx_recursive(scan);
@@ -556,10 +539,7 @@ fn has_jsx_recursive<D: ast_grep_core::Doc>(node: &Node<D>) -> bool {
     children.iter().any(|c| has_jsx_recursive(c))
 }
 
-fn collect_jsx_tags_recursive<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    tags: &mut Vec<String>,
-) {
+fn collect_jsx_tags_recursive<D: ast_grep_core::Doc>(node: &Node<D>, tags: &mut Vec<String>) {
     let kind = node.kind();
     let k = kind.as_ref();
     if k == "jsx_opening_element" || k == "jsx_self_closing_element" {
@@ -583,10 +563,7 @@ fn collect_jsx_tags_recursive<D: ast_grep_core::Doc>(
 
 // ── Hook detection ─────────────────────────────────────────────────
 
-fn collect_hooks_recursive<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    hooks: &mut Vec<String>,
-) {
+fn collect_hooks_recursive<D: ast_grep_core::Doc>(node: &Node<D>, hooks: &mut Vec<String>) {
     let kind = node.kind();
     if kind.as_ref() == "call_expression" {
         let children: Vec<_> = node.children().collect();
@@ -657,20 +634,14 @@ fn extract_props_from_arrow_params<D: ast_grep_core::Doc>(arrow: &Node<D>) -> Op
 fn is_hook_name(name: &str) -> bool {
     name.starts_with("use")
         && name.len() > 3
-        && name[3..4]
-            .chars()
-            .next()
-            .is_some_and(char::is_uppercase)
+        && name[3..4].chars().next().is_some_and(char::is_uppercase)
 }
 
 /// HOC: starts with `with` followed by uppercase letter.
 fn is_hoc_name(name: &str) -> bool {
     name.starts_with("with")
         && name.len() > 4
-        && name[4..5]
-            .chars()
-            .next()
-            .is_some_and(char::is_uppercase)
+        && name[4..5].chars().next().is_some_and(char::is_uppercase)
 }
 
 /// Component: starts with uppercase letter.
@@ -702,16 +673,13 @@ mod tests {
     }
 
     fn find_by_name<'a>(items: &'a [ParsedItem], name: &str) -> &'a ParsedItem {
-        items
-            .iter()
-            .find(|i| i.name == name)
-            .unwrap_or_else(|| {
-                let names: Vec<_> = items
-                    .iter()
-                    .map(|i| format!("{}({})", i.name, i.kind))
-                    .collect();
-                panic!("should find item named '{name}', available: {names:?}")
-            })
+        items.iter().find(|i| i.name == name).unwrap_or_else(|| {
+            let names: Vec<_> = items
+                .iter()
+                .map(|i| format!("{}({})", i.name, i.kind))
+                .collect();
+            panic!("should find item named '{name}', available: {names:?}")
+        })
     }
 
     // ── "use client" directive ─────────────────────────────────────
@@ -1112,7 +1080,10 @@ mod tests {
         let items = parse_and_extract(source);
         let ls = find_by_name(&items, "LazySettings");
         assert!(ls.metadata.is_lazy);
-        assert!(!ls.metadata.is_component, "lazy import itself is not a component");
+        assert!(
+            !ls.metadata.is_component,
+            "lazy import itself is not a component"
+        );
     }
 
     // ── Suspense boundary ──────────────────────────────────────────
@@ -1144,7 +1115,9 @@ mod tests {
         let items = parse_and_extract(source);
         let p = find_by_name(&items, "PageWithSuspense");
         assert!(
-            p.metadata.jsx_elements.contains(&"LazySettings".to_string()),
+            p.metadata
+                .jsx_elements
+                .contains(&"LazySettings".to_string()),
             "jsx: {:?}",
             p.metadata.jsx_elements
         );
@@ -1256,10 +1229,7 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.tsx");
         let items = parse_and_extract(source);
         let pc = find_by_name(&items, "PureCounter");
-        assert_eq!(
-            pc.metadata.props_type.as_deref(),
-            Some("CounterClassProps")
-        );
+        assert_eq!(pc.metadata.props_type.as_deref(), Some("CounterClassProps"));
     }
 
     // ── Hook detection ─────────────────────────────────────────────

@@ -4,9 +4,9 @@
 //! classes with getters/setters/static methods, arrow functions,
 //! `export` statements, and `JSDoc` comment extraction.
 
+use ast_grep_core::Node;
 use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::ops::Any;
-use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -70,9 +70,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
 
 // ── export_statement unwrapping ────────────────────────────────────
 
-fn process_export_statement<D: ast_grep_core::Doc>(
-    export_node: &Node<D>,
-) -> Vec<ParsedItem> {
+fn process_export_statement<D: ast_grep_core::Doc>(export_node: &Node<D>) -> Vec<ParsedItem> {
     let is_default = export_node
         .children()
         .any(|c| c.kind().as_ref() == "default");
@@ -116,9 +114,7 @@ fn process_function<D: ast_grep_core::Doc>(
     let name = node.field("name").map(|n| n.text().to_string())?;
     let jsdoc = extract_jsdoc_before(jsdoc_anchor);
     let doc_sections = parse_jsdoc_sections(&jsdoc);
-    let is_async = node
-        .children()
-        .any(|c| c.kind().as_ref() == "async");
+    let is_async = node.children().any(|c| c.kind().as_ref() == "async");
 
     let visibility = if is_exported {
         Visibility::Export
@@ -156,9 +152,7 @@ fn process_generator_function<D: ast_grep_core::Doc>(
     let name = node.field("name").map(|n| n.text().to_string())?;
     let jsdoc = extract_jsdoc_before(jsdoc_anchor);
     let doc_sections = parse_jsdoc_sections(&jsdoc);
-    let is_async = node
-        .children()
-        .any(|c| c.kind().as_ref() == "async");
+    let is_async = node.children().any(|c| c.kind().as_ref() == "async");
 
     let visibility = if is_exported {
         Visibility::Export
@@ -274,8 +268,7 @@ fn process_lexical_declaration<D: ast_grep_core::Doc>(
     let mut items = Vec::new();
     for child in node.children() {
         if child.kind().as_ref() == "variable_declarator"
-            && let Some(item) =
-                process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
+            && let Some(item) = process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
         {
             items.push(item);
         }
@@ -293,8 +286,7 @@ fn process_variable_declaration<D: ast_grep_core::Doc>(
     let mut items = Vec::new();
     for child in node.children() {
         if child.kind().as_ref() == "variable_declarator"
-            && let Some(item) =
-                process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
+            && let Some(item) = process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
         {
             items.push(item);
         }
@@ -326,9 +318,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
 
     if is_arrow {
         let arrow = value.unwrap();
-        let is_async = arrow
-            .children()
-            .any(|c| c.kind().as_ref() == "async");
+        let is_async = arrow.children().any(|c| c.kind().as_ref() == "async");
         let params = extract_js_parameters(&arrow);
 
         Some(ParsedItem {
@@ -382,10 +372,7 @@ fn extract_jsdoc_before<D: ast_grep_core::Doc>(anchor: &Node<D>) -> String {
 }
 
 fn parse_jsdoc_text(text: &str) -> String {
-    let text = text
-        .trim_start_matches("/**")
-        .trim_end_matches("*/")
-        .trim();
+    let text = text.trim_start_matches("/**").trim_end_matches("*/").trim();
     text.lines()
         .map(|line| {
             let trimmed = line.trim();

@@ -3,9 +3,9 @@
 //! Extracts functions, structs, enums, traits, impl blocks, type aliases,
 //! modules, consts, statics, macros, and unions with full metadata.
 
+use ast_grep_core::Node;
 use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::ops::Any;
-use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -54,10 +54,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
     Ok(items)
 }
 
-fn process_rust_node<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    source: &str,
-) -> Option<ParsedItem> {
+fn process_rust_node<D: ast_grep_core::Doc>(node: &Node<D>, source: &str) -> Option<ParsedItem> {
     let kind_str = node.kind();
     let k = kind_str.as_ref();
 
@@ -151,8 +148,8 @@ fn build_struct_metadata<D: ast_grep_core::Doc>(
     let attrs = helpers::extract_attributes(node);
     let generics = helpers::extract_generics(node);
     let fields = extract_struct_fields(node);
-    let is_error = helpers::is_error_type_by_name(name)
-        || attrs.iter().any(|a| a.contains("Error"));
+    let is_error =
+        helpers::is_error_type_by_name(name) || attrs.iter().any(|a| a.contains("Error"));
     let doc = helpers::extract_doc_comments_rust(node, source);
     let doc_sections = helpers::parse_rust_doc_sections(&doc);
 
@@ -185,8 +182,8 @@ fn build_enum_metadata<D: ast_grep_core::Doc>(
     let attrs = helpers::extract_attributes(node);
     let generics = helpers::extract_generics(node);
     let variants = extract_enum_variants(node);
-    let is_error = helpers::is_error_type_by_name(name)
-        || attrs.iter().any(|a| a.contains("Error"));
+    let is_error =
+        helpers::is_error_type_by_name(name) || attrs.iter().any(|a| a.contains("Error"));
     let doc = helpers::extract_doc_comments_rust(node, source);
     let doc_sections = helpers::parse_rust_doc_sections(&doc);
 
@@ -242,9 +239,7 @@ fn build_type_alias_metadata<D: ast_grep_core::Doc>(
     )
 }
 
-fn build_const_metadata<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (SymbolKind, SymbolMetadata) {
+fn build_const_metadata<D: ast_grep_core::Doc>(node: &Node<D>) -> (SymbolKind, SymbolMetadata) {
     let return_type = helpers::extract_return_type(node);
     (
         SymbolKind::Const,
@@ -255,9 +250,7 @@ fn build_const_metadata<D: ast_grep_core::Doc>(
     )
 }
 
-fn build_static_metadata<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (SymbolKind, SymbolMetadata) {
+fn build_static_metadata<D: ast_grep_core::Doc>(node: &Node<D>) -> (SymbolKind, SymbolMetadata) {
     let return_type = helpers::extract_return_type(node);
     let (_, is_unsafe) = helpers::detect_modifiers(node);
     (
@@ -272,10 +265,7 @@ fn build_static_metadata<D: ast_grep_core::Doc>(
 
 // ── impl block processing ──────────────────────────────────────────
 
-fn process_impl_item<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    source: &str,
-) -> Vec<ParsedItem> {
+fn process_impl_item<D: ast_grep_core::Doc>(node: &Node<D>, source: &str) -> Vec<ParsedItem> {
     let (trait_name, for_type) = extract_impl_targets(node);
 
     let mut methods = Vec::new();
@@ -294,9 +284,7 @@ fn process_impl_item<D: ast_grep_core::Doc>(
     methods
 }
 
-fn extract_impl_targets<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (Option<String>, Option<String>) {
+fn extract_impl_targets<D: ast_grep_core::Doc>(node: &Node<D>) -> (Option<String>, Option<String>) {
     let mut trait_name = None;
     let mut for_type = None;
 
@@ -347,10 +335,7 @@ fn extract_impl_targets<D: ast_grep_core::Doc>(
 fn is_type_node(kind: &str) -> bool {
     matches!(
         kind,
-        "type_identifier"
-            | "scoped_type_identifier"
-            | "generic_type"
-            | "scoped_identifier"
+        "type_identifier" | "scoped_type_identifier" | "generic_type" | "scoped_identifier"
     )
 }
 
@@ -427,15 +412,11 @@ fn extract_enum_variants<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
     };
     body.children()
         .filter(|c| c.kind().as_ref() == "enum_variant")
-        .filter_map(|c| {
-            c.field("name").map(|n| n.text().to_string())
-        })
+        .filter_map(|c| c.field("name").map(|n| n.text().to_string()))
         .collect()
 }
 
-fn extract_trait_members<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> (Vec<String>, Vec<String>) {
+fn extract_trait_members<D: ast_grep_core::Doc>(node: &Node<D>) -> (Vec<String>, Vec<String>) {
     let mut methods = Vec::new();
     let mut associated_types = Vec::new();
 
@@ -487,7 +468,10 @@ mod tests {
         let items = parse_and_extract(source);
         let names: Vec<&str> = items.iter().map(|i| i.name.as_str()).collect();
         assert!(names.contains(&"process"), "missing 'process': {names:?}");
-        assert!(names.contains(&"dangerous"), "missing 'dangerous': {names:?}");
+        assert!(
+            names.contains(&"dangerous"),
+            "missing 'dangerous': {names:?}"
+        );
         assert!(names.contains(&"Config"), "missing 'Config': {names:?}");
         assert!(names.contains(&"Status"), "missing 'Status': {names:?}");
         assert!(names.contains(&"Handler"), "missing 'Handler': {names:?}");
@@ -617,7 +601,10 @@ mod tests {
         let items = parse_and_extract(source);
         let handler = find_by_name(&items, "Handler");
         assert!(
-            handler.metadata.associated_types.contains(&"Output".to_string()),
+            handler
+                .metadata
+                .associated_types
+                .contains(&"Output".to_string()),
             "associated_types: {:?}",
             handler.metadata.associated_types
         );
@@ -883,10 +870,7 @@ mod tests {
                     .as_deref()
                     .is_some_and(|t| t.contains("io::Error") || t.contains("io :: Error"))
         });
-        assert!(
-            from_io.is_some(),
-            "should find From<std::io::Error> impl"
-        );
+        assert!(from_io.is_some(), "should find From<std::io::Error> impl");
     }
 
     #[test]
@@ -894,9 +878,6 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.rs");
         let items = parse_and_extract(source);
         let py_add = find_by_name(&items, "py_add");
-        assert!(
-            py_add.metadata.is_pyo3,
-            "py_add should be detected as PyO3"
-        );
+        assert!(py_add.metadata.is_pyo3, "py_add should be detected as PyO3");
     }
 }

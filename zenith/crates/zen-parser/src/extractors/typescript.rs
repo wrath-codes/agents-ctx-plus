@@ -4,9 +4,9 @@
 //! functions, classes, interfaces, type aliases, enums, and arrow
 //! functions with `JSDoc` support and export detection.
 
+use ast_grep_core::Node;
 use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::ops::Any;
-use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -100,9 +100,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
 
 // ── export_statement unwrapping ────────────────────────────────────
 
-fn process_export_statement<D: ast_grep_core::Doc>(
-    export_node: &Node<D>,
-) -> Vec<ParsedItem> {
+fn process_export_statement<D: ast_grep_core::Doc>(export_node: &Node<D>) -> Vec<ParsedItem> {
     let is_default = export_node
         .children()
         .any(|c| c.kind().as_ref() == "default");
@@ -161,9 +159,7 @@ fn process_function<D: ast_grep_core::Doc>(
     let name = node.field("name").map(|n| n.text().to_string())?;
     let jsdoc = extract_jsdoc_before(jsdoc_anchor);
     let doc_sections = parse_jsdoc_sections(&jsdoc);
-    let is_async = node
-        .children()
-        .any(|c| c.kind().as_ref() == "async");
+    let is_async = node.children().any(|c| c.kind().as_ref() == "async");
     let return_type = extract_ts_return_type(node);
     let type_params = node
         .field("type_parameters")
@@ -218,8 +214,8 @@ fn process_class<D: ast_grep_core::Doc>(
     let implements = extract_class_heritage(node, "implements");
     let (methods, fields) = extract_class_members(node);
 
-    let is_error_type = helpers::is_error_type_by_name(&name)
-        || extends.iter().any(|e| e == "Error");
+    let is_error_type =
+        helpers::is_error_type_by_name(&name) || extends.iter().any(|e| e == "Error");
 
     let visibility = if is_exported {
         Visibility::Export
@@ -252,10 +248,7 @@ fn process_class<D: ast_grep_core::Doc>(
     })
 }
 
-fn extract_class_heritage<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    clause_kind: &str,
-) -> Vec<String> {
+fn extract_class_heritage<D: ast_grep_core::Doc>(node: &Node<D>, clause_kind: &str) -> Vec<String> {
     let target = match clause_kind {
         "extends" => "extends_clause",
         "implements" => "implements_clause",
@@ -502,7 +495,12 @@ fn process_namespace<D: ast_grep_core::Doc>(
     Some(ParsedItem {
         kind: SymbolKind::Module,
         name,
-        signature: format!("namespace {}", node.field("name").map(|n| n.text().to_string()).unwrap_or_default()),
+        signature: format!(
+            "namespace {}",
+            node.field("name")
+                .map(|n| n.text().to_string())
+                .unwrap_or_default()
+        ),
         source: helpers::extract_source(node, 50),
         doc_comment: jsdoc,
         start_line: node.start_pos().line() as u32 + 1,
@@ -518,9 +516,7 @@ fn process_namespace<D: ast_grep_core::Doc>(
 
 // ── ambient_declaration (declare ...) ──────────────────────────────
 
-fn process_ambient_declaration<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> Vec<ParsedItem> {
+fn process_ambient_declaration<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedItem> {
     let mut items = Vec::new();
     for child in node.children() {
         let k = child.kind();
@@ -604,8 +600,7 @@ fn process_variable_declaration<D: ast_grep_core::Doc>(
     let mut items = Vec::new();
     for child in node.children() {
         if child.kind().as_ref() == "variable_declarator"
-            && let Some(item) =
-                process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
+            && let Some(item) = process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
         {
             items.push(item);
         }
@@ -623,8 +618,7 @@ fn process_lexical_declaration<D: ast_grep_core::Doc>(
     let mut items = Vec::new();
     for child in node.children() {
         if child.kind().as_ref() == "variable_declarator"
-            && let Some(item) =
-                process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
+            && let Some(item) = process_variable_declarator(&child, node, jsdoc_anchor, is_exported)
         {
             items.push(item);
         }
@@ -656,9 +650,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
 
     if is_arrow {
         let arrow = value.unwrap();
-        let is_async = arrow
-            .children()
-            .any(|c| c.kind().as_ref() == "async");
+        let is_async = arrow.children().any(|c| c.kind().as_ref() == "async");
         let return_type = extract_ts_return_type(&arrow);
         let params = extract_ts_parameters(&arrow);
         let type_params = arrow
@@ -730,10 +722,7 @@ fn extract_jsdoc_before<D: ast_grep_core::Doc>(anchor: &Node<D>) -> String {
 }
 
 fn parse_jsdoc_text(text: &str) -> String {
-    let text = text
-        .trim_start_matches("/**")
-        .trim_end_matches("*/")
-        .trim();
+    let text = text.trim_start_matches("/**").trim_end_matches("*/").trim();
     text.lines()
         .map(|line| {
             let trimmed = line.trim();
@@ -1272,10 +1261,7 @@ mod tests {
     fn function_overload_signatures_extracted() {
         let source = include_str!("../../tests/fixtures/sample.ts");
         let items = parse_and_extract(source);
-        let greets: Vec<&ParsedItem> = items
-            .iter()
-            .filter(|i| i.name == "greet")
-            .collect();
+        let greets: Vec<&ParsedItem> = items.iter().filter(|i| i.name == "greet").collect();
         assert!(
             greets.len() >= 3,
             "should find at least 3 greet items (2 overloads + 1 impl), found {}",
@@ -1287,11 +1273,10 @@ mod tests {
     fn function_overload_has_jsdoc() {
         let source = include_str!("../../tests/fixtures/sample.ts");
         let items = parse_and_extract(source);
-        let greets: Vec<&ParsedItem> = items
+        let greets: Vec<&ParsedItem> = items.iter().filter(|i| i.name == "greet").collect();
+        let has_doc = greets
             .iter()
-            .filter(|i| i.name == "greet")
-            .collect();
-        let has_doc = greets.iter().any(|g| g.doc_comment.contains("Greet a person"));
+            .any(|g| g.doc_comment.contains("Greet a person"));
         assert!(has_doc, "at least one greet should have JSDoc");
     }
 

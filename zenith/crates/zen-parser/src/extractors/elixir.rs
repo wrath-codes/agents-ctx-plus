@@ -22,8 +22,8 @@
 //! Doc comments are extracted from preceding `@doc`/`@moduledoc` siblings
 //! (which are `unary_operator` nodes with `@` child).
 
-use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::Node;
+use ast_grep_core::matcher::KindMatcher;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -153,9 +153,7 @@ fn first_identifier_text<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String
 
 /// Extract module name from a `defmodule`/`defprotocol` call's `arguments` → `alias`.
 fn extract_module_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    let args = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")?;
+    let args = node.children().find(|c| c.kind().as_ref() == "arguments")?;
     args.children()
         .find(|c| c.kind().as_ref() == "alias")
         .map(|n| n.text().to_string())
@@ -168,9 +166,7 @@ fn extract_module_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> 
 /// 2. `def process(items) when guard` → `arguments` → `binary_operator` → first `call` → `identifier`
 /// 3. `def max_retries, do: ...` → `arguments` → first child is `identifier` = name (no-paren form)
 fn extract_def_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    let args = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")?;
+    let args = node.children().find(|c| c.kind().as_ref() == "arguments")?;
 
     for child in args.children() {
         let k = child.kind();
@@ -208,10 +204,7 @@ fn extract_def_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
 ///
 /// Navigates: `call` → `arguments` → `call`/`binary_operator` → inner `call` → `arguments` children
 fn extract_def_params<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let Some(args) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")
-    else {
+    let Some(args) = node.children().find(|c| c.kind().as_ref() == "arguments") else {
         return Vec::new();
     };
 
@@ -222,10 +215,7 @@ fn extract_def_params<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
     };
 
     // The call's `arguments` child has the actual params
-    let Some(params_node) = call
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")
-    else {
+    let Some(params_node) = call.children().find(|c| c.kind().as_ref() == "arguments") else {
         return Vec::new();
     };
 
@@ -241,9 +231,7 @@ fn extract_def_params<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
 }
 
 /// Find the inner function `call` node inside a def's `arguments`.
-fn find_inner_def_call<'a, D: ast_grep_core::Doc>(
-    args: &Node<'a, D>,
-) -> Option<Node<'a, D>> {
+fn find_inner_def_call<'a, D: ast_grep_core::Doc>(args: &Node<'a, D>) -> Option<Node<'a, D>> {
     for child in args.children() {
         let k = child.kind();
         match k.as_ref() {
@@ -263,16 +251,12 @@ fn find_inner_def_call<'a, D: ast_grep_core::Doc>(
 
 /// Extract guard clause text from a def with `when`.
 fn extract_guard<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    let args = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")?;
+    let args = node.children().find(|c| c.kind().as_ref() == "arguments")?;
 
     for child in args.children() {
         if child.kind().as_ref() == "binary_operator" {
             // Check if it contains a `when` keyword
-            let has_when = child
-                .children()
-                .any(|c| c.kind().as_ref() == "when");
+            let has_when = child.children().any(|c| c.kind().as_ref() == "when");
             if has_when {
                 // The guard is the part after `when` — extract from binary_operator text
                 let text = child.text().to_string();
@@ -319,10 +303,7 @@ fn extract_elixir_doc<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
 
 /// Extract `@moduledoc` content from inside a defmodule's `do_block`.
 fn extract_moduledoc<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
-    let Some(do_block) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "do_block")
-    else {
+    let Some(do_block) = node.children().find(|c| c.kind().as_ref() == "do_block") else {
         return String::new();
     };
 
@@ -341,14 +322,9 @@ fn extract_moduledoc<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
 /// Returns `None` if the node is not the expected attribute.
 /// Returns `Some("")` for `@doc false`.
 /// Returns `Some(content)` for `@doc "content"` or `@doc """content"""`.
-fn try_extract_doc_attr<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    attr_name: &str,
-) -> Option<String> {
+fn try_extract_doc_attr<D: ast_grep_core::Doc>(node: &Node<D>, attr_name: &str) -> Option<String> {
     // Structure: unary_operator → @ + call(identifier=attr_name, arguments(string|boolean))
-    let call_node = node
-        .children()
-        .find(|c| c.kind().as_ref() == "call")?;
+    let call_node = node.children().find(|c| c.kind().as_ref() == "call")?;
 
     let id = call_node
         .children()
@@ -435,10 +411,7 @@ fn extract_string_content<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
 /// Build an Elixir signature from a def/defmacro call.
 ///
 /// Format: `def name(params)` or `def name(params) when guard`
-fn build_elixir_signature<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    keyword: &str,
-) -> String {
+fn build_elixir_signature<D: ast_grep_core::Doc>(node: &Node<D>, keyword: &str) -> String {
     let name = extract_def_name(node).unwrap_or_default();
     let params = extract_def_params(node);
     let guard = extract_guard(node);
@@ -485,9 +458,7 @@ fn try_extract_at_attr_text<D: ast_grep_core::Doc>(
     node: &Node<D>,
     attr_name: &str,
 ) -> Option<String> {
-    let call_node = node
-        .children()
-        .find(|c| c.kind().as_ref() == "call")?;
+    let call_node = node.children().find(|c| c.kind().as_ref() == "call")?;
 
     let id = call_node
         .children()
@@ -531,52 +502,38 @@ fn has_impl_attr<D: ast_grep_core::Doc>(node: &Node<D>) -> bool {
 
 /// Check if a `unary_operator` is `@impl true`.
 fn is_impl_true<D: ast_grep_core::Doc>(node: &Node<D>) -> bool {
-    let call_node = node
-        .children()
-        .find(|c| c.kind().as_ref() == "call");
+    let call_node = node.children().find(|c| c.kind().as_ref() == "call");
     let Some(call) = call_node else {
         return false;
     };
-    let id = call
-        .children()
-        .find(|c| c.kind().as_ref() == "identifier");
+    let id = call.children().find(|c| c.kind().as_ref() == "identifier");
     let Some(id) = id else {
         return false;
     };
     if id.text().as_ref() != "impl" {
         return false;
     }
-    let args = call
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments");
+    let args = call.children().find(|c| c.kind().as_ref() == "arguments");
     args.is_some_and(|a| {
-        a.children().any(|c| {
-            c.kind().as_ref() == "boolean" && c.text().as_ref() == "true"
-        })
+        a.children()
+            .any(|c| c.kind().as_ref() == "boolean" && c.text().as_ref() == "true")
     })
 }
 
 /// Check if a module's `do_block` contains a call with the given keyword.
 fn module_has_keyword<D: ast_grep_core::Doc>(node: &Node<D>, keyword: &str) -> bool {
-    let Some(do_block) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "do_block")
-    else {
+    let Some(do_block) = node.children().find(|c| c.kind().as_ref() == "do_block") else {
         return false;
     };
 
     do_block.children().any(|child| {
-        child.kind().as_ref() == "call"
-            && first_identifier_text(&child).as_deref() == Some(keyword)
+        child.kind().as_ref() == "call" && first_identifier_text(&child).as_deref() == Some(keyword)
     })
 }
 
 /// Extract `@callback` definitions from a module's `do_block`.
 fn extract_callbacks<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let Some(do_block) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "do_block")
-    else {
+    let Some(do_block) = node.children().find(|c| c.kind().as_ref() == "do_block") else {
         return Vec::new();
     };
 
@@ -609,10 +566,7 @@ fn extract_callback_name(spec_text: &str) -> Option<String> {
 
 /// Extract `defstruct` fields from inside a `defmodule` `do_block`.
 fn extract_struct_fields_from_module<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let Some(do_block) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "do_block")
-    else {
+    let Some(do_block) = node.children().find(|c| c.kind().as_ref() == "do_block") else {
         return Vec::new();
     };
 
@@ -629,10 +583,7 @@ fn extract_struct_fields_from_module<D: ast_grep_core::Doc>(node: &Node<D>) -> V
 
 /// Extract field names from a `defstruct` call.
 fn extract_defstruct_fields<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let Some(args) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")
-    else {
+    let Some(args) = node.children().find(|c| c.kind().as_ref() == "arguments") else {
         return Vec::new();
     };
 
@@ -673,10 +624,7 @@ fn extract_defstruct_fields<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String
 
 /// Extract methods defined inside a `defmodule`/`defprotocol`/`defimpl` `do_block`.
 fn extract_module_methods<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let Some(do_block) = node
-        .children()
-        .find(|c| c.kind().as_ref() == "do_block")
-    else {
+    let Some(do_block) = node.children().find(|c| c.kind().as_ref() == "do_block") else {
         return Vec::new();
     };
 
@@ -843,9 +791,7 @@ fn process_defimpl<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> 
 
 /// Extract `defimpl Protocol, for: Type` name as `Protocol.Type`.
 fn extract_defimpl_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    let args = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")?;
+    let args = node.children().find(|c| c.kind().as_ref() == "arguments")?;
 
     let protocol_name = args
         .children()
@@ -864,9 +810,7 @@ fn extract_defimpl_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String>
             let mut has_for = false;
             let mut value = None;
             for pc in pair.children() {
-                if pc.kind().as_ref() == "keyword"
-                    && pc.text().to_string().starts_with("for")
-                {
+                if pc.kind().as_ref() == "keyword" && pc.text().to_string().starts_with("for") {
                     has_for = true;
                 }
                 if has_for && pc.kind().as_ref() == "alias" {
@@ -992,9 +936,7 @@ fn process_defdelegate<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedIt
 
 /// Extract the `to:` target from a `defdelegate` call.
 fn extract_delegate_target<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    let args = node
-        .children()
-        .find(|c| c.kind().as_ref() == "arguments")?;
+    let args = node.children().find(|c| c.kind().as_ref() == "arguments")?;
 
     args.children().find_map(|c| {
         if c.kind().as_ref() != "keywords" {
@@ -1004,9 +946,9 @@ fn extract_delegate_target<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Stri
             if pair.kind().as_ref() != "pair" {
                 continue;
             }
-            let has_to = pair
-                .children()
-                .any(|pc| pc.kind().as_ref() == "keyword" && pc.text().to_string().starts_with("to"));
+            let has_to = pair.children().any(|pc| {
+                pc.kind().as_ref() == "keyword" && pc.text().to_string().starts_with("to")
+            });
             if has_to {
                 // The target is an alias child
                 return pair
@@ -1029,9 +971,7 @@ fn try_extract_type_attr<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Parsed
         return None;
     }
 
-    let call_node = node
-        .children()
-        .find(|c| c.kind().as_ref() == "call")?;
+    let call_node = node.children().find(|c| c.kind().as_ref() == "call")?;
 
     let id = call_node
         .children()
@@ -1054,7 +994,10 @@ fn try_extract_type_attr<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Parsed
             return None;
         }
         // Try direct identifier first (simple type)
-        if let Some(id_node) = c.children().find(|inner| inner.kind().as_ref() == "identifier") {
+        if let Some(id_node) = c
+            .children()
+            .find(|inner| inner.kind().as_ref() == "identifier")
+        {
             return Some(id_node.text().to_string());
         }
         // Then try call → identifier (parametric type)
@@ -1131,13 +1074,13 @@ mod tests {
     }
 
     fn find_by_name<'a>(items: &'a [ParsedItem], name: &str) -> &'a ParsedItem {
-        items
-            .iter()
-            .find(|i| i.name == name)
-            .unwrap_or_else(|| {
-                let names: Vec<_> = items.iter().map(|i| format!("{}:{}", i.kind, i.name)).collect();
-                panic!("no item named '{name}', available: {names:?}");
-            })
+        items.iter().find(|i| i.name == name).unwrap_or_else(|| {
+            let names: Vec<_> = items
+                .iter()
+                .map(|i| format!("{}:{}", i.kind, i.name))
+                .collect();
+            panic!("no item named '{name}', available: {names:?}");
+        })
     }
 
     fn find_all_by_name<'a>(items: &'a [ParsedItem], name: &str) -> Vec<&'a ParsedItem> {
@@ -1276,7 +1219,11 @@ mod tests {
             "should have guard clause"
         );
         assert!(
-            f.metadata.where_clause.as_deref().unwrap().contains("is_list"),
+            f.metadata
+                .where_clause
+                .as_deref()
+                .unwrap()
+                .contains("is_list"),
             "guard: {:?}",
             f.metadata.where_clause
         );
@@ -1287,10 +1234,7 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
         let f = find_by_name(&items, "process");
-        assert!(
-            f.metadata.return_type.is_some(),
-            "should have @spec"
-        );
+        assert!(f.metadata.return_type.is_some(), "should have @spec");
         assert!(
             f.metadata.return_type.as_deref().unwrap().contains("list"),
             "spec: {:?}",
@@ -1339,7 +1283,11 @@ mod tests {
         let f = find_by_name(&items, "validate");
         assert_eq!(f.kind, SymbolKind::Function);
         assert_eq!(f.visibility, Visibility::Private);
-        assert!(f.metadata.parameters.len() >= 2, "params: {:?}", f.metadata.parameters);
+        assert!(
+            f.metadata.parameters.len() >= 2,
+            "params: {:?}",
+            f.metadata.parameters
+        );
     }
 
     // ── Macro extraction ────────────────────────────────────────────
@@ -1506,10 +1454,7 @@ mod tests {
     fn handle_call_extracted() {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
-        let hc: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "handle_call")
-            .collect();
+        let hc: Vec<_> = items.iter().filter(|i| i.name == "handle_call").collect();
         assert!(!hc.is_empty(), "should find handle_call");
     }
 
@@ -1529,12 +1474,16 @@ mod tests {
         let items = parse_and_extract(source);
         let m = find_by_name(&items, "Sample.Behaviour");
         assert!(
-            m.metadata.associated_types.contains(&"handle_event".to_string()),
+            m.metadata
+                .associated_types
+                .contains(&"handle_event".to_string()),
             "callbacks: {:?}",
             m.metadata.associated_types
         );
         assert!(
-            m.metadata.associated_types.contains(&"format_output".to_string()),
+            m.metadata
+                .associated_types
+                .contains(&"format_output".to_string()),
             "callbacks: {:?}",
             m.metadata.associated_types
         );
@@ -1785,7 +1734,11 @@ mod tests {
             "should have guard clause"
         );
         assert!(
-            g.metadata.where_clause.as_deref().unwrap().contains("is_integer"),
+            g.metadata
+                .where_clause
+                .as_deref()
+                .unwrap()
+                .contains("is_integer"),
             "guard: {:?}",
             g.metadata.where_clause
         );
@@ -1899,11 +1852,7 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
         let t = find_by_name(&items, "direction");
-        assert!(
-            t.signature.starts_with("@type"),
-            "sig: {:?}",
-            t.signature
-        );
+        assert!(t.signature.starts_with("@type"), "sig: {:?}", t.signature);
     }
 
     #[test]
@@ -1938,11 +1887,7 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
         let t = find_by_name(&items, "wrapped");
-        assert!(
-            t.signature.starts_with("@opaque"),
-            "sig: {:?}",
-            t.signature
-        );
+        assert!(t.signature.starts_with("@opaque"), "sig: {:?}", t.signature);
     }
 
     #[test]

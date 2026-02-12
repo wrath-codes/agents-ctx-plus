@@ -48,12 +48,8 @@ pub fn extract_signature_python<D: ast_grep_core::Doc>(node: &Node<D>) -> String
         "def"
     };
 
-    let params = node
-        .field("parameters")
-        .map(|p| p.text().to_string());
-    let superclasses = node
-        .field("superclasses")
-        .map(|s| s.text().to_string());
+    let params = node.field("parameters").map(|p| p.text().to_string());
+    let superclasses = node.field("superclasses").map(|s| s.text().to_string());
     let return_type = node
         .field("return_type")
         .map(|rt| format!(" -> {}", rt.text()));
@@ -72,10 +68,7 @@ pub fn extract_signature_python<D: ast_grep_core::Doc>(node: &Node<D>) -> String
 
 /// Extract full source up to `max_lines` lines.
 #[allow(clippy::unnecessary_wraps)]
-pub fn extract_source<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    max_lines: usize,
-) -> Option<String> {
+pub fn extract_source<D: ast_grep_core::Doc>(node: &Node<D>, max_lines: usize) -> Option<String> {
     let text = node.text().to_string();
     let lines: Vec<&str> = text.lines().collect();
     if lines.len() <= max_lines {
@@ -93,10 +86,7 @@ pub fn extract_source<D: ast_grep_core::Doc>(
 ///
 /// Primary: walks `prev()` siblings collecting `///` and `//!` comments.
 /// Fallback (spike 0.21): line-based scan above `start_pos().line()`.
-pub fn extract_doc_comments_rust<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    source: &str,
-) -> String {
+pub fn extract_doc_comments_rust<D: ast_grep_core::Doc>(node: &Node<D>, source: &str) -> String {
     // Primary: AST sibling walk
     let mut comments = Vec::new();
     let mut current = node.prev();
@@ -207,8 +197,13 @@ pub fn extract_visibility_rust<D: ast_grep_core::Doc>(node: &Node<D>) -> Visibil
 
 /// Extract return type from a function node's `return_type` field.
 pub fn extract_return_type<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    node.field("return_type")
-        .map(|rt| rt.text().to_string().trim_start_matches("->").trim().to_string())
+    node.field("return_type").map(|rt| {
+        rt.text()
+            .to_string()
+            .trim_start_matches("->")
+            .trim()
+            .to_string()
+    })
 }
 
 /// Extract generic/type parameters from a node.
@@ -259,9 +254,7 @@ pub fn is_error_type_by_name(name: &str) -> bool {
 /// Check if an item has `PyO3` attributes.
 pub fn is_pyo3(attrs: &[String]) -> bool {
     attrs.iter().any(|a| {
-        a.starts_with("pyfunction")
-            || a.starts_with("pyclass")
-            || a.starts_with("pymethods")
+        a.starts_with("pyfunction") || a.starts_with("pyclass") || a.starts_with("pymethods")
     })
 }
 
@@ -316,11 +309,7 @@ pub fn parse_rust_doc_sections(doc: &str) -> crate::types::DocSections {
     sections
 }
 
-fn flush_section(
-    sections: &mut crate::types::DocSections,
-    heading: Option<&str>,
-    content: &str,
-) {
+fn flush_section(sections: &mut crate::types::DocSections, heading: Option<&str>, content: &str) {
     let content = content.trim();
     if content.is_empty() {
         return;

@@ -4,9 +4,9 @@
 //! type alias, function type), constants, and variables with Go-specific
 //! metadata including receiver types, exported detection, and doc comments.
 
+use ast_grep_core::Node;
 use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::ops::Any;
-use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -185,10 +185,7 @@ fn process_type_declaration<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<Parsed
     items
 }
 
-fn process_type_spec<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    doc: &str,
-) -> Option<ParsedItem> {
+fn process_type_spec<D: ast_grep_core::Doc>(node: &Node<D>, doc: &str) -> Option<ParsedItem> {
     let name = node
         .children()
         .find(|c| c.kind().as_ref() == "type_identifier")
@@ -250,10 +247,7 @@ fn classify_type_spec<D: ast_grep_core::Doc>(
     (SymbolKind::TypeAlias, SymbolMetadata::default())
 }
 
-fn process_type_alias<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    doc: &str,
-) -> Option<ParsedItem> {
+fn process_type_alias<D: ast_grep_core::Doc>(node: &Node<D>, doc: &str) -> Option<ParsedItem> {
     let name = node
         .children()
         .find(|c| c.kind().as_ref() == "type_identifier")
@@ -344,10 +338,7 @@ fn process_var_declaration<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedI
     items
 }
 
-fn process_var_spec<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    parent_doc: &str,
-) -> Option<ParsedItem> {
+fn process_var_spec<D: ast_grep_core::Doc>(node: &Node<D>, parent_doc: &str) -> Option<ParsedItem> {
     let name = node
         .children()
         .find(|c| c.kind().as_ref() == "identifier")
@@ -386,9 +377,7 @@ fn extract_go_return_type<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Strin
     let children: Vec<_> = node.children().collect();
 
     // Find block (body) position — return type is between params and block
-    let block_idx = children
-        .iter()
-        .position(|c| c.kind().as_ref() == "block");
+    let block_idx = children.iter().position(|c| c.kind().as_ref() == "block");
 
     let block_idx = block_idx?;
 
@@ -489,8 +478,7 @@ fn extract_param_decls<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
     node.children()
         .filter(|c| {
             let k = c.kind();
-            k.as_ref() == "parameter_declaration"
-                || k.as_ref() == "variadic_parameter_declaration"
+            k.as_ref() == "parameter_declaration" || k.as_ref() == "variadic_parameter_declaration"
         })
         .map(|c| c.text().to_string())
         .collect()
@@ -1015,7 +1003,10 @@ mod tests {
         let f = find_by_name(&items, "Divide");
         assert_eq!(f.kind, SymbolKind::Function);
         assert!(
-            f.metadata.return_type.as_deref().is_some_and(|rt| rt.contains("float64")),
+            f.metadata
+                .return_type
+                .as_deref()
+                .is_some_and(|rt| rt.contains("float64")),
             "return type: {:?}",
             f.metadata.return_type
         );

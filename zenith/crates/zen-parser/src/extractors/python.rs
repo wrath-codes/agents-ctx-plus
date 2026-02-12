@@ -3,9 +3,9 @@
 //! Extracts from `function_definition`, `class_definition`,
 //! `decorated_definition`, and module-level typed assignments.
 
+use ast_grep_core::Node;
 use ast_grep_core::matcher::KindMatcher;
 use ast_grep_core::ops::Any;
-use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
@@ -69,12 +69,10 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
 
 fn process_decorated<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
     let decorators = extract_decorators(node);
-    let inner = node
-        .children()
-        .find(|c| {
-            let k = c.kind();
-            k.as_ref() == "class_definition" || k.as_ref() == "function_definition"
-        })?;
+    let inner = node.children().find(|c| {
+        let k = c.kind();
+        k.as_ref() == "class_definition" || k.as_ref() == "function_definition"
+    })?;
 
     match inner.kind().as_ref() {
         "class_definition" => process_class(&inner, &decorators),
@@ -111,8 +109,8 @@ fn process_class<D: ast_grep_core::Doc>(
     let is_enum = base_classes
         .iter()
         .any(|b| b == "Enum" || b == "IntEnum" || b == "StrEnum");
-    let is_error_type = helpers::is_error_type_by_name(&name)
-        || is_exception_subclass(&base_classes);
+    let is_error_type =
+        helpers::is_error_type_by_name(&name) || is_exception_subclass(&base_classes);
 
     let (methods, fields) = extract_class_members(node, decorators);
 
@@ -205,9 +203,9 @@ fn extract_class_members<D: ast_grep_core::Doc>(
                 }
             }
             "decorated_definition" => {
-                let inner = child.children().find(|c| {
-                    c.kind().as_ref() == "function_definition"
-                });
+                let inner = child
+                    .children()
+                    .find(|c| c.kind().as_ref() == "function_definition");
                 if let Some(func) = inner
                     && let Some(name) = func.field("name")
                 {
@@ -288,9 +286,7 @@ fn process_function<D: ast_grep_core::Doc>(
 
 // ── module-level assignments ───────────────────────────────────────
 
-fn process_module_assignment<D: ast_grep_core::Doc>(
-    expr_stmt: &Node<D>,
-) -> Option<ParsedItem> {
+fn process_module_assignment<D: ast_grep_core::Doc>(expr_stmt: &Node<D>) -> Option<ParsedItem> {
     // expression_statement → assignment with identifier + type
     let assignment = expr_stmt
         .children()
@@ -400,10 +396,7 @@ fn parse_python_doc_sections(doc: &str) -> DocSections {
 }
 
 fn sections_empty(s: &DocSections) -> bool {
-    s.args.is_empty()
-        && s.returns.is_none()
-        && s.raises.is_empty()
-        && s.yields.is_none()
+    s.args.is_empty() && s.returns.is_none() && s.raises.is_empty() && s.yields.is_none()
 }
 
 fn parse_google_style(doc: &str) -> DocSections {
@@ -449,11 +442,7 @@ fn parse_google_style(doc: &str) -> DocSections {
     sections
 }
 
-fn flush_google_section(
-    sections: &mut DocSections,
-    heading: Option<&str>,
-    content: &str,
-) {
+fn flush_google_section(sections: &mut DocSections, heading: Option<&str>, content: &str) {
     let content = content.trim();
     if content.is_empty() {
         return;
@@ -607,7 +596,10 @@ mod tests {
         let validator = find_by_name(&items, "Validator");
         assert!(validator.metadata.is_protocol);
         assert!(
-            validator.metadata.base_classes.contains(&"Protocol".to_string()),
+            validator
+                .metadata
+                .base_classes
+                .contains(&"Protocol".to_string()),
             "base_classes: {:?}",
             validator.metadata.base_classes
         );
@@ -759,7 +751,10 @@ mod tests {
         assert_eq!(settings.kind, SymbolKind::Class);
         assert!(settings.metadata.is_pydantic);
         assert!(
-            settings.metadata.base_classes.contains(&"BaseModel".to_string()),
+            settings
+                .metadata
+                .base_classes
+                .contains(&"BaseModel".to_string()),
             "base_classes: {:?}",
             settings.metadata.base_classes
         );
@@ -797,7 +792,10 @@ mod tests {
             "ProcessingError(Exception) should be error type"
         );
         assert!(
-            proc_err.metadata.base_classes.contains(&"Exception".to_string()),
+            proc_err
+                .metadata
+                .base_classes
+                .contains(&"Exception".to_string()),
             "base_classes: {:?}",
             proc_err.metadata.base_classes
         );
@@ -833,10 +831,7 @@ mod tests {
         let max_retries = find_by_name(&items, "MAX_RETRIES");
         assert_eq!(max_retries.kind, SymbolKind::Const);
         assert_eq!(max_retries.visibility, Visibility::Public);
-        assert_eq!(
-            max_retries.metadata.return_type.as_deref(),
-            Some("int"),
-        );
+        assert_eq!(max_retries.metadata.return_type.as_deref(), Some("int"),);
     }
 
     #[test]
@@ -845,10 +840,7 @@ mod tests {
         let items = parse_and_extract(source);
         let timeout = find_by_name(&items, "DEFAULT_TIMEOUT");
         assert_eq!(timeout.kind, SymbolKind::Const);
-        assert_eq!(
-            timeout.metadata.return_type.as_deref(),
-            Some("float"),
-        );
+        assert_eq!(timeout.metadata.return_type.as_deref(), Some("float"),);
     }
 
     #[test]

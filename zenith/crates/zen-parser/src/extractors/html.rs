@@ -33,10 +33,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
     Ok(items)
 }
 
-fn collect_elements<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn collect_elements<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let kind = node.kind();
     match kind.as_ref() {
         "element" => process_element(node, items),
@@ -54,10 +51,7 @@ fn collect_elements<D: ast_grep_core::Doc>(
 
 // ── element processing ─────────────────────────────────────────────
 
-fn process_element<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let Some((tag_name, attrs)) = extract_tag_info(node) else {
         return;
     };
@@ -70,9 +64,7 @@ fn process_element<D: ast_grep_core::Doc>(
     let has_end_tag = node.children().any(|c| c.kind().as_ref() == "end_tag");
     let is_self_closing = !has_end_tag;
 
-    let should_extract = is_custom
-        || element_id.is_some()
-        || is_significant_tag(&tag_name);
+    let should_extract = is_custom || element_id.is_some() || is_significant_tag(&tag_name);
 
     if !should_extract {
         return;
@@ -117,10 +109,7 @@ fn process_element<D: ast_grep_core::Doc>(
 
 // ── script_element processing ──────────────────────────────────────
 
-fn process_script_element<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_script_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let attrs = extract_start_tag_attrs(node);
     let src = attr_value(&attrs, "src");
     let script_type = attr_value(&attrs, "type");
@@ -152,10 +141,7 @@ fn process_script_element<D: ast_grep_core::Doc>(
 
 // ── style_element processing ───────────────────────────────────────
 
-fn process_style_element<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-    items: &mut Vec<ParsedItem>,
-) {
+fn process_style_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let attrs = extract_start_tag_attrs(node);
     let signature = build_signature("style", &attrs);
 
@@ -179,9 +165,7 @@ fn process_style_element<D: ast_grep_core::Doc>(
 // ── Helper functions ───────────────────────────────────────────────
 
 /// Extract tag name and attributes from an element's `start_tag`.
-fn extract_tag_info<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> Option<(String, Vec<HtmlAttr>)> {
+fn extract_tag_info<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<(String, Vec<HtmlAttr>)> {
     for child in node.children() {
         if child.kind().as_ref() == "start_tag" {
             let tag_name = child
@@ -207,9 +191,7 @@ fn extract_tag_info<D: ast_grep_core::Doc>(
 }
 
 /// Extract attributes from a `start_tag` node's children.
-fn extract_start_tag_attrs<D: ast_grep_core::Doc>(
-    node: &Node<D>,
-) -> Vec<HtmlAttr> {
+fn extract_start_tag_attrs<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<HtmlAttr> {
     for child in node.children() {
         if child.kind().as_ref() == "start_tag" {
             return extract_attrs_from_tag(&child);
@@ -219,9 +201,7 @@ fn extract_start_tag_attrs<D: ast_grep_core::Doc>(
 }
 
 /// Extract all attributes from a tag node.
-fn extract_attrs_from_tag<D: ast_grep_core::Doc>(
-    tag_node: &Node<D>,
-) -> Vec<HtmlAttr> {
+fn extract_attrs_from_tag<D: ast_grep_core::Doc>(tag_node: &Node<D>) -> Vec<HtmlAttr> {
     tag_node
         .children()
         .filter(|c| c.kind().as_ref() == "attribute")
@@ -897,10 +877,7 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.html");
         let items = parse_and_extract(source);
         let slots = find_all_by_tag(&items, "slot");
-        assert!(
-            !slots.is_empty(),
-            "should find at least one slot element"
-        );
+        assert!(!slots.is_empty(), "should find at least one slot element");
     }
 
     #[test]
@@ -914,6 +891,9 @@ mod tests {
                 .iter()
                 .any(|(n, v)| n == "name" && v.as_deref() == Some("sidebar-content"))
         });
-        assert!(named.is_some(), "should find slot with name=sidebar-content");
+        assert!(
+            named.is_some(),
+            "should find slot with name=sidebar-content"
+        );
     }
 }
