@@ -92,6 +92,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_csharp() {
+        assert_eq!(detect_language("Program.cs"), Some(SupportLang::CSharp));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

@@ -37,6 +37,13 @@ fn constructor_normalization_across_languages() {
             .iter()
             .any(|i| i.kind == SymbolKind::Constructor && i.name == "new")
     );
+
+    let csharp_source = "class User { public User(string name) {} }";
+    let csharp_root = SupportLang::CSharp.ast_grep(csharp_source);
+    let csharp_items = super::csharp::extract(&csharp_root).expect("csharp extraction");
+    assert!(csharp_items.iter().any(|i| {
+        i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
+    }));
 }
 
 #[test]

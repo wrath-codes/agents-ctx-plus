@@ -1,6 +1,7 @@
 pub mod bash;
 pub mod c;
 pub mod cpp;
+pub mod csharp;
 pub mod css;
 pub mod elixir;
 pub mod go;

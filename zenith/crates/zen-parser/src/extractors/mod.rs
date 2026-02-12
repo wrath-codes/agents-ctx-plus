@@ -5,6 +5,7 @@ pub(crate) mod helpers;
 pub use dispatcher::bash;
 pub use dispatcher::c;
 pub use dispatcher::cpp;
+pub use dispatcher::csharp;
 pub use dispatcher::css;
 pub use dispatcher::elixir;
 pub use dispatcher::go;
