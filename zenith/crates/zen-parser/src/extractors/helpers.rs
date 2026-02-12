@@ -104,6 +104,23 @@ pub fn extract_doc_comments_rust<D: ast_grep_core::Doc>(node: &Node<D>, source: 
             } else {
                 break;
             }
+        } else if kind.as_ref() == "block_comment" {
+            let text = sibling.text().to_string();
+            if text.starts_with("/**") && !text.starts_with("/***") {
+                let inner = text
+                    .trim_start_matches("/**")
+                    .trim_end_matches("*/")
+                    .lines()
+                    .map(|l| l.trim().trim_start_matches('*').trim())
+                    .filter(|l| !l.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !inner.is_empty() {
+                    comments.push(inner);
+                }
+            } else {
+                break;
+            }
         } else if kind.as_ref() == "attribute_item" {
             // Skip attributes, keep looking for docs
         } else {
@@ -185,8 +202,11 @@ pub fn extract_visibility_rust<D: ast_grep_core::Doc>(node: &Node<D>) -> Visibil
             let text = child.text().to_string();
             if text.contains("pub(crate)") {
                 return Visibility::PublicCrate;
-            } else if text.contains("pub(super)") {
-                return Visibility::Private;
+            } else if text.contains("pub(super)")
+                || text.contains("pub(self)")
+                || text.contains("pub(in ")
+            {
+                return Visibility::Protected;
             } else if text.starts_with("pub") {
                 return Visibility::Public;
             }
@@ -258,13 +278,65 @@ pub fn is_pyo3(attrs: &[String]) -> bool {
     })
 }
 
-/// Detect `async`/`unsafe` modifiers on a function node.
+/// Analyze attributes for common semantic flags.
 ///
-/// Spike 0.8 finding (b): `async`/`unsafe` appear as children of
-/// `function_modifiers` node, not as direct children of the function.
-pub fn detect_modifiers<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool) {
+/// Returns `(is_cfg, is_deprecated, is_must_use, is_doc_hidden)`.
+#[allow(dead_code)]
+pub fn extract_attribute_flags(attrs: &[String]) -> (bool, bool, bool, bool) {
+    let mut is_cfg = false;
+    let mut is_deprecated = false;
+    let mut is_must_use = false;
+    let mut is_doc_hidden = false;
+    for a in attrs {
+        if a.starts_with("cfg(") || a.starts_with("cfg_attr(") {
+            is_cfg = true;
+        }
+        if a.starts_with("deprecated") {
+            is_deprecated = true;
+        }
+        if a == "must_use" || a.starts_with("must_use(") {
+            is_must_use = true;
+        }
+        if a == "doc(hidden)" {
+            is_doc_hidden = true;
+        }
+    }
+    (is_cfg, is_deprecated, is_must_use, is_doc_hidden)
+}
+
+/// Extract the type annotation from a const/static item.
+///
+/// In tree-sitter-rust, const/static items have their type as a direct
+/// child node after `:`, not via `field("return_type")`.
+pub fn extract_type_annotation<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
+    // First try the "type" field
+    if let Some(ty) = node.field("type") {
+        return Some(ty.text().to_string());
+    }
+    // Fallback: look for type node after ":"
+    let children: Vec<_> = node.children().collect();
+    let mut found_colon = false;
+    for child in &children {
+        let k = child.kind();
+        if k.as_ref() == ":" {
+            found_colon = true;
+            continue;
+        }
+        if found_colon && k.as_ref() != "=" && k.as_ref() != ";" {
+            return Some(child.text().to_string());
+        }
+    }
+    None
+}
+
+/// Detect `async`/`unsafe`/`const` modifiers and ABI on a function node.
+pub fn detect_modifiers<D: ast_grep_core::Doc>(
+    node: &Node<D>,
+) -> (bool, bool, bool, Option<String>) {
     let mut is_async = false;
     let mut is_unsafe = false;
+    let mut is_const = false;
+    let mut abi = None;
     for child in node.children() {
         let kind = child.kind();
         let k = kind.as_ref();
@@ -272,6 +344,22 @@ pub fn detect_modifiers<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool) {
             let text = child.text().to_string();
             is_async = text.contains("async");
             is_unsafe = text.contains("unsafe");
+            is_const = text.contains("const");
+            // Extract ABI from extern_modifier inside function_modifiers
+            for fc in child.children() {
+                if fc.kind().as_ref() == "extern_modifier" {
+                    let ext_text = fc.text().to_string();
+                    let abi_str = ext_text
+                        .trim_start_matches("extern")
+                        .trim()
+                        .trim_matches('"');
+                    if abi_str.is_empty() {
+                        abi = Some("C".to_string());
+                    } else {
+                        abi = Some(abi_str.to_string());
+                    }
+                }
+            }
             break;
         }
         if k == "async" {
@@ -280,10 +368,13 @@ pub fn detect_modifiers<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool) {
         if k == "unsafe" {
             is_unsafe = true;
         }
+        if k == "const" {
+            is_const = true;
+        }
     }
     is_async = is_async || node.text().starts_with("async ");
     is_unsafe = is_unsafe || node.text().starts_with("unsafe ");
-    (is_async, is_unsafe)
+    (is_async, is_unsafe, is_const, abi)
 }
 
 /// Parse Rust doc sections (`# Errors`, `# Panics`, `# Safety`, `# Examples`).
@@ -395,7 +486,7 @@ mod tests {
 
     #[test]
     fn visibility_detection() {
-        let source = "pub fn a() {} fn b() {} pub(crate) fn c() {}";
+        let source = "pub fn a() {} fn b() {} pub(crate) fn c() {} pub(super) fn d() {}";
         let root = SupportLang::Rust.ast_grep(source);
         let funcs: Vec<_> = root
             .root()
@@ -404,7 +495,7 @@ mod tests {
                 SupportLang::Rust,
             ))
             .collect();
-        assert_eq!(funcs.len(), 3);
+        assert_eq!(funcs.len(), 4);
 
         let mut vis_map = std::collections::HashMap::new();
         for f in &funcs {
@@ -417,6 +508,7 @@ mod tests {
         assert_eq!(vis_map["a"], Visibility::Public);
         assert_eq!(vis_map["b"], Visibility::Private);
         assert_eq!(vis_map["c"], Visibility::PublicCrate);
+        assert_eq!(vis_map["d"], Visibility::Protected);
     }
 
     #[test]
@@ -430,7 +522,7 @@ mod tests {
                 SupportLang::Rust,
             ))
             .expect("should find function");
-        let (is_async, is_unsafe) = detect_modifiers(&func);
+        let (is_async, is_unsafe, _is_const, _abi) = detect_modifiers(&func);
         assert!(is_async);
         assert!(!is_unsafe);
     }
@@ -446,7 +538,7 @@ mod tests {
                 SupportLang::Rust,
             ))
             .expect("should find function");
-        let (is_async, is_unsafe) = detect_modifiers(&func);
+        let (is_async, is_unsafe, _is_const, _abi) = detect_modifiers(&func);
         assert!(!is_async);
         assert!(is_unsafe);
     }
