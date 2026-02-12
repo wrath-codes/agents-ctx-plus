@@ -2,7 +2,6 @@
 
 pub mod c;
 pub mod cpp;
-pub mod css;
 pub mod dispatcher;
 pub mod elixir;
 pub mod go;
@@ -12,6 +11,7 @@ pub mod tsx;
 pub mod typescript;
 
 pub use dispatcher::bash;
+pub use dispatcher::css;
 pub use dispatcher::html;
 pub use dispatcher::python;
 pub use dispatcher::rust;
