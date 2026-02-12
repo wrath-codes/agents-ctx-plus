@@ -1,9 +1,9 @@
 //! Extraction orchestrator — two-tier fallback: ast-grep → regex.
 
-pub mod bash;
 pub mod c;
 pub mod cpp;
 pub mod css;
+pub mod dispatcher;
 pub mod elixir;
 pub mod go;
 pub(crate) mod helpers;
@@ -13,3 +13,5 @@ pub mod python;
 pub mod rust;
 pub mod tsx;
 pub mod typescript;
+
+pub use dispatcher::bash;
