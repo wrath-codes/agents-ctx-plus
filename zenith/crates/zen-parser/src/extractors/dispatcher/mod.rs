@@ -3,5 +3,6 @@ pub mod css;
 pub mod elixir;
 pub mod go;
 pub mod html;
+pub mod javascript;
 pub mod python;
 pub mod rust;
