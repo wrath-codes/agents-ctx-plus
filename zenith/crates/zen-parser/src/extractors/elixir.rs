@@ -1270,12 +1270,10 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
         // Find private "transform" — there may be a public one in Types module too
-        let transforms: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "transform" && i.visibility == Visibility::Private)
-            .collect();
         assert!(
-            !transforms.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "transform" && i.visibility == Visibility::Private),
             "should find private transform function"
         );
     }
@@ -1458,8 +1456,10 @@ mod tests {
     fn handle_call_extracted() {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
-        let hc: Vec<_> = items.iter().filter(|i| i.name == "handle_call").collect();
-        assert!(!hc.is_empty(), "should find handle_call");
+        assert!(
+            items.iter().any(|i| i.name == "handle_call"),
+            "should find handle_call"
+        );
     }
 
     // ── Behaviour callbacks ─────────────────────────────────────────
@@ -1899,10 +1899,11 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.ex");
         let items = parse_and_extract(source);
         // The Sample.Config module has @type t :: %__MODULE__{}
-        let t_types: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "t" && i.kind == SymbolKind::TypeAlias)
-            .collect();
-        assert!(!t_types.is_empty(), "should extract @type t");
+        assert!(
+            items
+                .iter()
+                .any(|i| i.name == "t" && i.kind == SymbolKind::TypeAlias),
+            "should extract @type t"
+        );
     }
 }

@@ -900,11 +900,14 @@ mod tests {
     fn custom_property_count() {
         let source = include_str!("../../tests/fixtures/sample.css");
         let items = parse_and_extract(source);
-        let vars: Vec<_> = items
-            .iter()
-            .filter(|i| i.metadata.is_custom_property)
-            .collect();
-        assert_eq!(vars.len(), 7, "should find 7 CSS custom properties");
+        assert_eq!(
+            items
+                .iter()
+                .filter(|i| i.metadata.is_custom_property)
+                .count(),
+            7,
+            "should find 7 CSS custom properties"
+        );
     }
 
     // ── Element selector tests ─────────────────────────────────────
@@ -1083,11 +1086,10 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.css");
         let items = parse_and_extract(source);
         // Nested rules inside @media should have parent context in name
-        let nested: Vec<_> = items
-            .iter()
-            .filter(|i| i.name.contains("@(max-width:"))
-            .collect();
-        assert!(!nested.is_empty(), "should find nested rules inside @media");
+        assert!(
+            items.iter().any(|i| i.name.contains("@(max-width:")),
+            "should find nested rules inside @media"
+        );
     }
 
     #[test]
@@ -1202,11 +1204,12 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.css");
         let items = parse_and_extract(source);
         // Rules inside @layer should have parent context
-        let nested: Vec<_> = items
-            .iter()
-            .filter(|i| i.name.contains("@base") || i.name.contains("@utilities"))
-            .collect();
-        assert!(!nested.is_empty(), "should find nested rules inside @layer");
+        assert!(
+            items
+                .iter()
+                .any(|i| i.name.contains("@base") || i.name.contains("@utilities")),
+            "should find nested rules inside @layer"
+        );
     }
 
     // ── @container tests ───────────────────────────────────────────
@@ -1570,11 +1573,12 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.css");
         let items = parse_and_extract(source);
         // Rules inside @scope should have parent context
-        let nested: Vec<_> = items
-            .iter()
-            .filter(|i| i.name.contains("@.card") || i.name.contains("@.hero"))
-            .collect();
-        assert!(!nested.is_empty(), "should find nested rules inside @scope");
+        assert!(
+            items
+                .iter()
+                .any(|i| i.name.contains("@.card") || i.name.contains("@.hero")),
+            "should find nested rules inside @scope"
+        );
     }
 
     #[test]
@@ -1600,12 +1604,8 @@ mod tests {
         let source = include_str!("../../tests/fixtures/sample.css");
         let items = parse_and_extract(source);
         // The .fade-in rule inside @starting-style should be extracted
-        let fade_in: Vec<_> = items
-            .iter()
-            .filter(|i| i.name.contains("fade-in"))
-            .collect();
         assert!(
-            !fade_in.is_empty(),
+            items.iter().any(|i| i.name.contains("fade-in")),
             "should find .fade-in nested inside @starting-style"
         );
     }

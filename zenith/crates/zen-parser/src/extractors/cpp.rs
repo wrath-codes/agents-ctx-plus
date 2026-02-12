@@ -2500,12 +2500,10 @@ mod tests {
     #[test]
     fn namespace_math_contains_abs() {
         let items = fixture_items();
-        let abs_items: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "abs" && i.kind == SymbolKind::Function)
-            .collect();
         assert!(
-            !abs_items.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "abs" && i.kind == SymbolKind::Function),
             "abs function in math namespace should exist"
         );
     }
@@ -2513,12 +2511,10 @@ mod tests {
     #[test]
     fn namespace_math_contains_square() {
         let items = fixture_items();
-        let sq: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "square" && i.kind == SymbolKind::Function)
-            .collect();
         assert!(
-            !sq.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "square" && i.kind == SymbolKind::Function),
             "square function in math namespace should exist"
         );
     }
@@ -2526,12 +2522,10 @@ mod tests {
     #[test]
     fn namespace_math_contains_point_struct() {
         let items = fixture_items();
-        let pts: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "Point" && i.kind == SymbolKind::Struct)
-            .collect();
         assert!(
-            !pts.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "Point" && i.kind == SymbolKind::Struct),
             "Point struct in math namespace should exist"
         );
     }
@@ -2539,12 +2533,10 @@ mod tests {
     #[test]
     fn namespace_utils_string_contains_trim() {
         let items = fixture_items();
-        let trims: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "trim" && i.kind == SymbolKind::Function)
-            .collect();
         assert!(
-            !trims.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "trim" && i.kind == SymbolKind::Function),
             "trim function in utils::string namespace should exist"
         );
     }
@@ -3055,12 +3047,10 @@ mod tests {
     #[test]
     fn function_increment_counter_in_anonymous_ns() {
         let items = fixture_items();
-        let ic: Vec<_> = items
-            .iter()
-            .filter(|i| i.name == "increment_counter" && i.kind == SymbolKind::Function)
-            .collect();
         assert!(
-            !ic.is_empty(),
+            items
+                .iter()
+                .any(|i| i.name == "increment_counter" && i.kind == SymbolKind::Function),
             "increment_counter in anonymous namespace should exist"
         );
     }
@@ -3428,12 +3418,10 @@ mod tests {
     #[test]
     fn operator_km_literal_extracted() {
         let items = fixture_items();
-        let ops: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == SymbolKind::Function && i.name.contains("operator"))
-            .collect();
         assert!(
-            !ops.is_empty(),
+            items
+                .iter()
+                .any(|i| i.kind == SymbolKind::Function && i.name.contains("operator")),
             "user-defined literal operator should be extracted as a Function"
         );
     }
@@ -3510,15 +3498,14 @@ mod tests {
     #[test]
     fn minimal_extern_c() {
         let items = parse_and_extract("extern \"C\" { void foo(); }");
-        let ext: Vec<_> = items
-            .iter()
-            .filter(|i| {
+        assert!(
+            items.iter().any(|i| {
                 i.metadata
                     .attributes
                     .contains(&"linkage_specification".to_string())
-            })
-            .collect();
-        assert!(!ext.is_empty(), "extern C block should be extracted");
+            }),
+            "extern C block should be extracted"
+        );
     }
 
     #[test]
@@ -3691,12 +3678,10 @@ mod tests {
     #[test]
     fn minimal_qualified_identifier() {
         let items = parse_and_extract("class A {};\nvoid A::foo() {}");
-        let funcs: Vec<_> = items
-            .iter()
-            .filter(|i| i.kind == SymbolKind::Function && i.name.contains("foo"))
-            .collect();
         assert!(
-            !funcs.is_empty(),
+            items
+                .iter()
+                .any(|i| i.kind == SymbolKind::Function && i.name.contains("foo")),
             "qualified function A::foo should be extracted"
         );
     }

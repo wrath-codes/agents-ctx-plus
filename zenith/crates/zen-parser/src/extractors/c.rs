@@ -2165,14 +2165,13 @@ mod tests {
         let items = parse_and_extract(source);
         let hw = find_by_name(&items, "HardwareRegister");
         assert_eq!(hw.kind, SymbolKind::Struct);
-        let bitfields: Vec<_> = hw
-            .metadata
-            .fields
-            .iter()
-            .filter(|f| f.contains("bitfield"))
-            .collect();
         assert!(
-            bitfields.len() >= 3,
+            hw.metadata
+                .fields
+                .iter()
+                .filter(|f| f.contains("bitfield"))
+                .count()
+                >= 3,
             "HardwareRegister should have 3+ bitfields: {:?}",
             hw.metadata.fields
         );
@@ -2653,12 +2652,12 @@ mod tests {
     fn pragma_pack_extracted() {
         let source = include_str!("../../tests/fixtures/sample.c");
         let items = parse_and_extract(source);
-        let pragmas: Vec<_> = items
-            .iter()
-            .filter(|i| i.metadata.attributes.contains(&"#pragma".to_string()))
-            .collect();
         assert!(
-            pragmas.len() >= 2,
+            items
+                .iter()
+                .filter(|i| i.metadata.attributes.contains(&"#pragma".to_string()))
+                .count()
+                >= 2,
             "should have at least 2 pragma directives"
         );
     }
@@ -3592,14 +3591,12 @@ mod tests {
     #[test]
     fn gcc_attribute_preserved_text() {
         let items = parse_and_extract("__attribute__((unused)) static int x = 0;");
-        let attr_text: Vec<_> = items[0]
-            .metadata
-            .attributes
-            .iter()
-            .filter(|a| a.contains("__attribute__"))
-            .collect();
         assert!(
-            !attr_text.is_empty(),
+            items[0]
+                .metadata
+                .attributes
+                .iter()
+                .any(|a| a.contains("__attribute__")),
             "should preserve __attribute__ text: {:?}",
             items[0].metadata.attributes
         );

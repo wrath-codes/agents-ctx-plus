@@ -1566,11 +1566,11 @@ mod tests {
     fn alias_count() {
         let source = include_str!("../../tests/fixtures/sample.sh");
         let items = parse_and_extract(source);
-        let aliases: Vec<_> = items
+        let alias_count = items
             .iter()
             .filter(|i| i.metadata.attributes.contains(&"alias".to_string()))
-            .collect();
-        assert_eq!(aliases.len(), 3, "should find 3 aliases: ll, gs, gp");
+            .count();
+        assert_eq!(alias_count, 3, "should find 3 aliases: ll, gs, gp");
     }
 
     // ── Array declaration tests ───────────────────────────────────
@@ -1623,8 +1623,10 @@ mod tests {
     fn if_statement_extracted() {
         let source = include_str!("../../tests/fixtures/sample.sh");
         let items = parse_and_extract(source);
-        let ifs: Vec<_> = items.iter().filter(|i| i.name.starts_with("if ")).collect();
-        assert!(!ifs.is_empty(), "should find at least one if statement");
+        assert!(
+            items.iter().any(|i| i.name.starts_with("if ")),
+            "should find at least one if statement"
+        );
     }
 
     #[test]
@@ -2269,11 +2271,11 @@ mod tests {
     fn c_style_for_count() {
         let source = include_str!("../../tests/fixtures/sample.sh");
         let items = parse_and_extract(source);
-        let c_fors: Vec<_> = items
+        let c_for_count = items
             .iter()
             .filter(|i| i.metadata.attributes.contains(&"c_style".to_string()))
-            .collect();
-        assert_eq!(c_fors.len(), 2, "should find 2 c-style for loops");
+            .count();
+        assert_eq!(c_for_count, 2, "should find 2 c-style for loops");
     }
 
     #[test]
@@ -2445,11 +2447,11 @@ mod tests {
     fn unset_count() {
         let source = include_str!("../../tests/fixtures/sample.sh");
         let items = parse_and_extract(source);
-        let unsets: Vec<_> = items
+        let unset_count = items
             .iter()
             .filter(|i| i.name.starts_with("unset "))
-            .collect();
-        assert_eq!(unsets.len(), 2, "should find 2 unset commands");
+            .count();
+        assert_eq!(unset_count, 2, "should find 2 unset commands");
     }
 
     // ── List (logical chain) tests ────────────────────────────────

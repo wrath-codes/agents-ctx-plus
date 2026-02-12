@@ -36,8 +36,9 @@
 #[cfg(test)]
 mod tests {
     use ast_grep_core::matcher::KindMatcher;
-    use ast_grep_core::ops::{Any, Not};
+    use ast_grep_core::ops::{All, Any, Not};
     use ast_grep_language::{LanguageExt, SupportLang};
+    use tree_sitter::StreamingIterator;
 
     // =========================================================================
     // Section 1: Core Parsing
@@ -107,11 +108,12 @@ mod tests {
             assert_eq!(
                 node.kind().as_ref(),
                 *expected_root_kind,
-                "Root kind mismatch for {:?}",
-                lang
+                "Root kind mismatch for {lang:?}"
             );
-            let children: Vec<_> = node.children().collect();
-            assert!(!children.is_empty(), "{:?} parsed with no children", lang);
+            assert!(
+                node.children().next().is_some(),
+                "{lang:?} parsed with no children"
+            );
         }
     }
 
@@ -137,8 +139,8 @@ mod tests {
         for (ext, expected) in cases {
             let lang: SupportLang = ext
                 .parse()
-                .unwrap_or_else(|_| panic!("Failed to parse {:?} as SupportLang", ext));
-            assert_eq!(lang, *expected, "Extension {:?} mismatch", ext);
+                .unwrap_or_else(|_| panic!("Failed to parse {ext:?} as SupportLang"));
+            assert_eq!(lang, *expected, "Extension {ext:?} mismatch");
         }
     }
 
@@ -159,9 +161,8 @@ mod tests {
         // Test with simple functions (no return type) — pattern works
         let simple_source = "fn hello() { } fn world() { }";
         let root = SupportLang::Rust.ast_grep(simple_source);
-        let simple_matches: Vec<_> = root.root().find_all("fn $FNAME() { $$$ }").collect();
         assert_eq!(
-            simple_matches.len(),
+            root.root().find_all("fn $FNAME() { $$$ }").count(),
             2,
             "Simple pattern should match both functions"
         );
@@ -214,7 +215,7 @@ mod tests {
 
         assert!(names.contains(&"hello".to_string()));
         assert!(names.contains(&"world".to_string()));
-        println!("FINDING: Single metavar capture works. Names: {:?}", names);
+        println!("FINDING: Single metavar capture works. Names: {names:?}");
     }
 
     #[test]
@@ -258,12 +259,11 @@ mod tests {
         let root = SupportLang::Python.ast_grep(source);
 
         // Try matching class definitions
-        let matches: Vec<_> = root.root().find_all("class $NAME: $$$BODY").collect();
         // This may or may not work — Python classes with base classes have different
         // syntax. Let's also try kind-based.
         println!(
             "FINDING: Pattern 'class $NAME: $$$BODY' matched {} nodes",
-            matches.len()
+            root.root().find_all("class $NAME: $$$BODY").count()
         );
 
         // Fallback: use KindMatcher for class_definition
@@ -276,7 +276,7 @@ mod tests {
         );
         for m in &kind_matches {
             let name = m.field("name").map(|n| n.text().to_string());
-            println!("FINDING: Python class found: {:?}", name);
+            println!("FINDING: Python class found: {name:?}");
         }
     }
 
@@ -331,18 +331,15 @@ mod tests {
 
         // All functions first
         let kind_matcher = KindMatcher::new("function_item", SupportLang::Rust);
-        let all_fns: Vec<_> = root.root().find_all(kind_matcher).collect();
-        let all_fn_count = all_fns.len();
+        let all_fn_count = root.root().find_all(kind_matcher).count();
 
         // All with impossible combination: function_item AND struct_item
-        use ast_grep_core::ops::All;
         let all_matcher = All::new(vec![
             KindMatcher::new("function_item", SupportLang::Rust),
             KindMatcher::new("struct_item", SupportLang::Rust),
         ]);
-        let impossible: Vec<_> = root.root().find_all(all_matcher).collect();
         assert_eq!(
-            impossible.len(),
+            root.root().find_all(all_matcher).count(),
             0,
             "Nothing should be both function_item and struct_item"
         );
@@ -375,7 +372,7 @@ mod tests {
 
         // Count all function_items
         let fn_matcher = KindMatcher::new("function_item", SupportLang::Rust);
-        let all_fns: Vec<_> = root.root().find_all(fn_matcher).collect();
+        let all_fn_count = root.root().find_all(fn_matcher).count();
 
         // Now find function_items that are NOT inside impl blocks
         // Use Not to exclude impl_items
@@ -389,7 +386,7 @@ mod tests {
         println!(
             "FINDING: Not combinator - total functions: {}, \
              nodes that are NOT impl_item: {}",
-            all_fns.len(),
+            all_fn_count,
             not_impl_matches.len()
         );
 
@@ -443,7 +440,7 @@ mod tests {
         let name_node = first_fn.field("name");
         assert!(name_node.is_some(), "Function should have a 'name' field");
         let name_text = name_node.unwrap().text().to_string();
-        println!("FINDING: field(\"name\") = {:?}", name_text);
+        println!("FINDING: field(\"name\") = {name_text:?}");
 
         // Field access: parameters
         let params_node = first_fn.field("parameters");
@@ -534,7 +531,7 @@ mod tests {
         }
         comments.reverse();
         let doc = comments.join("\n");
-        println!("FINDING: Extracted doc comment: {:?}", doc);
+        println!("FINDING: Extracted doc comment: {doc:?}");
         // The `process` function should have doc comments
         assert!(
             !doc.is_empty(),
@@ -542,8 +539,7 @@ mod tests {
         );
         assert!(
             doc.contains("documented async function"),
-            "Doc should mention 'documented async function', got: {:?}",
-            doc
+            "Doc should mention 'documented async function', got: {doc:?}"
         );
     }
 
@@ -577,15 +573,7 @@ mod tests {
             let text_has_unsafe = text.contains("unsafe");
 
             println!(
-                "FINDING: fn {} — child-async={}, child-unsafe={}, has_modifiers={}, \
-                 text-async={}, text-unsafe={}, child_kinds={:?}",
-                name,
-                has_async,
-                has_unsafe,
-                has_modifiers,
-                text_has_async,
-                text_has_unsafe,
-                child_kinds
+                "FINDING: fn {name} - child-async={has_async}, child-unsafe={has_unsafe}, has_modifiers={has_modifiers}, text-async={text_has_async}, text-unsafe={text_has_unsafe}, child_kinds={child_kinds:?}"
             );
         }
 
@@ -609,7 +597,7 @@ mod tests {
             .filter(|c| c.kind().as_ref() == "enum_variant")
             .filter_map(|v| v.field("name").map(|n| n.text().to_string()))
             .collect();
-        println!("FINDING: Enum variants: {:?}", variants);
+        println!("FINDING: Enum variants: {variants:?}");
         assert!(variants.contains(&"Active".to_string()));
 
         // Test 3: Struct fields via children
@@ -625,7 +613,7 @@ mod tests {
             .filter(|c| c.kind().as_ref() == "field_declaration")
             .filter_map(|f| f.field("name").map(|n| n.text().to_string()))
             .collect();
-        println!("FINDING: Struct fields: {:?}", fields);
+        println!("FINDING: Struct fields: {fields:?}");
         assert!(!fields.is_empty(), "Should find struct fields");
     }
 
@@ -665,7 +653,7 @@ mod tests {
 
         // Walk up via ancestors()
         let ancestors: Vec<String> = inner_fn.ancestors().map(|a| a.kind().to_string()).collect();
-        println!("FINDING: fn {} ancestors = {:?}", name, ancestors);
+        println!("FINDING: fn {name} ancestors = {ancestors:?}");
         assert!(
             ancestors.iter().any(|a| a == "impl_item"),
             "Ancestors should include impl_item"
@@ -763,7 +751,7 @@ mod tests {
             (None, None) => text.len(),
         };
         let signature = text[..end].trim();
-        println!("FINDING: Extracted signature: {:?}", signature);
+        println!("FINDING: Extracted signature: {signature:?}");
         assert!(signature.contains("fn"), "Signature should contain 'fn'");
         assert!(
             !signature.contains('{'),
@@ -773,7 +761,7 @@ mod tests {
         // kind() also returns Cow<str>
         let kind = first_fn.kind();
         assert_eq!(kind.as_ref(), "function_item");
-        println!("FINDING: kind() returns Cow<str>: {:?}", kind);
+        println!("FINDING: kind() returns Cow<str>: {kind:?}");
     }
 
     // =========================================================================
@@ -794,10 +782,7 @@ mod tests {
             .filter_map(|m| m.get_env().get_match("NAME").map(|n| n.text().to_string()))
             .collect();
 
-        println!(
-            "FINDING: Pattern 'fn $NAME() {{}}' with smart strictness matched: {:?}",
-            names
-        );
+        println!("FINDING: Pattern 'fn $NAME() {{}}' with smart strictness matched: {names:?}");
         println!(
             "FINDING: Smart strictness matches {} out of 3 functions",
             matches.len()
@@ -817,11 +802,14 @@ mod tests {
         // MatchStrictness enum exists but configuring it from the Rust API
         // requires PatternBuilder or similar. Document whether this is possible.
         // For now, just verify the enum exists at compile time.
-        let _smart = ast_grep_core::MatchStrictness::Smart;
-        let _ast = ast_grep_core::MatchStrictness::Ast;
-        let _cst = ast_grep_core::MatchStrictness::Cst;
-        let _relaxed = ast_grep_core::MatchStrictness::Relaxed;
-        let _sig = ast_grep_core::MatchStrictness::Signature;
+        let strictness_modes = [
+            ast_grep_core::MatchStrictness::Smart,
+            ast_grep_core::MatchStrictness::Ast,
+            ast_grep_core::MatchStrictness::Cst,
+            ast_grep_core::MatchStrictness::Relaxed,
+            ast_grep_core::MatchStrictness::Signature,
+        ];
+        assert_eq!(strictness_modes.len(), 5);
         println!(
             "FINDING: MatchStrictness enum has 5 variants (Cst, Smart, Ast, Relaxed, Signature)"
         );
@@ -867,17 +855,13 @@ mod tests {
         for (source, lang) in cases {
             let root = lang.ast_grep(source);
             let node = root.root();
-            let children: Vec<_> = node.children().collect();
-            if children.is_empty() {
-                failures.push(format!("{:?}", lang));
+            if node.children().next().is_none() {
+                failures.push(format!("{lang:?}"));
             }
         }
 
         if !failures.is_empty() {
-            println!(
-                "WARNING: These languages parsed with no children: {:?}",
-                failures
-            );
+            println!("WARNING: These languages parsed with no children: {failures:?}");
         }
         println!(
             "FINDING: {}/{} built-in grammars parsed successfully",
@@ -886,8 +870,7 @@ mod tests {
         );
         assert!(
             failures.is_empty(),
-            "All 26 built-in grammars should parse. Failures: {:?}",
-            failures
+            "All 26 built-in grammars should parse. Failures: {failures:?}"
         );
     }
 
@@ -923,10 +906,6 @@ mod tests {
 
         let mut cursor = tree_sitter::QueryCursor::new();
 
-        // tree-sitter 0.26: QueryMatches uses StreamingIterator, not std Iterator.
-        // Must import the trait and use .next() which returns Option<&Item>.
-        use tree_sitter::StreamingIterator;
-
         let fn_name_idx = query
             .capture_index_for_name("fn_name")
             .expect("fn_name capture should exist");
@@ -938,10 +917,10 @@ mod tests {
             while let Some(m) = matches.next() {
                 match_count += 1;
                 for capture in m.captures {
-                    if capture.index == fn_name_idx {
-                        if let Ok(text) = capture.node.utf8_text(source) {
-                            names.push(text.to_string());
-                        }
+                    if capture.index == fn_name_idx
+                        && let Ok(text) = capture.node.utf8_text(source)
+                    {
+                        names.push(text.to_string());
                     }
                 }
             }
@@ -952,10 +931,7 @@ mod tests {
             "Should find 2 functions via tree-sitter query"
         );
         assert_eq!(names, vec!["hello".to_string(), "world".to_string()]);
-        println!(
-            "FINDING: Raw tree-sitter fallback works. Query found functions: {:?}",
-            names
-        );
+        println!("FINDING: Raw tree-sitter fallback works. Query found functions: {names:?}");
         println!(
             "FINDING: tree-sitter Node.kind() returns &'static str, \
              ast-grep Node.kind() returns Cow<str>"

@@ -1016,7 +1016,7 @@ mod tests {
             "generics should be Some"
         );
         let g = process.metadata.generics.as_deref().unwrap();
-        assert!(g.contains("T"), "generics should contain T: {g}");
+        assert!(g.contains('T'), "generics should contain T: {g}");
     }
 
     #[test]
@@ -1500,7 +1500,7 @@ mod tests {
                 .metadata
                 .associated_types
                 .iter()
-                .any(|a| a.contains("Item") && a.contains("<")),
+                .any(|a| a.contains("Item") && a.contains('<')),
             "GAT should include type params: {:?}",
             lending.metadata.associated_types
         );
@@ -1550,7 +1550,7 @@ mod tests {
             msg.metadata
                 .variants
                 .iter()
-                .any(|v| v.starts_with("Move") && v.contains("x")),
+                .any(|v| v.starts_with("Move") && v.contains('x')),
             "Move variant should have struct payload: {:?}",
             msg.metadata.variants
         );
@@ -1913,7 +1913,7 @@ mod tests {
                     && i.metadata
                         .for_type
                         .as_deref()
-                        .is_some_and(|t| t.contains("&") && t.contains("RawValue"))
+                        .is_some_and(|t| t.contains('&') && t.contains("RawValue"))
             })
             .expect("should find fmt for &RawValue");
         assert!(fmt.metadata.trait_name.is_some(), "should have trait_name");
@@ -1962,12 +1962,10 @@ mod tests {
     fn no_duplicate_new_as_free_function() {
         let source = include_str!("../../tests/fixtures/sample.rs");
         let items = parse_and_extract(source);
-        let free_new: Vec<&ParsedItem> = items
-            .iter()
-            .filter(|i| i.kind == SymbolKind::Function && i.name == "new")
-            .collect();
         assert!(
-            free_new.is_empty(),
+            !items
+                .iter()
+                .any(|i| i.kind == SymbolKind::Function && i.name == "new"),
             "impl method 'new' should not appear as free function"
         );
     }
