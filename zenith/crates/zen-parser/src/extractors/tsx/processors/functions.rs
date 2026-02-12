@@ -2,77 +2,16 @@ use ast_grep_core::Node;
 
 use crate::types::{ParsedItem, SymbolKind, TsxMetadataExt};
 
-use super::tsx_helpers::{
-    collect_hooks_recursive, collect_jsx_tags_recursive, detect_directive,
-    extract_props_from_arrow_params, extract_props_from_type_annotation,
-    extract_props_type_from_params, has_jsx_recursive, is_component_name, is_component_return_type,
-    is_hoc_name, is_hook_name,
+use super::super::tsx_helpers::{
+    collect_hooks_recursive, collect_jsx_tags_recursive, extract_props_from_arrow_params,
+    extract_props_from_type_annotation, extract_props_type_from_params, has_jsx_recursive,
+    is_component_name, is_component_return_type, is_hoc_name, is_hook_name,
 };
+use super::FnBody;
 
-// ── Enrichment pass ────────────────────────────────────────────────
+// ── Function/arrow enrichment ──────────────────────────────────────
 
-/// Metadata extracted from a function/arrow body.
-#[allow(clippy::struct_excessive_bools)]
-pub(super) struct FnBody {
-    pub start_line: u32,
-    pub name: String,
-    pub has_jsx: bool,
-    pub hooks_used: Vec<String>,
-    pub jsx_elements: Vec<String>,
-    pub is_forward_ref: bool,
-    pub is_memo: bool,
-    pub is_lazy: bool,
-    pub props_type: Option<String>,
-    pub type_annotation: Option<String>,
-}
-
-/// Metadata extracted from a class declaration.
-#[allow(clippy::struct_excessive_bools)]
-pub(super) struct ClassInfo {
-    pub start_line: u32,
-    pub name: String,
-    pub extends_react_component: bool,
-    pub extends_pure_component: bool,
-    pub has_derived_state_from_error: bool,
-    pub has_component_did_catch: bool,
-    pub jsx_elements: Vec<String>,
-    pub props_type: Option<String>,
-}
-
-/// Enrich extracted items with React/JSX metadata.
-pub(super) fn enrich_items<D: ast_grep_core::Doc>(
-    root: &ast_grep_core::Node<D>,
-    items: &mut [ParsedItem],
-) {
-    // Detect file-level directive ("use client" / "use server").
-    let directive = detect_directive(root);
-
-    // Build a lookup of function/arrow bodies for deeper analysis.
-    let mut bodies: Vec<FnBody> = Vec::new();
-    collect_fn_bodies(root, &mut bodies);
-
-    // Detect class components.
-    let mut class_infos: Vec<ClassInfo> = Vec::new();
-    collect_class_components(root, &mut class_infos);
-
-    for item in items.iter_mut() {
-        enrich_item(item, &bodies, &class_infos);
-        // Apply file-level directive to all items.
-        if let Some(ref dir) = directive {
-            item.metadata.set_component_directive(dir.clone());
-        }
-    }
-}
-
-fn enrich_item(item: &mut ParsedItem, bodies: &[FnBody], class_infos: &[ClassInfo]) {
-    match item.kind {
-        SymbolKind::Function | SymbolKind::Const => enrich_fn_item(item, bodies),
-        SymbolKind::Class => enrich_class_item(item, class_infos),
-        _ => {}
-    }
-}
-
-fn enrich_fn_item(item: &mut ParsedItem, bodies: &[FnBody]) {
+pub fn enrich_fn_item(item: &mut ParsedItem, bodies: &[FnBody]) {
     let name = &item.name;
 
     let body = bodies
@@ -119,36 +58,10 @@ fn enrich_fn_item(item: &mut ParsedItem, bodies: &[FnBody]) {
     }
 }
 
-fn enrich_class_item(item: &mut ParsedItem, class_infos: &[ClassInfo]) {
-    let info = class_infos
-        .iter()
-        .find(|c| c.start_line == item.start_line && c.name == item.name);
-
-    let Some(ci) = info else {
-        return;
-    };
-
-    let is_class_component = ci.extends_react_component || ci.extends_pure_component;
-    let is_error_boundary = ci.has_derived_state_from_error || ci.has_component_did_catch;
-
-    item.metadata.set_class_component(is_class_component);
-    item.metadata.set_error_boundary(is_error_boundary);
-
-    if is_class_component {
-        item.metadata.set_component(true);
-        item.kind = SymbolKind::Component;
-    }
-
-    if !ci.jsx_elements.is_empty() {
-        item.metadata.set_jsx_elements(ci.jsx_elements.clone());
-    }
-    item.metadata.set_props_type_if_none(ci.props_type.clone());
-}
-
 // ── AST body collection (functions/arrows) ─────────────────────────
 
 /// Walk the AST collecting function/arrow bodies with their metadata.
-fn collect_fn_bodies<D: ast_grep_core::Doc>(node: &Node<D>, out: &mut Vec<FnBody>) {
+pub fn collect_fn_bodies<D: ast_grep_core::Doc>(node: &Node<D>, out: &mut Vec<FnBody>) {
     let kind = node.kind();
     match kind.as_ref() {
         "export_statement" => {
@@ -303,127 +216,6 @@ fn analyze_variable_declarator<D: ast_grep_core::Doc>(
     } else {
         None
     }
-}
-
-// ── Class component collection ─────────────────────────────────────
-
-fn collect_class_components<D: ast_grep_core::Doc>(node: &Node<D>, out: &mut Vec<ClassInfo>) {
-    let kind = node.kind();
-    match kind.as_ref() {
-        "export_statement" => {
-            let children: Vec<_> = node.children().collect();
-            for child in &children {
-                if child.kind().as_ref() == "class_declaration"
-                    && let Some(ci) = analyze_class(child, node)
-                {
-                    out.push(ci);
-                }
-            }
-        }
-        "class_declaration" => {
-            if let Some(ci) = analyze_class(node, node) {
-                out.push(ci);
-            }
-        }
-        _ => {}
-    }
-
-    let children: Vec<_> = node.children().collect();
-    for child in &children {
-        collect_class_components(child, out);
-    }
-}
-
-fn analyze_class<D: ast_grep_core::Doc>(node: &Node<D>, anchor: &Node<D>) -> Option<ClassInfo> {
-    let name = node.field("name").map(|n| n.text().to_string())?;
-
-    // Check extends clause for React.Component / React.PureComponent.
-    let (extends_component, extends_pure, props_type) = check_class_heritage(node);
-
-    if !extends_component && !extends_pure {
-        return None;
-    }
-
-    // Check class body for render(), getDerivedStateFromError, componentDidCatch.
-    let body = node.field("body")?;
-    let body_children: Vec<_> = body.children().collect();
-
-    let mut has_derived_state = false;
-    let mut has_did_catch = false;
-    let mut jsx_elems = Vec::new();
-
-    for member in &body_children {
-        let mk = member.kind();
-        if mk.as_ref() == "method_definition" {
-            let method_name = member.field("name").map(|n| n.text().to_string());
-            match method_name.as_deref() {
-                Some("render") => {
-                    if let Some(mbody) = member.field("body") {
-                        collect_jsx_tags_recursive(&mbody, &mut jsx_elems);
-                    }
-                }
-                Some("getDerivedStateFromError") => has_derived_state = true,
-                Some("componentDidCatch") => has_did_catch = true,
-                _ => {}
-            }
-        }
-    }
-
-    jsx_elems.sort();
-    jsx_elems.dedup();
-
-    Some(ClassInfo {
-        start_line: anchor.start_pos().line() as u32 + 1,
-        name,
-        extends_react_component: extends_component,
-        extends_pure_component: extends_pure,
-        has_derived_state_from_error: has_derived_state,
-        has_component_did_catch: has_did_catch,
-        jsx_elements: jsx_elems,
-        props_type,
-    })
-}
-
-/// Check if a class extends `React.Component` or `React.PureComponent`.
-/// Also extracts the props type parameter if present.
-fn check_class_heritage<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool, Option<String>) {
-    let children: Vec<_> = node.children().collect();
-    for child in &children {
-        if child.kind().as_ref() == "class_heritage" {
-            let clauses: Vec<_> = child.children().collect();
-            for clause in &clauses {
-                if clause.kind().as_ref() == "extends_clause" {
-                    let clause_children: Vec<_> = clause.children().collect();
-                    for cc in &clause_children {
-                        let ck = cc.kind();
-                        if ck.as_ref() == "member_expression" {
-                            let text = cc.text().to_string();
-                            let is_component = text == "React.Component" || text == "Component";
-                            let is_pure = text == "React.PureComponent" || text == "PureComponent";
-
-                            // Extract props type from type_arguments: <Props, State>
-                            let props = clause_children
-                                .iter()
-                                .find(|c| c.kind().as_ref() == "type_arguments")
-                                .and_then(|ta| {
-                                    ta.children()
-                                        .find(|c| {
-                                            let k = c.kind();
-                                            k.as_ref() != "<"
-                                                && k.as_ref() != ">"
-                                                && k.as_ref() != ","
-                                        })
-                                        .map(|first| first.text().to_string())
-                                });
-
-                            return (is_component, is_pure, props);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    (false, false, None)
 }
 
 // ── Body content analysis ──────────────────────────────────────────

@@ -8,7 +8,7 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../tsx/processors.rs"]
+#[path = "../tsx/processors/mod.rs"]
 mod processors;
 #[path = "../tsx/helpers.rs"]
 mod tsx_helpers;
