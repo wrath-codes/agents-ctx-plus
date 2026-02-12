@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait ElixirMetadataExt {
     fn push_parameter(&mut self, parameter: impl Into<String>);
@@ -11,26 +11,26 @@ pub trait ElixirMetadataExt {
 
 impl ElixirMetadataExt for SymbolMetadata {
     fn push_parameter(&mut self, parameter: impl Into<String>) {
-        self.parameters.push(parameter.into());
+        CommonMetadataExt::push_parameter(self, parameter);
     }
 
     fn set_spec(&mut self, spec: Option<String>) {
-        self.return_type = spec;
+        CommonMetadataExt::set_return_type(self, spec);
     }
 
     fn set_guard(&mut self, guard: Option<String>) {
-        self.where_clause = guard;
+        CommonMetadataExt::set_where_clause(self, guard);
     }
 
     fn mark_callback_impl(&mut self) {
-        self.trait_name = Some("@impl".to_string());
+        CommonMetadataExt::set_trait_name(self, Some("@impl".to_string()));
     }
 
     fn set_delegate_target(&mut self, target: Option<String>) {
-        self.for_type = target;
+        CommonMetadataExt::set_for_type(self, target);
     }
 
     fn mark_error_type(&mut self) {
-        self.is_error_type = true;
+        CommonMetadataExt::mark_error_type(self);
     }
 }

@@ -4,6 +4,7 @@ use super::DocSections;
 
 pub mod bash;
 pub mod c;
+pub mod common;
 pub mod cpp;
 pub mod css;
 pub mod elixir;

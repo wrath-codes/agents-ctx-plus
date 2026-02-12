@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait RustMetadataExt {
     fn mark_async(&mut self);
@@ -14,11 +14,11 @@ pub trait RustMetadataExt {
 
 impl RustMetadataExt for SymbolMetadata {
     fn mark_async(&mut self) {
-        self.is_async = true;
+        CommonMetadataExt::mark_async(self);
     }
 
     fn mark_unsafe(&mut self) {
-        self.is_unsafe = true;
+        CommonMetadataExt::mark_unsafe(self);
     }
 
     fn mark_pyo3(&mut self) {
@@ -30,16 +30,16 @@ impl RustMetadataExt for SymbolMetadata {
     }
 
     fn set_generics(&mut self, generics: impl Into<String>) {
-        self.generics = Some(generics.into());
+        CommonMetadataExt::set_generics(self, Some(generics.into()));
     }
 
     fn set_where_clause(&mut self, where_clause: impl Into<String>) {
-        self.where_clause = Some(where_clause.into());
+        CommonMetadataExt::set_where_clause(self, Some(where_clause.into()));
     }
 
     fn set_trait_target(&mut self, trait_name: impl Into<String>, for_type: impl Into<String>) {
-        self.trait_name = Some(trait_name.into());
-        self.for_type = Some(for_type.into());
+        CommonMetadataExt::set_trait_name(self, Some(trait_name.into()));
+        CommonMetadataExt::set_for_type(self, Some(for_type.into()));
     }
 
     fn push_lifetime(&mut self, lifetime: impl Into<String>) {

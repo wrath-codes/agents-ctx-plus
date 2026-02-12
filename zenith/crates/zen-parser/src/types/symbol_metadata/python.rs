@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait PythonMetadataExt {
     fn mark_exported(&mut self);
@@ -15,7 +15,7 @@ pub trait PythonMetadataExt {
 
 impl PythonMetadataExt for SymbolMetadata {
     fn mark_exported(&mut self) {
-        self.is_exported = true;
+        CommonMetadataExt::mark_exported(self);
     }
 
     fn mark_dataclass(&mut self) {
@@ -35,7 +35,7 @@ impl PythonMetadataExt for SymbolMetadata {
     }
 
     fn mark_generator(&mut self) {
-        self.is_generator = true;
+        CommonMetadataExt::mark_generator(self);
     }
 
     fn mark_property(&mut self) {
@@ -51,6 +51,6 @@ impl PythonMetadataExt for SymbolMetadata {
     }
 
     fn push_attribute(&mut self, attribute: impl Into<String>) {
-        self.attributes.push(attribute.into());
+        CommonMetadataExt::push_attribute(self, attribute);
     }
 }

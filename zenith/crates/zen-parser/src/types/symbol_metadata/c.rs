@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait CMetadataExt {
     fn push_attribute(&mut self, attribute: impl Into<String>);
@@ -7,10 +7,10 @@ pub trait CMetadataExt {
 
 impl CMetadataExt for SymbolMetadata {
     fn push_attribute(&mut self, attribute: impl Into<String>) {
-        self.attributes.push(attribute.into());
+        CommonMetadataExt::push_attribute(self, attribute);
     }
 
     fn push_parameter(&mut self, parameter: impl Into<String>) {
-        self.parameters.push(parameter.into());
+        CommonMetadataExt::push_parameter(self, parameter);
     }
 }

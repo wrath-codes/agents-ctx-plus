@@ -1,6 +1,6 @@
 use crate::types::DocSections;
 
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait TypeScriptMetadataExt {
     fn mark_async(&mut self);
@@ -21,58 +21,58 @@ pub trait TypeScriptMetadataExt {
 
 impl TypeScriptMetadataExt for SymbolMetadata {
     fn mark_async(&mut self) {
-        self.is_async = true;
+        CommonMetadataExt::mark_async(self);
     }
 
     fn mark_exported(&mut self) {
-        self.is_exported = true;
+        CommonMetadataExt::mark_exported(self);
     }
 
     fn mark_default_export(&mut self) {
-        self.is_default_export = true;
+        CommonMetadataExt::mark_default_export(self);
     }
 
     fn mark_unsafe(&mut self) {
-        self.is_unsafe = true;
+        CommonMetadataExt::mark_unsafe(self);
     }
 
     fn mark_error_type(&mut self) {
-        self.is_error_type = true;
+        CommonMetadataExt::mark_error_type(self);
     }
 
     fn set_return_type(&mut self, return_type: Option<String>) {
-        self.return_type = return_type;
+        CommonMetadataExt::set_return_type(self, return_type);
     }
 
     fn set_type_parameters(&mut self, type_parameters: Option<String>) {
-        self.type_parameters = type_parameters;
+        CommonMetadataExt::set_type_parameters(self, type_parameters);
     }
 
     fn set_parameters(&mut self, parameters: Vec<String>) {
-        self.parameters = parameters;
+        CommonMetadataExt::set_parameters(self, parameters);
     }
 
     fn set_doc_sections(&mut self, doc_sections: DocSections) {
-        self.doc_sections = doc_sections;
+        CommonMetadataExt::set_doc_sections(self, doc_sections);
     }
 
     fn set_base_classes(&mut self, base_classes: Vec<String>) {
-        self.base_classes = base_classes;
+        CommonMetadataExt::set_base_classes(self, base_classes);
     }
 
     fn set_implements(&mut self, implements: Vec<String>) {
-        self.implements = implements;
+        CommonMetadataExt::set_implements(self, implements);
     }
 
     fn set_methods(&mut self, methods: Vec<String>) {
-        self.methods = methods;
+        CommonMetadataExt::set_methods(self, methods);
     }
 
     fn set_fields(&mut self, fields: Vec<String>) {
-        self.fields = fields;
+        CommonMetadataExt::set_fields(self, fields);
     }
 
     fn set_variants(&mut self, variants: Vec<String>) {
-        self.variants = variants;
+        CommonMetadataExt::set_variants(self, variants);
     }
 }

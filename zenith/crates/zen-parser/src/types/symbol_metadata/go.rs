@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait GoMetadataExt {
     fn set_return_type(&mut self, return_type: Option<String>);
@@ -12,30 +12,30 @@ pub trait GoMetadataExt {
 
 impl GoMetadataExt for SymbolMetadata {
     fn set_return_type(&mut self, return_type: Option<String>) {
-        self.return_type = return_type;
+        CommonMetadataExt::set_return_type(self, return_type);
     }
 
     fn push_parameter(&mut self, parameter: impl Into<String>) {
-        self.parameters.push(parameter.into());
+        CommonMetadataExt::push_parameter(self, parameter);
     }
 
     fn set_type_parameters(&mut self, type_parameters: Option<String>) {
-        self.type_parameters = type_parameters;
+        CommonMetadataExt::set_type_parameters(self, type_parameters);
     }
 
     fn set_receiver(&mut self, receiver: Option<String>) {
-        self.for_type = receiver;
+        CommonMetadataExt::set_for_type(self, receiver);
     }
 
     fn set_fields(&mut self, fields: Vec<String>) {
-        self.fields = fields;
+        CommonMetadataExt::set_fields(self, fields);
     }
 
     fn set_methods(&mut self, methods: Vec<String>) {
-        self.methods = methods;
+        CommonMetadataExt::set_methods(self, methods);
     }
 
     fn mark_error_type(&mut self) {
-        self.is_error_type = true;
+        CommonMetadataExt::mark_error_type(self);
     }
 }

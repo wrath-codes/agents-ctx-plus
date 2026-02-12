@@ -1,4 +1,4 @@
-use super::SymbolMetadata;
+use super::{SymbolMetadata, common::CommonMetadataExt};
 
 pub trait BashMetadataExt {
     fn push_attribute(&mut self, attribute: impl Into<String>);
@@ -7,10 +7,10 @@ pub trait BashMetadataExt {
 
 impl BashMetadataExt for SymbolMetadata {
     fn push_attribute(&mut self, attribute: impl Into<String>) {
-        self.attributes.push(attribute.into());
+        CommonMetadataExt::push_attribute(self, attribute);
     }
 
     fn push_parameter(&mut self, parameter: impl Into<String>) {
-        self.parameters.push(parameter.into());
+        CommonMetadataExt::push_parameter(self, parameter);
     }
 }

@@ -13,6 +13,7 @@ pub use symbol_kind::SymbolKind;
 pub use symbol_metadata::SymbolMetadata;
 pub use symbol_metadata::bash::BashMetadataExt;
 pub use symbol_metadata::c::CMetadataExt;
+pub use symbol_metadata::common::CommonMetadataExt;
 pub use symbol_metadata::cpp::CppMetadataExt;
 pub use symbol_metadata::css::CssMetadataExt;
 pub use symbol_metadata::elixir::ElixirMetadataExt;
