@@ -102,6 +102,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_java() {
+        assert_eq!(detect_language("Main.java"), Some(SupportLang::Java));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

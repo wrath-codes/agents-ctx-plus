@@ -11,6 +11,7 @@ pub use dispatcher::elixir;
 pub use dispatcher::go;
 pub use dispatcher::haskell;
 pub use dispatcher::html;
+pub use dispatcher::java;
 pub use dispatcher::javascript;
 pub use dispatcher::python;
 pub use dispatcher::rust;

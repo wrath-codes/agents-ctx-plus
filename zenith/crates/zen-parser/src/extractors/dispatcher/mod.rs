@@ -7,6 +7,7 @@ pub mod elixir;
 pub mod go;
 pub mod haskell;
 pub mod html;
+pub mod java;
 pub mod javascript;
 pub mod python;
 pub mod rust;

@@ -44,6 +44,13 @@ fn constructor_normalization_across_languages() {
     assert!(csharp_items.iter().any(|i| {
         i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
     }));
+
+    let java_source = "class User { User(String name) {} }";
+    let java_root = SupportLang::Java.ast_grep(java_source);
+    let java_items = super::java::extract(&java_root).expect("java extraction");
+    assert!(java_items.iter().any(|i| {
+        i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
+    }));
 }
 
 #[test]
@@ -70,4 +77,23 @@ fn property_and_field_members_have_owner_metadata() {
         .expect("expected field member item");
     assert_eq!(id_field.metadata.owner_name.as_deref(), Some("Card"));
     assert_eq!(id_field.metadata.owner_kind, Some(SymbolKind::Class));
+
+    let java_source = "class Card { static final int MAX = 1; int id; }";
+    let java_root = SupportLang::Java.ast_grep(java_source);
+    let java_items = super::java::extract(&java_root).expect("java extraction");
+
+    let java_max = java_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Const && i.name == "MAX")
+        .expect("expected const member item");
+    assert_eq!(java_max.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(java_max.metadata.owner_kind, Some(SymbolKind::Class));
+    assert!(java_max.metadata.is_static_member);
+
+    let java_id = java_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Field && i.name == "id")
+        .expect("expected field member item");
+    assert_eq!(java_id.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(java_id.metadata.owner_kind, Some(SymbolKind::Class));
 }
