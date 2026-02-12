@@ -10,7 +10,7 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../typescript/processors.rs"]
+#[path = "../typescript/processors/mod.rs"]
 mod processors;
 #[path = "../typescript/helpers.rs"]
 mod ts_helpers;
