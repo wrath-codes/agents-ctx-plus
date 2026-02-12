@@ -10,7 +10,9 @@ use ast_grep_core::ops::Any;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{DocSections, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{
+    DocSections, ParsedItem, SymbolKind, SymbolMetadata, TypeScriptMetadataExt, Visibility,
+};
 
 const TS_TOP_KINDS: &[&str] = &[
     "export_statement",
@@ -171,6 +173,21 @@ fn process_function<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_async {
+        metadata.mark_async();
+    }
+    if is_exported {
+        metadata.mark_exported();
+    }
+    if is_default {
+        metadata.mark_default_export();
+    }
+    metadata.set_return_type(return_type);
+    metadata.set_type_parameters(type_params);
+    metadata.set_parameters(extract_ts_parameters(node));
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -180,16 +197,7 @@ fn process_function<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_async,
-            is_exported,
-            is_default_export: is_default,
-            return_type,
-            type_parameters: type_params,
-            parameters: extract_ts_parameters(node),
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -223,6 +231,26 @@ fn process_class<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_exported {
+        metadata.mark_exported();
+    }
+    if is_default {
+        metadata.mark_default_export();
+    }
+    metadata.set_type_parameters(type_params);
+    metadata.set_base_classes(extends);
+    metadata.set_implements(implements);
+    metadata.set_methods(methods);
+    metadata.set_fields(fields);
+    if is_error_type {
+        metadata.mark_error_type();
+    }
+    if is_abstract {
+        metadata.mark_unsafe();
+    }
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Class,
         name,
@@ -232,19 +260,7 @@ fn process_class<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_exported,
-            is_default_export: is_default,
-            type_parameters: type_params,
-            base_classes: extends,
-            implements,
-            methods,
-            fields,
-            is_error_type,
-            is_unsafe: is_abstract,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -330,6 +346,15 @@ fn process_interface<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_exported {
+        metadata.mark_exported();
+    }
+    metadata.set_type_parameters(type_params);
+    metadata.set_base_classes(extends);
+    metadata.set_methods(members);
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Interface,
         name,
@@ -339,14 +364,7 @@ fn process_interface<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_exported,
-            type_parameters: type_params,
-            base_classes: extends,
-            methods: members,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -400,6 +418,13 @@ fn process_type_alias<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_exported {
+        metadata.mark_exported();
+    }
+    metadata.set_type_parameters(type_params);
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::TypeAlias,
         name,
@@ -409,12 +434,7 @@ fn process_type_alias<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_exported,
-            type_parameters: type_params,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -436,6 +456,13 @@ fn process_enum<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_variants(variants);
+    if is_exported {
+        metadata.mark_exported();
+    }
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Enum,
         name,
@@ -445,12 +472,7 @@ fn process_enum<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            variants,
-            is_exported,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -492,6 +514,12 @@ fn process_namespace<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_exported {
+        metadata.mark_exported();
+    }
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -506,11 +534,7 @@ fn process_namespace<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_exported,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -579,13 +603,14 @@ fn process_function_signature<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Export,
-        metadata: SymbolMetadata {
-            is_exported: true,
-            return_type,
-            type_parameters: type_params,
-            parameters: extract_ts_parameters(node),
-            doc_sections,
-            ..Default::default()
+        metadata: {
+            let mut metadata = SymbolMetadata::default();
+            metadata.mark_exported();
+            metadata.set_return_type(return_type);
+            metadata.set_type_parameters(type_params);
+            metadata.set_parameters(extract_ts_parameters(node));
+            metadata.set_doc_sections(doc_sections);
+            metadata
         },
     })
 }
@@ -666,14 +691,19 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             start_line: declaration.start_pos().line() as u32 + 1,
             end_line: declaration.end_pos().line() as u32 + 1,
             visibility,
-            metadata: SymbolMetadata {
-                is_async,
-                is_exported,
-                return_type,
-                type_parameters: type_params,
-                parameters: params,
-                doc_sections,
-                ..Default::default()
+            metadata: {
+                let mut metadata = SymbolMetadata::default();
+                if is_async {
+                    metadata.mark_async();
+                }
+                if is_exported {
+                    metadata.mark_exported();
+                }
+                metadata.set_return_type(return_type);
+                metadata.set_type_parameters(type_params);
+                metadata.set_parameters(params);
+                metadata.set_doc_sections(doc_sections);
+                metadata
             },
         })
     } else {
@@ -697,11 +727,14 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             start_line: declaration.start_pos().line() as u32 + 1,
             end_line: declaration.end_pos().line() as u32 + 1,
             visibility,
-            metadata: SymbolMetadata {
-                is_exported,
-                return_type: type_annotation,
-                doc_sections,
-                ..Default::default()
+            metadata: {
+                let mut metadata = SymbolMetadata::default();
+                if is_exported {
+                    metadata.mark_exported();
+                }
+                metadata.set_return_type(type_annotation);
+                metadata.set_doc_sections(doc_sections);
+                metadata
             },
         })
     }

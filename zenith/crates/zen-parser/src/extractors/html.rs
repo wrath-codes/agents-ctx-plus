@@ -8,7 +8,7 @@
 use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{HtmlMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 /// An HTML attribute: `(name, optional_value)`.
 type HtmlAttr = (String, Option<String>);
@@ -86,6 +86,14 @@ fn process_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parsed
 
     let signature = build_signature(&tag_name, &attrs);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_tag_name(tag_name);
+    metadata.set_element_id(element_id);
+    metadata.set_class_names(class_names);
+    metadata.set_html_attributes(attrs);
+    metadata.set_custom_element(is_custom);
+    metadata.set_self_closing(is_self_closing);
+
     items.push(ParsedItem {
         kind: symbol_kind,
         name,
@@ -95,15 +103,7 @@ fn process_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parsed
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            tag_name: Some(tag_name),
-            element_id,
-            class_names,
-            html_attributes: attrs,
-            is_custom_element: is_custom,
-            is_self_closing,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -122,6 +122,10 @@ fn process_script_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec
 
     let signature = build_signature("script", &attrs);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_tag_name("script");
+    metadata.set_html_attributes(attrs);
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -131,11 +135,7 @@ fn process_script_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            tag_name: Some("script".to_string()),
-            html_attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -144,6 +144,10 @@ fn process_script_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec
 fn process_style_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedItem>) {
     let attrs = extract_start_tag_attrs(node);
     let signature = build_signature("style", &attrs);
+
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_tag_name("style");
+    metadata.set_html_attributes(attrs);
 
     items.push(ParsedItem {
         kind: SymbolKind::Module,
@@ -154,11 +158,7 @@ fn process_style_element<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            tag_name: Some("style".to_string()),
-            html_attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 

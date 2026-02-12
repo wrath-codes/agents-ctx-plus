@@ -8,7 +8,7 @@
 //! using declarations/aliases, constexpr/consteval/constinit, `static_assert`,
 //! RAII patterns, and extern "C" linkage.
 
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{CppMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
@@ -156,6 +156,11 @@ fn maybe_process_operator_function<D: ast_grep_core::Doc>(
     let return_type = extract_return_type_from_children(&children);
     let parameters = extract_parameters_from_declarator(func_decl);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    metadata.set_parameters(parameters);
+    metadata.push_attribute("operator");
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -165,12 +170,7 @@ fn maybe_process_operator_function<D: ast_grep_core::Doc>(
         start_line,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            attributes: vec!["operator".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -200,9 +200,10 @@ fn process_namespace<D: ast_grep_core::Doc>(
         })
         .unwrap_or_else(|| "(anonymous)".to_string());
 
-    let mut attrs = vec!["namespace".to_string()];
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("namespace");
     if is_inline {
-        attrs.push("inline".to_string());
+        metadata.push_attribute("inline");
     }
 
     items.push(ParsedItem {
@@ -222,10 +223,7 @@ fn process_namespace<D: ast_grep_core::Doc>(
         } else {
             Visibility::Public
         },
-        metadata: SymbolMetadata {
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into declaration_list for items inside the namespace
@@ -257,6 +255,9 @@ fn process_namespace_alias<D: ast_grep_core::Doc>(
     if name.is_empty() {
         return;
     }
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("namespace_alias");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -266,10 +267,7 @@ fn process_namespace_alias<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["namespace_alias".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -387,6 +385,13 @@ fn process_c_function_definition<D: ast_grep_core::Doc>(
         Visibility::Public
     };
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    metadata.set_parameters(parameters);
+    for attr in attrs {
+        metadata.push_attribute(attr);
+    }
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -396,12 +401,7 @@ fn process_c_function_definition<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -421,6 +421,11 @@ fn process_c_declaration<D: ast_grep_core::Doc>(
         if !name.is_empty() {
             let return_type = extract_return_type_from_children(&children);
             let parameters = extract_parameters_from_declarator(func_decl);
+            let mut metadata = SymbolMetadata::default();
+            metadata.set_return_type(return_type);
+            metadata.set_parameters(parameters);
+            metadata.push_attribute("prototype");
+
             items.push(ParsedItem {
                 kind: SymbolKind::Function,
                 name,
@@ -430,12 +435,7 @@ fn process_c_declaration<D: ast_grep_core::Doc>(
                 start_line: node.start_pos().line() as u32 + 1,
                 end_line: node.end_pos().line() as u32 + 1,
                 visibility: Visibility::Public,
-                metadata: SymbolMetadata {
-                    return_type,
-                    parameters,
-                    attributes: vec!["prototype".to_string()],
-                    ..Default::default()
-                },
+                metadata,
             });
         }
         return;
@@ -464,6 +464,9 @@ fn process_c_declaration<D: ast_grep_core::Doc>(
         } else {
             SymbolKind::Static
         };
+        let mut metadata = SymbolMetadata::default();
+        metadata.set_return_type(return_type);
+
         items.push(ParsedItem {
             kind,
             name,
@@ -473,10 +476,7 @@ fn process_c_declaration<D: ast_grep_core::Doc>(
             start_line: node.start_pos().line() as u32 + 1,
             end_line: node.end_pos().line() as u32 + 1,
             visibility: Visibility::Public,
-            metadata: SymbolMetadata {
-                return_type,
-                ..Default::default()
-            },
+            metadata,
         });
     }
 
@@ -518,6 +518,10 @@ fn process_c_struct<D: ast_grep_core::Doc>(
     if has_body {
         let fields = extract_field_names(node);
         let methods = extract_method_names(node);
+        let mut metadata = SymbolMetadata::default();
+        metadata.set_fields(fields);
+        metadata.set_methods(methods);
+
         items.push(ParsedItem {
             kind: SymbolKind::Struct,
             name,
@@ -527,11 +531,7 @@ fn process_c_struct<D: ast_grep_core::Doc>(
             start_line: node.start_pos().line() as u32 + 1,
             end_line: node.end_pos().line() as u32 + 1,
             visibility: Visibility::Public,
-            metadata: SymbolMetadata {
-                fields,
-                methods,
-                ..Default::default()
-            },
+            metadata,
         });
     }
 }
@@ -550,9 +550,10 @@ fn process_c_enum<D: ast_grep_core::Doc>(
     }
     let is_scoped = node.children().any(|c| c.kind().as_ref() == "class");
     let variants = extract_enum_variants(node);
-    let mut attrs = Vec::new();
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_variants(variants);
     if is_scoped {
-        attrs.push("scoped_enum".to_string());
+        metadata.push_attribute("scoped_enum");
     }
     items.push(ParsedItem {
         kind: SymbolKind::Enum,
@@ -563,11 +564,7 @@ fn process_c_enum<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            variants,
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -585,6 +582,9 @@ fn process_c_typedef<D: ast_grep_core::Doc>(
     if name.is_empty() {
         return;
     }
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("typedef");
+
     items.push(ParsedItem {
         kind: SymbolKind::TypeAlias,
         name,
@@ -594,10 +594,7 @@ fn process_c_typedef<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["typedef".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -614,6 +611,9 @@ fn process_c_union<D: ast_grep_core::Doc>(
         return;
     }
     let fields = extract_field_names(node);
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_fields(fields);
+
     items.push(ParsedItem {
         kind: SymbolKind::Union,
         name,
@@ -623,10 +623,7 @@ fn process_c_union<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            fields,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -673,6 +670,21 @@ fn process_class<D: ast_grep_core::Doc>(
     }
     attrs.extend(access_sections);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_base_classes(base_classes);
+    metadata.set_methods(methods);
+    metadata.set_fields(fields);
+    if is_abstract {
+        metadata.mark_unsafe();
+    }
+    if is_error_type {
+        metadata.mark_error_type();
+    }
+    metadata.set_generics(template_params.map(String::from));
+    for attr in attrs {
+        metadata.push_attribute(attr);
+    }
+
     items.push(ParsedItem {
         kind: SymbolKind::Class,
         name,
@@ -682,16 +694,7 @@ fn process_class<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            base_classes,
-            methods,
-            fields,
-            is_unsafe: is_abstract,
-            is_error_type,
-            generics: template_params.map(String::from),
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Emit nested types (nested classes, structs, enums, aliases) as
@@ -1101,6 +1104,12 @@ fn process_template_declaration<D: ast_grep_core::Doc>(
                 if !name.is_empty() {
                     let fields = extract_field_names(child);
                     let methods = extract_method_names(child);
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.set_fields(fields);
+                    metadata.set_methods(methods);
+                    metadata.set_generics(template_params.clone());
+                    metadata.push_attribute("template");
+
                     items.push(ParsedItem {
                         kind: SymbolKind::Struct,
                         name,
@@ -1110,13 +1119,7 @@ fn process_template_declaration<D: ast_grep_core::Doc>(
                         start_line: node.start_pos().line() as u32 + 1,
                         end_line: node.end_pos().line() as u32 + 1,
                         visibility: Visibility::Public,
-                        metadata: SymbolMetadata {
-                            fields,
-                            methods,
-                            generics: template_params.clone(),
-                            attributes: vec!["template".to_string()],
-                            ..Default::default()
-                        },
+                        metadata,
                     });
                 }
             }
@@ -1147,6 +1150,11 @@ fn process_template_declaration<D: ast_grep_core::Doc>(
                     .find(|c| c.kind().as_ref() == "type_identifier")
                     .map_or_else(String::new, |n| n.text().to_string());
                 if !alias_name.is_empty() {
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.set_generics(template_params.clone());
+                    metadata.push_attribute("template");
+                    metadata.push_attribute("using");
+
                     items.push(ParsedItem {
                         kind: SymbolKind::TypeAlias,
                         name: alias_name,
@@ -1156,11 +1164,7 @@ fn process_template_declaration<D: ast_grep_core::Doc>(
                         start_line: node.start_pos().line() as u32 + 1,
                         end_line: node.end_pos().line() as u32 + 1,
                         visibility: Visibility::Public,
-                        metadata: SymbolMetadata {
-                            generics: template_params.clone(),
-                            attributes: vec!["template".to_string(), "using".to_string()],
-                            ..Default::default()
-                        },
+                        metadata,
                     });
                 }
             }
@@ -1230,6 +1234,9 @@ fn process_template_instantiation<D: ast_grep_core::Doc>(
     if name.is_empty() {
         return;
     }
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("explicit_instantiation");
+
     items.push(ParsedItem {
         kind: SymbolKind::Class,
         name,
@@ -1239,10 +1246,7 @@ fn process_template_instantiation<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["explicit_instantiation".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1282,6 +1286,14 @@ fn process_template_function<D: ast_grep_core::Doc>(
         }
     }
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    metadata.set_parameters(parameters);
+    metadata.set_generics(template_params.map(String::from));
+    for attr in attrs {
+        metadata.push_attribute(attr);
+    }
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -1291,13 +1303,7 @@ fn process_template_function<D: ast_grep_core::Doc>(
         start_line: template_node.start_pos().line() as u32 + 1,
         end_line: template_node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            generics: template_params.map(String::from),
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1318,6 +1324,10 @@ fn process_template_function_decl<D: ast_grep_core::Doc>(
             if child.kind().as_ref() == "init_declarator" {
                 let name = find_identifier_recursive(child);
                 if !name.is_empty() {
+                    let mut metadata = SymbolMetadata::default();
+                    metadata.set_generics(template_params.map(String::from));
+                    metadata.push_attribute("template");
+
                     items.push(ParsedItem {
                         kind: SymbolKind::Static,
                         name,
@@ -1327,11 +1337,7 @@ fn process_template_function_decl<D: ast_grep_core::Doc>(
                         start_line: template_node.start_pos().line() as u32 + 1,
                         end_line: template_node.end_pos().line() as u32 + 1,
                         visibility: Visibility::Public,
-                        metadata: SymbolMetadata {
-                            generics: template_params.map(String::from),
-                            attributes: vec!["template".to_string()],
-                            ..Default::default()
-                        },
+                        metadata,
                     });
                 }
             }
@@ -1346,6 +1352,13 @@ fn process_template_function_decl<D: ast_grep_core::Doc>(
     let return_type = extract_return_type_from_children(&children);
     let parameters = extract_parameters_from_declarator(func_decl);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    metadata.set_parameters(parameters);
+    metadata.set_generics(template_params.map(String::from));
+    metadata.push_attribute("template");
+    metadata.push_attribute("prototype");
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -1355,13 +1368,7 @@ fn process_template_function_decl<D: ast_grep_core::Doc>(
         start_line: template_node.start_pos().line() as u32 + 1,
         end_line: template_node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            generics: template_params.map(String::from),
-            attributes: vec!["template".to_string(), "prototype".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1379,6 +1386,10 @@ fn process_concept<D: ast_grep_core::Doc>(
         return;
     }
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_generics(template_params.map(String::from));
+    metadata.push_attribute("concept");
+
     items.push(ParsedItem {
         kind: SymbolKind::Trait,
         name,
@@ -1388,11 +1399,7 @@ fn process_concept<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            generics: template_params.map(String::from),
-            attributes: vec!["concept".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1410,6 +1417,9 @@ fn process_alias_declaration<D: ast_grep_core::Doc>(
     if name.is_empty() {
         return;
     }
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("using");
+
     items.push(ParsedItem {
         kind: SymbolKind::TypeAlias,
         name,
@@ -1419,10 +1429,7 @@ fn process_alias_declaration<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["using".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1449,6 +1456,9 @@ fn process_using_declaration<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut 
         "using_declaration".to_string()
     };
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute(attr);
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -1458,10 +1468,7 @@ fn process_using_declaration<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut 
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec![attr],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1473,6 +1480,9 @@ fn process_static_assert<D: ast_grep_core::Doc>(
     let text = node.text().to_string();
     let sig = text.trim_end_matches(';').trim().to_string();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("static_assert");
+
     items.push(ParsedItem {
         kind: SymbolKind::Macro,
         name: "static_assert".to_string(),
@@ -1482,10 +1492,7 @@ fn process_static_assert<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["static_assert".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1498,6 +1505,10 @@ fn process_linkage_spec<D: ast_grep_core::Doc>(
     let children: Vec<_> = node.children().collect();
 
     // Emit the linkage_specification itself
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("linkage_specification");
+    metadata.push_attribute("extern_c");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name: "extern \"C\"".to_string(),
@@ -1507,10 +1518,7 @@ fn process_linkage_spec<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec!["linkage_specification".to_string(), "extern_c".to_string()],
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Process declarations inside the block

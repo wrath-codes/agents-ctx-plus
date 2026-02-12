@@ -27,7 +27,7 @@ use ast_grep_core::matcher::KindMatcher;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{ElixirMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 /// Elixir definition keywords we extract at any nesting depth.
 const ELIXIR_DEF_KEYWORDS: &[&str] = &[
@@ -691,6 +691,16 @@ fn process_def<D: ast_grep_core::Doc>(
         "defp"
     };
 
+    let mut metadata = SymbolMetadata::default();
+    for param in params {
+        metadata.push_parameter(param);
+    }
+    metadata.set_spec(spec);
+    metadata.set_guard(guard);
+    if is_callback_impl {
+        metadata.mark_callback_impl();
+    }
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -700,19 +710,7 @@ fn process_def<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            parameters: params,
-            return_type: spec,
-            // Store guard in where_clause (analogous to Rust where clause)
-            where_clause: guard,
-            // Mark callback implementations
-            trait_name: if is_callback_impl {
-                Some("@impl".to_string())
-            } else {
-                None
-            },
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -730,6 +728,11 @@ fn process_defmacro<D: ast_grep_core::Doc>(
         "defmacrop"
     };
 
+    let mut metadata = SymbolMetadata::default();
+    for param in params {
+        metadata.push_parameter(param);
+    }
+
     Some(ParsedItem {
         kind: SymbolKind::Macro,
         name,
@@ -739,10 +742,7 @@ fn process_defmacro<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            parameters: params,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -855,6 +855,11 @@ fn process_defstruct<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
 /// `defexception` has the same structure as `defstruct` (list of atoms or keywords).
 fn process_defexception<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
     let fields = extract_defstruct_fields(node);
+    let mut metadata = SymbolMetadata {
+        fields,
+        ..Default::default()
+    };
+    metadata.mark_error_type();
 
     ParsedItem {
         kind: SymbolKind::Struct,
@@ -865,11 +870,7 @@ fn process_defexception<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            fields,
-            is_error_type: true,
-            ..Default::default()
-        },
+        metadata,
     }
 }
 
@@ -891,6 +892,12 @@ fn process_defguard<D: ast_grep_core::Doc>(
         "defguardp"
     };
 
+    let mut metadata = SymbolMetadata::default();
+    for param in params {
+        metadata.push_parameter(param);
+    }
+    metadata.set_guard(guard);
+
     Some(ParsedItem {
         kind: SymbolKind::Macro,
         name,
@@ -900,11 +907,7 @@ fn process_defguard<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            parameters: params,
-            where_clause: guard,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -916,6 +919,12 @@ fn process_defdelegate<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedIt
     let params = extract_def_params(node);
     let delegate_target = extract_delegate_target(node);
 
+    let mut metadata = SymbolMetadata::default();
+    for param in params {
+        metadata.push_parameter(param);
+    }
+    metadata.set_delegate_target(delegate_target);
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -925,12 +934,7 @@ fn process_defdelegate<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedIt
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            parameters: params,
-            // Store delegation target in `for_type` (reuse field for "delegates to")
-            for_type: delegate_target,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 

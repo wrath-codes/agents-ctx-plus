@@ -20,7 +20,7 @@
 use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
-use crate::types::{ParsedItem, SymbolKind};
+use crate::types::{ParsedItem, SymbolKind, TsxMetadataExt};
 
 /// Extract all API symbols from a TSX source file with React metadata.
 ///
@@ -52,7 +52,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
         enrich_item(item, &bodies, &class_infos);
         // Apply file-level directive to all items.
         if let Some(ref dir) = directive {
-            item.metadata.component_directive = Some(dir.clone());
+            item.metadata.set_component_directive(dir.clone());
         }
     }
     Ok(items)
@@ -121,12 +121,12 @@ fn enrich_fn_item(item: &mut ParsedItem, bodies: &[FnBody]) {
                     || body
                         .is_some_and(|b| is_component_return_type(b.type_annotation.as_deref())))));
 
-    item.metadata.is_component = is_component;
-    item.metadata.is_hook = is_hook;
-    item.metadata.is_hoc = is_hoc;
-    item.metadata.is_forward_ref = is_forward_ref;
-    item.metadata.is_memo = is_memo;
-    item.metadata.is_lazy = is_lazy;
+    item.metadata.set_component(is_component);
+    item.metadata.set_hook(is_hook);
+    item.metadata.set_hoc(is_hoc);
+    item.metadata.set_forward_ref(is_forward_ref);
+    item.metadata.set_memo(is_memo);
+    item.metadata.set_lazy(is_lazy);
 
     if is_component {
         item.kind = SymbolKind::Component;
@@ -134,14 +134,12 @@ fn enrich_fn_item(item: &mut ParsedItem, bodies: &[FnBody]) {
 
     if let Some(b) = body {
         if !b.hooks_used.is_empty() {
-            item.metadata.hooks_used.clone_from(&b.hooks_used);
+            item.metadata.set_hooks_used(b.hooks_used.clone());
         }
         if !b.jsx_elements.is_empty() {
-            item.metadata.jsx_elements.clone_from(&b.jsx_elements);
+            item.metadata.set_jsx_elements(b.jsx_elements.clone());
         }
-        if item.metadata.props_type.is_none() {
-            item.metadata.props_type.clone_from(&b.props_type);
-        }
+        item.metadata.set_props_type_if_none(b.props_type.clone());
     }
 }
 
@@ -157,20 +155,18 @@ fn enrich_class_item(item: &mut ParsedItem, class_infos: &[ClassInfo]) {
     let is_class_component = ci.extends_react_component || ci.extends_pure_component;
     let is_error_boundary = ci.has_derived_state_from_error || ci.has_component_did_catch;
 
-    item.metadata.is_class_component = is_class_component;
-    item.metadata.is_error_boundary = is_error_boundary;
+    item.metadata.set_class_component(is_class_component);
+    item.metadata.set_error_boundary(is_error_boundary);
 
     if is_class_component {
-        item.metadata.is_component = true;
+        item.metadata.set_component(true);
         item.kind = SymbolKind::Component;
     }
 
     if !ci.jsx_elements.is_empty() {
-        item.metadata.jsx_elements.clone_from(&ci.jsx_elements);
+        item.metadata.set_jsx_elements(ci.jsx_elements.clone());
     }
-    if item.metadata.props_type.is_none() {
-        item.metadata.props_type.clone_from(&ci.props_type);
-    }
+    item.metadata.set_props_type_if_none(ci.props_type.clone());
 }
 
 // ── Directive detection ────────────────────────────────────────────

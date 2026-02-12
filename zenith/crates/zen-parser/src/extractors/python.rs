@@ -10,7 +10,9 @@ use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{DocSections, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{
+    DocSections, ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata, Visibility,
+};
 
 /// Extract all API symbols from a Python source file.
 ///
@@ -75,7 +77,7 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
         for item in &mut items {
             if exports.contains(&item.name) {
                 item.visibility = Visibility::Export;
-                item.metadata.is_exported = true;
+                item.metadata.mark_exported();
             }
         }
     }
@@ -213,6 +215,31 @@ fn process_class<D: ast_grep_core::Doc>(
     // Extract enum variants from fields for enum classes
     let variants = if is_enum { fields.clone() } else { Vec::new() };
 
+    let mut metadata = SymbolMetadata {
+        base_classes,
+        decorators: decorators.to_vec(),
+        methods,
+        fields,
+        variants,
+        doc_sections,
+        is_error_type,
+        generics,
+        ..Default::default()
+    };
+
+    if is_dataclass {
+        metadata.mark_dataclass();
+    }
+    if is_pydantic {
+        metadata.mark_pydantic();
+    }
+    if is_protocol {
+        metadata.mark_protocol();
+    }
+    if is_enum {
+        metadata.mark_enum();
+    }
+
     Some(ParsedItem {
         kind: symbol_kind,
         name,
@@ -222,34 +249,18 @@ fn process_class<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            base_classes,
-            decorators: decorators.to_vec(),
-            is_dataclass,
-            is_pydantic,
-            is_protocol,
-            is_enum,
-            methods,
-            fields,
-            variants,
-            doc_sections,
-            is_error_type,
-            generics,
-            // NamedTuple/TypedDict not in SymbolMetadata yet but tracked via base_classes
-            // and is_dataclass covers dataclass; generic tracked via generics field
-            ..Default::default()
-        },
+        metadata,
     })
     .map(|mut item| {
         // Store extra detection in attributes for features without dedicated fields
         if is_namedtuple {
-            item.metadata.attributes.push("namedtuple".to_string());
+            item.metadata.push_attribute("namedtuple");
         }
         if is_typed_dict {
-            item.metadata.attributes.push("typed_dict".to_string());
+            item.metadata.push_attribute("typed_dict");
         }
         if is_generic {
-            item.metadata.attributes.push("generic".to_string());
+            item.metadata.push_attribute("generic");
         }
         item
     })
@@ -431,6 +442,32 @@ fn process_function<D: ast_grep_core::Doc>(
         attributes.push("abstractmethod".to_string());
     }
 
+    let mut metadata = SymbolMetadata {
+        return_type,
+        parameters,
+        decorators: decorators.to_vec(),
+        attributes,
+        returns_result,
+        doc_sections,
+        ..Default::default()
+    };
+
+    if is_async {
+        metadata.is_async = true;
+    }
+    if is_property {
+        metadata.mark_property();
+    }
+    if is_classmethod {
+        metadata.mark_classmethod();
+    }
+    if is_staticmethod {
+        metadata.mark_staticmethod();
+    }
+    if is_generator {
+        metadata.mark_generator();
+    }
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -440,20 +477,7 @@ fn process_function<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_async,
-            return_type,
-            parameters,
-            decorators: decorators.to_vec(),
-            attributes,
-            is_property,
-            is_classmethod,
-            is_staticmethod,
-            is_generator,
-            returns_result,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 

@@ -13,7 +13,7 @@ use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 use std::fmt::Write as _;
 
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{BashMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 /// Extract all significant elements from a Bash script.
 ///
@@ -608,6 +608,12 @@ fn process_trap<D: ast_grep_core::Doc>(
     let name = format!("trap {signal_str}");
     let signature = format!("trap {handler} {signal_str}");
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("trap");
+    for signal in &signals {
+        metadata.push_attribute(signal.clone());
+    }
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -617,14 +623,7 @@ fn process_trap<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: {
-                let mut attrs = vec!["trap".to_string()];
-                attrs.extend(signals);
-                attrs
-            },
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -700,12 +699,12 @@ fn process_if_statement<D: ast_grep_core::Doc>(
         .iter()
         .any(|c| c.kind().as_ref() == "else_clause" || c.kind().as_ref() == "else");
 
-    let mut attrs = Vec::new();
+    let mut metadata = SymbolMetadata::default();
     if elif_count > 0 {
-        attrs.push(format!("elif_count={elif_count}"));
+        metadata.push_attribute(format!("elif_count={elif_count}"));
     }
     if has_else {
-        attrs.push("has_else".to_string());
+        metadata.push_attribute("has_else");
     }
 
     items.push(ParsedItem {
@@ -717,10 +716,7 @@ fn process_if_statement<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -832,6 +828,12 @@ fn process_for_statement<D: ast_grep_core::Doc>(
         SymbolKind::Macro
     };
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute(keyword);
+    if !loop_var.is_empty() {
+        metadata.push_parameter(loop_var);
+    }
+
     items.push(ParsedItem {
         kind,
         name,
@@ -841,15 +843,7 @@ fn process_for_statement<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: vec![keyword.to_string()],
-            parameters: if loop_var.is_empty() {
-                Vec::new()
-            } else {
-                vec![loop_var]
-            },
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1170,9 +1164,10 @@ fn process_unset_command<D: ast_grep_core::Doc>(
         SymbolKind::Static
     };
 
-    let mut attrs = vec!["unset".to_string()];
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("unset");
     if has_f_flag {
-        attrs.push("-f".to_string());
+        metadata.push_attribute("-f");
     }
 
     items.push(ParsedItem {
@@ -1184,10 +1179,7 @@ fn process_unset_command<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 

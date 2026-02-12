@@ -12,7 +12,7 @@
 use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{CssMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 /// Extract all significant elements from a CSS stylesheet.
 ///
@@ -112,6 +112,10 @@ fn process_rule_set<D: ast_grep_core::Doc>(
 
     // Emit custom properties as individual items
     for (prop_name, prop_value) in &custom_props {
+        let mut metadata = SymbolMetadata::default();
+        metadata.set_selector(selector_text.clone());
+        metadata.mark_custom_property();
+
         items.push(ParsedItem {
             kind: SymbolKind::Const,
             name: prop_name.clone(),
@@ -121,11 +125,7 @@ fn process_rule_set<D: ast_grep_core::Doc>(
             start_line: node.start_pos().line() as u32 + 1,
             end_line: node.end_pos().line() as u32 + 1,
             visibility: Visibility::Public,
-            metadata: SymbolMetadata {
-                selector: Some(selector_text.clone()),
-                is_custom_property: true,
-                ..Default::default()
-            },
+            metadata,
         });
     }
 
@@ -134,6 +134,10 @@ fn process_rule_set<D: ast_grep_core::Doc>(
     let name = build_rule_name(&selector_text, parent_context);
 
     let signature = build_rule_signature(&selector_text, &properties);
+
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_selector(selector_text);
+    metadata.set_css_properties(properties);
 
     items.push(ParsedItem {
         kind: symbol_kind,
@@ -144,11 +148,7 @@ fn process_rule_set<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            selector: Some(selector_text),
-            css_properties: properties,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -161,6 +161,10 @@ fn process_media_statement<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Ve
     let name = format!("@media {query}");
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("media");
+    metadata.set_media_query(query.clone());
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -170,11 +174,7 @@ fn process_media_statement<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Ve
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("media".to_string()),
-            media_query: Some(query.clone()),
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into the block to collect nested rules
@@ -201,6 +201,9 @@ fn process_keyframes<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Pars
     let name = format!("@keyframes {anim_name}");
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("keyframes");
+
     items.push(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -210,10 +213,7 @@ fn process_keyframes<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Pars
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("keyframes".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -225,6 +225,9 @@ fn process_import<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedI
     let name = url.clone();
     let signature = format!("@import url('{url}')");
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("import");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -234,10 +237,7 @@ fn process_import<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedI
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("import".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -258,6 +258,9 @@ fn process_charset<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parsed
     let name = format!("@charset {charset}");
     let signature = format!("@charset \"{charset}\"");
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("charset");
+
     items.push(ParsedItem {
         kind: SymbolKind::Const,
         name,
@@ -267,10 +270,7 @@ fn process_charset<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parsed
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("charset".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -288,6 +288,9 @@ fn process_namespace<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Pars
     let name = format!("@namespace {ns_name}");
     let signature = format!("@namespace {ns_name} url({url})");
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("namespace");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -297,10 +300,7 @@ fn process_namespace<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Pars
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("namespace".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -318,6 +318,10 @@ fn process_supports<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parse
     let name = format!("@supports {query}");
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("supports");
+    metadata.set_media_query(query.clone());
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -327,11 +331,7 @@ fn process_supports<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<Parse
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("supports".to_string()),
-            media_query: Some(query.clone()),
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into block for nested rules
@@ -388,6 +388,9 @@ fn process_scope<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedIt
     };
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("scope");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -397,10 +400,7 @@ fn process_scope<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Vec<ParsedIt
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("scope".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into block for nested rules
@@ -455,6 +455,10 @@ fn process_font_face<D: ast_grep_core::Doc>(
     let name = format!("@font-face {font_family}");
     let signature = format!("@font-face {{ font-family: {font_family} }}");
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("font-face");
+    metadata.set_css_properties(properties);
+
     items.push(ParsedItem {
         kind: SymbolKind::Struct,
         name,
@@ -464,11 +468,7 @@ fn process_font_face<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("font-face".to_string()),
-            css_properties: properties,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -485,6 +485,9 @@ fn process_layer<D: ast_grep_core::Doc>(
     let name = format!("@layer {layer_name}");
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("layer");
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -494,10 +497,7 @@ fn process_layer<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("layer".to_string()),
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into block for nested rules
@@ -533,6 +533,10 @@ fn process_container<D: ast_grep_core::Doc>(
     );
     let signature = name.clone();
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name("container");
+    metadata.set_media_query(query);
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -542,11 +546,7 @@ fn process_container<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some("container".to_string()),
-            media_query: Some(query),
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into block for nested rules
@@ -584,6 +584,10 @@ fn process_generic_at_rule<D: ast_grep_core::Doc>(
 
     let properties = extract_properties_from_block(children);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_at_rule_name(rule_name.to_string());
+    metadata.set_css_properties(properties);
+
     items.push(ParsedItem {
         kind: SymbolKind::Module,
         name,
@@ -593,11 +597,7 @@ fn process_generic_at_rule<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            at_rule_name: Some(rule_name.to_string()),
-            css_properties: properties,
-            ..Default::default()
-        },
+        metadata,
     });
 
     // Recurse into block for nested rules (e.g., `@starting-style`)

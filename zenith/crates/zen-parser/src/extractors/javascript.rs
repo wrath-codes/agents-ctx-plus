@@ -10,7 +10,9 @@ use ast_grep_core::ops::Any;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{DocSections, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{
+    DocSections, JavaScriptMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility,
+};
 
 const JS_TOP_KINDS: &[&str] = &[
     "export_statement",
@@ -122,6 +124,19 @@ fn process_function<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_async {
+        metadata.mark_async();
+    }
+    if is_exported {
+        metadata.mark_exported();
+    }
+    if is_default {
+        metadata.mark_default_export();
+    }
+    metadata.set_parameters(extract_js_parameters(node));
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -131,14 +146,7 @@ fn process_function<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_async,
-            is_exported,
-            is_default_export: is_default,
-            parameters: extract_js_parameters(node),
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -160,6 +168,17 @@ fn process_generator_function<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_async {
+        metadata.mark_async();
+    }
+    if is_exported {
+        metadata.mark_exported();
+    }
+    metadata.mark_generator();
+    metadata.set_parameters(extract_js_parameters(node));
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name,
@@ -169,14 +188,7 @@ fn process_generator_function<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_async,
-            is_exported,
-            is_generator: true,
-            parameters: extract_js_parameters(node),
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -204,6 +216,20 @@ fn process_class<D: ast_grep_core::Doc>(
         Visibility::Private
     };
 
+    let mut metadata = SymbolMetadata::default();
+    if is_exported {
+        metadata.mark_exported();
+    }
+    if is_default {
+        metadata.mark_default_export();
+    }
+    metadata.set_base_classes(extends);
+    metadata.set_methods(methods);
+    if is_error_type {
+        metadata.mark_error_type();
+    }
+    metadata.set_doc_sections(doc_sections);
+
     Some(ParsedItem {
         kind: SymbolKind::Class,
         name,
@@ -213,15 +239,7 @@ fn process_class<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            is_exported,
-            is_default_export: is_default,
-            base_classes: extends,
-            methods,
-            is_error_type,
-            doc_sections,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -321,6 +339,16 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
         let is_async = arrow.children().any(|c| c.kind().as_ref() == "async");
         let params = extract_js_parameters(&arrow);
 
+        let mut metadata = SymbolMetadata::default();
+        if is_async {
+            metadata.mark_async();
+        }
+        if is_exported {
+            metadata.mark_exported();
+        }
+        metadata.set_parameters(params);
+        metadata.set_doc_sections(doc_sections);
+
         Some(ParsedItem {
             kind: SymbolKind::Function,
             name,
@@ -330,15 +358,15 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             start_line: declaration.start_pos().line() as u32 + 1,
             end_line: declaration.end_pos().line() as u32 + 1,
             visibility,
-            metadata: SymbolMetadata {
-                is_async,
-                is_exported,
-                parameters: params,
-                doc_sections,
-                ..Default::default()
-            },
+            metadata,
         })
     } else {
+        let mut metadata = SymbolMetadata::default();
+        if is_exported {
+            metadata.mark_exported();
+        }
+        metadata.set_doc_sections(doc_sections);
+
         Some(ParsedItem {
             kind: SymbolKind::Const,
             name,
@@ -348,11 +376,7 @@ fn process_variable_declarator<D: ast_grep_core::Doc>(
             start_line: declaration.start_pos().line() as u32 + 1,
             end_line: declaration.end_pos().line() as u32 + 1,
             visibility,
-            metadata: SymbolMetadata {
-                is_exported,
-                doc_sections,
-                ..Default::default()
-            },
+            metadata,
         })
     }
 }

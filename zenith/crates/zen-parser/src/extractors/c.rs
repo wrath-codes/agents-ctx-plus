@@ -13,7 +13,7 @@ use ast_grep_core::Node;
 use ast_grep_language::SupportLang;
 use std::fmt::Write as _;
 
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{CMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 /// Extract all significant elements from a C source file.
 ///
@@ -289,32 +289,32 @@ const fn visibility_from_qualifiers(q: &Qualifiers) -> Visibility {
 
 /// Build attribute list from qualifiers.
 fn attributes_from_qualifiers(q: &Qualifiers) -> Vec<String> {
-    let mut attrs = Vec::new();
+    let mut metadata = SymbolMetadata::default();
     if q.is_static {
-        attrs.push("static".to_string());
+        metadata.push_attribute("static");
     }
     if q.is_inline {
-        attrs.push("inline".to_string());
+        metadata.push_attribute("inline");
     }
     if q.is_extern {
-        attrs.push("extern".to_string());
+        metadata.push_attribute("extern");
     }
     if q.is_const {
-        attrs.push("const".to_string());
+        metadata.push_attribute("const");
     }
     if q.is_volatile {
-        attrs.push("volatile".to_string());
+        metadata.push_attribute("volatile");
     }
     if q.is_register {
-        attrs.push("register".to_string());
+        metadata.push_attribute("register");
     }
     for attr in &q.gcc_attributes {
-        attrs.push(attr.clone());
+        metadata.push_attribute(attr.clone());
     }
     for eq in &q.c11_attrs {
-        attrs.push(eq.clone());
+        metadata.push_attribute(eq.clone());
     }
-    attrs
+    metadata.attributes
 }
 
 // ── Function definition processing ────────────────────────────────
@@ -350,9 +350,14 @@ fn process_function_definition<D: ast_grep_core::Doc>(
     // Check for variadic
     let is_variadic = func_decl.text().as_ref().contains("...");
 
-    let mut attrs = attributes_from_qualifiers(&q);
+    let mut metadata = SymbolMetadata {
+        return_type,
+        parameters,
+        attributes: attributes_from_qualifiers(&q),
+        ..Default::default()
+    };
     if is_variadic {
-        attrs.push("variadic".to_string());
+        metadata.push_attribute("variadic");
     }
 
     items.push(ParsedItem {
@@ -364,12 +369,7 @@ fn process_function_definition<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: visibility_from_qualifiers(&q),
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -420,12 +420,16 @@ fn process_declaration<D: ast_grep_core::Doc>(
                 }
                 let return_type = extract_return_type(&children);
                 let (kind, visibility) = classify_variable(&q);
-                let mut attrs = attributes_from_qualifiers(&q);
+                let mut metadata = SymbolMetadata {
+                    return_type,
+                    attributes: attributes_from_qualifiers(&q),
+                    ..Default::default()
+                };
                 if init_decl
                     .children()
                     .any(|c| c.kind().as_ref() == "array_declarator")
                 {
-                    attrs.push("array".to_string());
+                    metadata.push_attribute("array");
                 }
                 items.push(ParsedItem {
                     kind,
@@ -436,11 +440,7 @@ fn process_declaration<D: ast_grep_core::Doc>(
                     start_line: node.start_pos().line() as u32 + 1,
                     end_line: node.end_pos().line() as u32 + 1,
                     visibility,
-                    metadata: SymbolMetadata {
-                        return_type,
-                        attributes: attrs,
-                        ..Default::default()
-                    },
+                    metadata,
                 });
             }
         }
@@ -541,10 +541,15 @@ fn process_function_prototype<D: ast_grep_core::Doc>(
     let parameters = extract_parameters(func_decl);
     let is_variadic = func_decl.text().as_ref().contains("...");
 
-    let mut attrs = attributes_from_qualifiers(q);
-    attrs.push("prototype".to_string());
+    let mut metadata = SymbolMetadata {
+        return_type,
+        parameters,
+        attributes: attributes_from_qualifiers(q),
+        ..Default::default()
+    };
+    metadata.push_attribute("prototype");
     if is_variadic {
-        attrs.push("variadic".to_string());
+        metadata.push_attribute("variadic");
     }
 
     items.push(ParsedItem {
@@ -556,12 +561,7 @@ fn process_function_prototype<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: visibility_from_qualifiers(q),
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -589,8 +589,12 @@ fn process_array_declaration<D: ast_grep_core::Doc>(
     let return_type = extract_return_type(children);
     let (kind, visibility) = classify_variable(q);
 
-    let mut attrs = attributes_from_qualifiers(q);
-    attrs.push("array".to_string());
+    let mut metadata = SymbolMetadata {
+        return_type,
+        attributes: attributes_from_qualifiers(q),
+        ..Default::default()
+    };
+    metadata.push_attribute("array");
 
     items.push(ParsedItem {
         kind,
@@ -601,11 +605,7 @@ fn process_array_declaration<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility,
-        metadata: SymbolMetadata {
-            return_type,
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -662,8 +662,11 @@ fn process_function_pointer_var<D: ast_grep_core::Doc>(
         return;
     }
 
-    let mut attrs = attributes_from_qualifiers(q);
-    attrs.push("function_pointer".to_string());
+    let mut metadata = SymbolMetadata {
+        attributes: attributes_from_qualifiers(q),
+        ..Default::default()
+    };
+    metadata.push_attribute("function_pointer");
 
     items.push(ParsedItem {
         kind: SymbolKind::Static,
@@ -674,10 +677,7 @@ fn process_function_pointer_var<D: ast_grep_core::Doc>(
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: visibility_from_qualifiers(q),
-        metadata: SymbolMetadata {
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 
@@ -1189,11 +1189,12 @@ fn process_preproc_include<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Ve
         .iter()
         .any(|c| c.kind().as_ref() == "system_lib_string");
 
-    let mut attrs = vec!["include".to_string()];
+    let mut metadata = SymbolMetadata::default();
+    metadata.push_attribute("include");
     if is_system {
-        attrs.push("system".to_string());
+        metadata.push_attribute("system");
     } else {
-        attrs.push("local".to_string());
+        metadata.push_attribute("local");
     }
 
     items.push(ParsedItem {
@@ -1205,10 +1206,7 @@ fn process_preproc_include<D: ast_grep_core::Doc>(node: &Node<D>, items: &mut Ve
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: Visibility::Public,
-        metadata: SymbolMetadata {
-            attributes: attrs,
-            ..Default::default()
-        },
+        metadata,
     });
 }
 

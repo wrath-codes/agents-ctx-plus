@@ -10,7 +10,7 @@ use ast_grep_core::ops::Any;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{GoMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 const GO_TOP_KINDS: &[&str] = &[
     "function_declaration",
@@ -110,6 +110,13 @@ fn process_function<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem>
     let parameters = extract_go_parameters(node);
     let type_params = extract_go_type_parameters(node);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    for parameter in parameters {
+        metadata.push_parameter(parameter);
+    }
+    metadata.set_type_parameters(type_params);
+
     Some(ParsedItem {
         kind: SymbolKind::Function,
         name: name.clone(),
@@ -119,12 +126,7 @@ fn process_function<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem>
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: go_visibility(&name),
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            type_parameters: type_params,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -142,6 +144,13 @@ fn process_method<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
     let parameters = extract_go_method_parameters(node);
     let receiver = extract_go_receiver(node);
 
+    let mut metadata = SymbolMetadata::default();
+    metadata.set_return_type(return_type);
+    for parameter in parameters {
+        metadata.push_parameter(parameter);
+    }
+    metadata.set_receiver(receiver);
+
     Some(ParsedItem {
         kind: SymbolKind::Method,
         name: name.clone(),
@@ -151,12 +160,7 @@ fn process_method<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
         start_line: node.start_pos().line() as u32 + 1,
         end_line: node.end_pos().line() as u32 + 1,
         visibility: go_visibility(&name),
-        metadata: SymbolMetadata {
-            return_type,
-            parameters,
-            for_type: receiver,
-            ..Default::default()
-        },
+        metadata,
     })
 }
 
@@ -217,25 +221,19 @@ fn classify_type_spec<D: ast_grep_core::Doc>(
             "struct_type" => {
                 let fields = extract_struct_fields(&child);
                 let is_error = helpers::is_error_type_by_name(name);
-                return (
-                    SymbolKind::Struct,
-                    SymbolMetadata {
-                        fields,
-                        is_error_type: is_error,
-                        type_parameters: extract_go_type_params_from_spec(node),
-                        ..Default::default()
-                    },
-                );
+                let mut metadata = SymbolMetadata::default();
+                metadata.set_fields(fields);
+                metadata.set_type_parameters(extract_go_type_params_from_spec(node));
+                if is_error {
+                    metadata.mark_error_type();
+                }
+                return (SymbolKind::Struct, metadata);
             }
             "interface_type" => {
                 let methods = extract_interface_methods(&child);
-                return (
-                    SymbolKind::Interface,
-                    SymbolMetadata {
-                        methods,
-                        ..Default::default()
-                    },
-                );
+                let mut metadata = SymbolMetadata::default();
+                metadata.set_methods(methods);
+                return (SymbolKind::Interface, metadata);
             }
             "function_type" => {
                 return (SymbolKind::TypeAlias, SymbolMetadata::default());

@@ -9,7 +9,7 @@ use ast_grep_core::ops::Any;
 use ast_grep_language::SupportLang;
 
 use super::helpers;
-use crate::types::{ParsedItem, SymbolKind, SymbolMetadata, Visibility};
+use crate::types::{ParsedItem, RustMetadataExt, SymbolKind, SymbolMetadata, Visibility};
 
 const RUST_ITEM_KINDS: &[&str] = &[
     "function_item",
@@ -171,25 +171,33 @@ fn build_function_metadata<D: ast_grep_core::Doc>(
         attrs.push("const".to_string());
     }
 
-    (
-        SymbolKind::Function,
-        SymbolMetadata {
-            is_async,
-            is_unsafe,
-            return_type: return_type.clone(),
-            generics: generics.clone(),
-            attributes: attrs.clone(),
-            parameters: helpers::extract_parameters(node),
-            lifetimes: helpers::extract_lifetimes(generics.as_deref()),
-            where_clause: helpers::extract_where_clause(node),
-            abi,
-            is_pyo3: helpers::is_pyo3(&attrs),
-            is_error_type: helpers::is_error_type_by_name(name),
-            returns_result: helpers::returns_result(return_type.as_deref()),
-            doc_sections,
-            ..Default::default()
-        },
-    )
+    let mut metadata = SymbolMetadata {
+        return_type: return_type.clone(),
+        generics: generics.clone(),
+        attributes: attrs.clone(),
+        parameters: helpers::extract_parameters(node),
+        lifetimes: helpers::extract_lifetimes(generics.as_deref()),
+        where_clause: helpers::extract_where_clause(node),
+        is_error_type: helpers::is_error_type_by_name(name),
+        returns_result: helpers::returns_result(return_type.as_deref()),
+        doc_sections,
+        ..Default::default()
+    };
+
+    if is_async {
+        metadata.mark_async();
+    }
+    if is_unsafe {
+        metadata.mark_unsafe();
+    }
+    if let Some(abi) = abi {
+        metadata.set_abi(abi);
+    }
+    if helpers::is_pyo3(&attrs) {
+        metadata.mark_pyo3();
+    }
+
+    (SymbolKind::Function, metadata)
 }
 
 fn build_struct_metadata<D: ast_grep_core::Doc>(
@@ -345,7 +353,7 @@ fn process_impl_item<D: ast_grep_core::Doc>(node: &Node<D>, source: &str) -> Vec
                     process_impl_method(&child, source, trait_name.as_deref(), for_type.as_deref())
                 {
                     if is_unsafe_impl {
-                        method.metadata.is_unsafe = true;
+                        method.metadata.mark_unsafe();
                     }
                     items.push(method);
                 }
