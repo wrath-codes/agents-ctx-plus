@@ -10,7 +10,7 @@ use crate::types::{ParsedItem, PythonMetadataExt, SymbolKind, SymbolMetadata, Vi
 
 #[path = "../python/doc.rs"]
 mod doc;
-#[path = "../python/processors.rs"]
+#[path = "../python/processors/mod.rs"]
 mod processors;
 #[path = "../python/helpers.rs"]
 mod pyhelpers;

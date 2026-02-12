@@ -4,7 +4,7 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../c/processors.rs"]
+#[path = "../c/processors/mod.rs"]
 mod processors;
 
 /// Extract all significant elements from a C source file.
