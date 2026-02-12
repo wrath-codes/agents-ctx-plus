@@ -12,7 +12,7 @@ use crate::types::ParsedItem;
 
 #[path = "../javascript/helpers.rs"]
 mod js_helpers;
-#[path = "../javascript/processors.rs"]
+#[path = "../javascript/processors/mod.rs"]
 mod processors;
 
 const JS_TOP_KINDS: &[&str] = &[
