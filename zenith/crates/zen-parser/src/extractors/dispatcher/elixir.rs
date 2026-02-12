@@ -9,7 +9,7 @@ use crate::types::ParsedItem;
 
 #[path = "../elixir/helpers.rs"]
 mod elixir_helpers;
-#[path = "../elixir/processors.rs"]
+#[path = "../elixir/processors/mod.rs"]
 mod processors;
 
 use elixir_helpers::first_identifier_text;
