@@ -971,9 +971,11 @@ impl ZenLake {
 
 ## 7. zen-parser
 
-**Purpose**: ast-grep-based parsing and API extraction across all 26 built-in languages (rich extractors for 7, generic for 19). This is the richest crate -- it ports the extraction logic from klaw-effect-tracker, using ast-grep's pattern matching and Node traversal API instead of raw tree-sitter.
+**Purpose**: ast-grep-based parsing and API extraction across all supported languages. This is the richest crate -- it ports and extends the extraction logic from klaw-effect-tracker, using ast-grep's pattern matching and Node traversal API instead of raw tree-sitter.
 
 **Validated in**: klaw-effect-tracker `rust-treesitter.ts` (788 lines) and `python-treesitter.ts` (1044 lines), plus our Go extractors (10 languages)
+
+**Implementation status**: **Stream A COMPLETE** (PR1 merged). 1328 tests passing (1324 unit + 4 doc-tests). Clippy clean.
 
 **Key change (v3)**: Replaced direct tree-sitter + individual grammar crates with `ast-grep-core` + `ast-grep-language`. This gives us:
 - Pattern-based AST matching (`fn $NAME($$$PARAMS) -> $RET { $$$ }` syntax)
@@ -982,10 +984,11 @@ impl ZenLake {
 - MetaVariable capture (like regex capture groups for AST nodes)
 - 26 built-in language grammars managed via feature flags (no manual grammar version tracking)
 
-**Language scope**: All 26 ast-grep built-in languages are supported for parsing. Extractors are tiered:
-- **Rich** (7): Rust, Python, TypeScript, TSX, JavaScript, Go, Elixir -- full `ParsedItem` metadata (signatures, doc comments, generics, visibility, error detection, etc.)
-- **Basic** (19): All other built-in languages (C, C++, Java, Ruby, etc.) -- generic kind-based extraction capturing function/class/type definitions with names and signatures
-- **Not yet supported**: Zig, Svelte, Astro, Gleam, Mojo, Markdown, TOML -- can be added later via ast-grep's `Language` trait
+**Language scope**: 25 dedicated extractors — every language has its own dispatcher, processors, helpers, and tests (no generic extractor):
+- **Builtin** (20): Rust, Python, TypeScript, TSX, JavaScript, Go, Elixir, C, C++, C#, CSS, Haskell, HTML, Java, JSON, Lua, PHP, Ruby, Bash, YAML — all with rich `ParsedItem` metadata
+- **Custom-lane** (4): Markdown (tree-sitter-md), TOML (tree-sitter-toml-ng), RST (tree-sitter-rst), Svelte (tree-sitter-svelte-next) — implement ast-grep `Language` trait for grammars outside ast-grep's builtin set
+- **Text** (1): Smart format routing for `.txt` files — heading detection, key-value pair extraction, list item extraction, paragraph splitting
+- **Deferred** (6 `SupportLang` variants): Hcl, Kotlin, Nix, Scala, Solidity, Swift — intentionally hit `UnsupportedLanguage` catch-all (no dispatchers exist)
 
 ### Dependencies
 
@@ -1004,21 +1007,45 @@ Note: `ast-grep-language` bundles tree-sitter grammars behind feature flags. No 
 
 ### Module Structure
 
+> **Updated 2026-02-13**: Reflects actual implementation after PR1 merge. The original plan's flat `extractors/` layout was replaced by a two-level dispatcher + `#[path]` architecture. There is no `generic.rs` or `format.rs` — every language has dedicated processors.
+
 ```
 zen-parser/src/
-├── lib.rs               # Public API: parse_file, extract_api, detect_language
-├── parser.rs            # ast-grep wrapper, language detection, SupportLang mapping
-├── types.rs             # ParsedItem, SymbolMetadata, DocSections
-├── test_files.rs        # IsTestFile, IsTestDir
-├── extractors/
-│   ├── mod.rs           # Extraction orchestrator (two-tier fallback: ast-grep → regex)
-│   ├── generic.rs       # Generic kind-based extractor (works for all 26 languages)
-│   ├── rust.rs          # Rust rich extractor (port of klaw rust-treesitter.ts)
-│   ├── python.rs        # Python rich extractor (port of klaw python-treesitter.ts)
-│   ├── typescript.rs    # TypeScript/JavaScript/TSX rich extractor
-│   ├── go.rs            # Go rich extractor
-│   └── elixir.rs        # Elixir rich extractor
-└── format.rs            # FormatAPIIndex (compressed AGENTS.md style output)
+├── lib.rs               # Public API: detect_language(), parse_source(), extract_api() — dispatches to all 25 extractors
+├── error.rs             # ParserError enum (ParseFailed, UnsupportedLanguage, ExtractionFailed, Io)
+├── parser.rs            # ast-grep wrapper, SupportLang mapping, DetectedLanguage enum (Builtin/Markdown/Toml/Rst/Svelte/Text), custom language parsers
+│   ├── markdown_lang.rs # MarkdownLang (tree-sitter-md)
+│   ├── toml_lang.rs     # TomlLang (tree-sitter-toml-ng)
+│   ├── rst_lang.rs      # RstLang (tree-sitter-rst)
+│   └── svelte_lang.rs   # SvelteLang (tree-sitter-svelte-next)
+├── types/               # Module tree (split from single types.rs)
+│   ├── mod.rs           # Re-exports: ParsedItem, SymbolKind, Visibility, SymbolMetadata, DocSections
+│   ├── parsed_item.rs   # ParsedItem struct
+│   ├── symbol_kind.rs   # SymbolKind enum (19 variants: +Constructor, Field, Property, Event, Indexer, Component)
+│   ├── visibility.rs    # Visibility enum
+│   ├── doc_sections.rs  # DocSections struct
+│   └── symbol_metadata/ # SymbolMetadata (~50+ fields) + per-language *MetadataExt traits (13 files)
+├── test_files.rs        # is_test_file(), is_test_dir() — 12 tests
+├── doc_chunker.rs       # chunk_document() — ast-grep KindMatcher for md/rst sections, ~2048 char chunks, ~200 char overlap — 35 tests
+├── spike_ast_grep.rs    # #[cfg(test)] — spike 0.8 validation (19 tests)
+└── extractors/
+    ├── mod.rs           # Re-exports all dispatcher modules (including text)
+    ├── helpers.rs       # Shared: extract_source(), extract_signature()
+    └── dispatcher/
+        ├── mod.rs       # pub mod for all 25 languages + #[cfg(test)] conformance
+        ├── rust.rs      # Rust dispatcher (root, source) → rust/processors/ via #[path]
+        ├── python.rs    # Python dispatcher (root) → python/processors/ via #[path]
+        ├── typescript.rs # TypeScript dispatcher (root, lang) → typescript/processors/ via #[path]
+        ├── tsx.rs       # TSX dispatcher (root, lang) — React-specific detection
+        ├── javascript.rs # JavaScript dispatcher (root) — separate from TypeScript
+        ├── c.rs         # C dispatcher (root, source) — 5 processor files
+        ├── cpp.rs       # C++ dispatcher (root, source) — 5 processor files
+        ├── text.rs      # Text dispatcher (source, file_path) — smart format routing for .txt
+        ├── ... (16 more) # All other languages (csharp, css, elixir, go, haskell, html, java, json, lua, markdown, php, ruby, bash, svelte, toml, rst, yaml)
+        └── conformance.rs # #[cfg(test)] cross-language taxonomy tests
+    # Each language also has: extractors/<lang>/processors/, helpers.rs, tests/
+    # These are #[path]-imported by the dispatcher, not mod-declared.
+    # Text extractor also has: extractors/text/helpers.rs, text/processors.rs, text/tests/mod.rs
 ```
 
 ### Key Types
@@ -1041,11 +1068,14 @@ pub struct ParsedItem {
     pub metadata: SymbolMetadata,
 }
 
+// NOTE: Actual implementation has 19 variants (not 14 as originally planned).
+// Added: Constructor, Field, Property, Event, Indexer, Component.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SymbolKind {
     Function, Method, Struct, Enum, Trait, Interface, Class,
     TypeAlias, Const, Static, Macro, Module, Union, Use,
+    Constructor, Field, Property, Event, Indexer, Component,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1121,44 +1151,50 @@ pub struct DocSections {
 
 ### Extraction Orchestrator
 
-**Ported from**: klaw-effect-tracker `extractors/index.ts` (adapted to two-tier with ast-grep)
+> **Updated 2026-02-13**: Reflects actual `extract_api()` implementation (PR1 merged). Key differences from original plan: (1) takes `file_path: &str` not `language: SupportLang` — handles custom-lane languages outside `SupportLang` enum. (2) No generic extractor — every language has a dedicated dispatcher. (3) Three dispatcher signature families handled internally. (4) Regex fallback deferred — logs warning and returns empty Vec if AST yields 0 items. (5) Text extractor added for `.txt` files.
 
 ```rust
-use ast_grep_language::{LanguageExt, SupportLang};
+/// Extract API symbols from source code for any supported language.
+///
+/// Detects the language from `file_path`, parses with ast-grep (or custom parser
+/// for Markdown/TOML/RST/Svelte, or smart text routing for .txt), and extracts symbols.
+/// Regex fallback deferred — logs warning and returns empty Vec if AST yields 0 items.
+pub fn extract_api(
+    source: &str,
+    file_path: &str,
+) -> Result<Vec<ParsedItem>, ParserError> {
+    let lang = detect_language_ext(file_path)
+        .ok_or_else(|| ParserError::UnsupportedLanguage(file_path.to_string()))?;
 
-/// Extract API from source code. Uses ast-grep pattern matching + Node traversal,
-/// falls back to regex for edge cases.
-pub fn extract_api(source: &str, language: SupportLang) -> Result<Vec<ParsedItem>, ParserError> {
-    // Tier 1: ast-grep pattern matching + Node traversal (preferred)
-    match extract_with_ast_grep(source, language) {
-        Ok(items) if !items.is_empty() => return Ok(items),
-        Ok(_) => tracing::debug!("ast-grep returned no items for {:?}", language),
-        Err(e) => tracing::warn!("ast-grep extraction failed for {:?}: {}", language, e),
-    }
+    let items = match lang {
+        DetectedLanguage::Builtin(builtin) => extract_builtin(source, builtin)?,
+        DetectedLanguage::Markdown => { /* parse_markdown_source → extractors::markdown::extract */ }
+        DetectedLanguage::Toml => { /* parse_toml_source → extractors::toml::extract */ }
+        DetectedLanguage::Rst => { /* parse_rst_source → extractors::rst::extract */ }
+        DetectedLanguage::Svelte => { /* parse_svelte_source → extractors::svelte::extract */ }
+        DetectedLanguage::Text => { /* extractors::text::extract(source, file_path) */ }
+    };
 
-    // Tier 2: Regex fallback (last resort)
-    match extract_with_regex(source, language) {
-        Ok(items) => Ok(items),
-        Err(e) => {
-            tracing::warn!("regex extraction failed for {:?}: {}", language, e);
-            Ok(vec![])
-        }
+    if items.is_empty() {
+        tracing::warn!("ast-grep returned no items for {file_path}, returning empty Vec (regex fallback deferred)");
     }
+    Ok(items)
 }
 
-fn extract_with_ast_grep(source: &str, language: SupportLang) -> Result<Vec<ParsedItem>, ParserError> {
-    let root = language.ast_grep(source);
-    match language {
-        // Rich extractors: full metadata, doc comments, language-specific features
-        SupportLang::Rust => extractors::rust::extract(&root),
-        SupportLang::Python => extractors::python::extract(&root),
-        SupportLang::TypeScript | SupportLang::Tsx | SupportLang::JavaScript => {
-            extractors::typescript::extract(&root)
-        }
-        SupportLang::Go => extractors::go::extract(&root),
-        SupportLang::Elixir => extractors::elixir::extract(&root),
-        // All other 19 built-in languages: generic kind-based extraction
-        _ => extractors::generic::extract(&root, language),
+fn extract_builtin(source: &str, lang: SupportLang) -> Result<Vec<ParsedItem>, ParserError> {
+    let root = parse_source(source, lang);
+    match lang {
+        // 20 builtin languages — each with a dedicated dispatcher
+        SupportLang::Rust => extractors::rust::extract(&root, source),     // (root, source)
+        SupportLang::Python => extractors::python::extract(&root),          // (root)
+        SupportLang::TypeScript => extractors::typescript::extract(&root, lang), // (root, lang)
+        SupportLang::Tsx => extractors::tsx::extract(&root, lang),          // (root, lang)
+        SupportLang::JavaScript => extractors::javascript::extract(&root),  // (root) — separate from TS
+        SupportLang::Bash => extractors::bash::extract(&root, source),     // (root, source)
+        SupportLang::C => extractors::c::extract(&root, source),           // (root, source)
+        SupportLang::Cpp => extractors::cpp::extract(&root, source),       // (root, source)
+        // ... 12 more (root) dispatchers: csharp, css, elixir, go, haskell, html, java, json, lua, php, ruby, yaml
+        _ => Err(ParserError::UnsupportedLanguage(format!("{lang:?}"))),    // Hcl, Kotlin, Nix, Scala, Solidity, Swift
     }
 }
 ```
@@ -1305,18 +1341,21 @@ fn is_error_type(name: &str, node: &Node<impl ast_grep_core::Doc>) -> bool {
 
 ### Tests
 
-- Parse and extract from real Rust source (use `include_str!` with test fixtures)
-- Parse and extract from real Python source
-- Parse and extract from real TypeScript source
-- Verify `ParsedItem` metadata fields (async, unsafe, generics, doc comments)
-- Two-tier fallback: ast-grep extraction empty triggers regex fallback
-- Test file detection for all supported languages
-- Signature extraction accuracy (no body leaks)
-- Doc comment extraction (///, #[doc], docstrings, JSDoc)
-- Error type detection (name pattern, derive(Error))
-- impl block processing (inherent vs trait impl)
-- ast-grep pattern matching: verify patterns correctly capture metavariables
-- ast-grep Node traversal: verify field access, children iteration, sibling walking
+> **1328 tests passing** (1324 unit + 4 doc-tests) as of PR1 merge.
+
+- Parse and extract from real source files for all 25 supported languages — **DONE** (per-language test suites in `extractors/<lang>/tests/`)
+- Verify `ParsedItem` metadata fields (async, unsafe, generics, doc comments) — **DONE**
+- `extract_api()` orchestrator dispatches to all 25 languages via file path — **DONE** (6 tests)
+- Test file detection (`is_test_file`, `is_test_dir`) for all supported patterns — **DONE** (12 tests)
+- Doc chunking: markdown/rst/txt section splitting with overlap — **DONE** (35 tests: 21 doc_chunker + 14 text_helpers)
+- Text extraction: smart format routing for .txt files — **DONE** (9 tests)
+- Signature extraction accuracy (no body leaks) — **DONE**
+- Doc comment extraction (///, #[doc], docstrings, JSDoc) — **DONE**
+- Error type detection (name pattern, derive(Error)) — **DONE**
+- impl block processing (inherent vs trait impl) — **DONE**
+- Cross-language taxonomy conformance (Constructor, Field, Property, owner) — **DONE** (conformance.rs)
+- ast-grep pattern matching + Node traversal — **DONE** (spike_ast_grep.rs: 19 tests)
+- Regex fallback — **DEFERRED** (logs warning, returns empty Vec; no regex crate dependency)
 
 ---
 

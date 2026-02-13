@@ -1,7 +1,7 @@
 # Phase 3: Parsing & Indexing Pipeline — Implementation Plan
 
-**Version**: 2026-02-13 (rev 4 — delta plan from implemented zen-parser baseline)
-**Status**: In Progress — Stream A substantially complete, Streams B/C/D pending
+**Version**: 2026-02-13 (rev 5 — PR1 merged, Stream A complete)
+**Status**: In Progress — Stream A: **COMPLETE** (PR1 merged to main), Streams B/C/D pending
 **Depends on**: Phase 1 (all tasks DONE — 127 tests), Phase 0 (spikes 0.4, 0.5, 0.6, 0.8, 0.14, 0.18, 0.19, 0.20, 0.21)
 **Produces**: Milestone 3 — `cargo test -p zen-parser -p zen-embeddings -p zen-lake` passes, full clone→parse→embed→store pipeline works end-to-end
 
@@ -33,7 +33,7 @@
 **Goal**: ast-grep-based extraction across all supported languages, fastembed integration, **local DuckDB cache storage** (temporary — production storage is Lance on R2 + Turso catalog in Phase 8/9), source file caching for `znt grep`, and the local indexing pipeline (clone → walk → parse → extract → embed → store to DuckDB cache).
 
 **Crate status summary**:
-- `zen-parser` — **substantially implemented**: 24 language dispatchers (20 builtin + 4 custom-lane), 399 source files in extractors tree, 1250 tests passing, types module tree with per-language `*MetadataExt` traits, 30 test fixture files
+- `zen-parser` — **Stream A COMPLETE (PR1 merged)**: 24 language dispatchers (20 builtin + 4 custom-lane + Text), 399 source files in extractors tree, **1328 tests passing** (1324 unit + 4 doc-tests), types module tree with per-language `*MetadataExt` traits, 30 test fixture files. `extract_api()` orchestrator, `test_files.rs`, `doc_chunker.rs`, Text extractor all implemented and merged.
 - `zen-embeddings` — **stub only**: spike module behind `#[cfg(test)]`, no production code
 - `zen-lake` — **stub only**: 4 spike modules behind `#[cfg(test)]`, no production code
 - `zen-search` — **stub only**: 3 spike modules behind `#[cfg(test)]`, no `walk.rs` yet
@@ -50,7 +50,7 @@
 
 | PR | Stream | Contents | Status |
 |----|--------|----------|--------|
-| PR 1 | A: zen-parser (reconciliation) | `extract_api()` orchestrator, `test_files.rs`, `doc_chunker.rs` | Remaining gaps |
+| PR 1 | A: zen-parser (reconciliation) | `extract_api()` orchestrator, `test_files.rs`, `doc_chunker.rs`, Text extractor, clippy cleanup | **DONE** — [merged to main](https://github.com/wrath-codes/agents-ctx-plus/pull/1), 1328 tests |
 | PR 2 | B: zen-embeddings | EmbeddingEngine, error type | Not started |
 | PR 3 | C: zen-lake | DuckDB local cache schema, ZenLake struct, store_symbols/store_doc_chunks | Not started |
 | PR 3b | C2: source_files | Separate DuckDB for source file caching (`.zenith/source_files.duckdb`) | Not started |
@@ -64,24 +64,25 @@
 
 | Aspect | Status | Detail |
 |--------|--------|--------|
-| **Language dispatchers** | 24/24 | All 20 builtin `SupportLang` + 4 custom-lane (Markdown, TOML, RST, Svelte). Every dispatcher has `pub fn extract()` in `src/extractors/dispatcher/<lang>.rs`. |
-| **Extractor processors** | 24/24 | Each language has a `<lang>/processors/` directory or `processors.rs` file. C has 5 processor files, C++ has 5, PHP has 6. |
-| **Extractor tests** | 24/24 | Every language directory has a `tests/` subdirectory. Total: **1250 tests passing**. |
+| **Language dispatchers** | 25/25 | All 20 builtin `SupportLang` + 4 custom-lane (Markdown, TOML, RST, Svelte) + Text extractor. Every dispatcher has `pub fn extract()` in `src/extractors/dispatcher/<lang>.rs`. |
+| **Extractor processors** | 25/25 | Each language has a `<lang>/processors/` directory or `processors.rs` file. C has 5 processor files, C++ has 5, PHP has 6. Text has `helpers.rs` + `processors.rs`. |
+| **Extractor tests** | 25/25 | Every language directory has a `tests/` subdirectory. Total: **1328 tests passing** (1324 unit + 4 doc-tests). |
 | **Test fixtures** | 30 files | `tests/fixtures/` contains sample files for: `.rs`, `.py`, `.ts`, `.tsx`, `.js`, `.go`, `.ex`, `.c`, `.cpp`, `.cs`, `.css`, `.hs`, `.html`, `.java`, `.json`, `.lua`, `.php`, `.rb`, `.sh`, `.yaml`, `.md`, `.toml`, `.rst`, `.svelte` plus edge cases. |
 | **Types** | Refactored | `src/types/` module tree: `ParsedItem`, `SymbolKind` (19 variants), `Visibility`, `SymbolMetadata`, `DocSections`. Per-language `*MetadataExt` traits in `symbol_metadata/`. TYPES_REFACTOR_PLAN.md Sessions 1+2 complete. |
 | **Conformance** | Validated | `dispatcher/conformance.rs`: cross-language Constructor, Property, Field, owner_name/owner_kind taxonomy. |
-| **Custom parsers** | Working | `parser.rs`: `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang` with `detect_language_ext()`. |
+| **Custom parsers** | Working | `parser.rs`: `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang` with `detect_language_ext()`. `DetectedLanguage::Text` added for `.txt` files. `.mdx` extension also mapped. |
 | **Shared helpers** | Working | `extractors/helpers.rs`: `extract_source()`, `extract_signature()`. |
-| **`extract_api()`** | **MISSING** | No top-level orchestrator. Callers must manually dispatch. |
-| **`test_files.rs`** | **MISSING** | Test file/dir detection not implemented. |
-| **`doc_chunker.rs`** | **MISSING** | Document section chunking not implemented. |
+| **`extract_api()`** | **DONE** | Top-level orchestrator in `lib.rs`. Takes `(source: &str, file_path: &str)`, detects language via `detect_language_ext()`, dispatches to all 25 language extractors (20 builtin + 4 custom-lane + Text). Logs warning and returns empty Vec if AST extraction yields 0 items (regex fallback deferred). 6 tests. |
+| **`test_files.rs`** | **DONE** | `is_test_file()` and `is_test_dir()` implemented with comprehensive pattern coverage (Go, Rust, JS/TS, Python, Elixir, general). 12 tests. |
+| **`doc_chunker.rs`** | **DONE** | ast-grep-based document chunker. ~2048 char max chunks (~512 tokens), ~200 char overlap, heading hierarchy breadcrumb (`section_path: Vec<String>`). Uses `KindMatcher` for markdown/RST section detection. Smart text routing for `.txt`. 35 tests (21 doc_chunker + 14 text_helpers). |
 
-**Dispatcher signature families** (design note for `extract_api()` orchestrator):
+**Dispatcher signature families** (used by `extract_api()` orchestrator — now implemented):
 - `extract(root)` — 16 dispatchers (csharp, css, elixir, go, haskell, html, java, javascript, json, lua, markdown, php, python, ruby, svelte, toml, rst, yaml)
 - `extract(root, source: &str)` — 4 dispatchers (bash, c, cpp, rust)
 - `extract(root, lang: SupportLang)` — 2 dispatchers (typescript, tsx)
+- `extract(source: &str, file_path: &str)` — 1 dispatcher (text — standalone, no ast-grep parse step)
 
-The custom-lane dispatchers (markdown, rst, svelte, toml) use generic `Doc` bounds (no `Lang = SupportLang`), requiring separate parse functions (`parse_markdown_source()` etc.) from `parser.rs`.
+The custom-lane dispatchers (markdown, rst, svelte, toml) use generic `Doc` bounds (no `Lang = SupportLang`), requiring separate parse functions (`parse_markdown_source()` etc.) from `parser.rs`. The Text dispatcher is fully standalone — it detects document format from the file extension and applies smart text routing (heading detection, key-value pair extraction, list item extraction, paragraph splitting).
 
 ### zen-embeddings — Stub Only
 
@@ -246,13 +247,13 @@ zen-core (types)
 
 ### Module Structure After Phase 3
 
-> **Updated 2026-02-13**: Reflects actual zen-parser implementation + remaining stubs.
+> **Updated 2026-02-13 (rev 2)**: Reflects zen-parser after PR1 merge (Stream A complete) + remaining stubs for Streams B/C/D.
 
 ```
-zen-parser/src/                          # ── IMPLEMENTED (except items marked PENDING) ──
-├── lib.rs                               # Public API: detect_language(), parse_source(), extract_api() [PENDING]
+zen-parser/src/                          # ── STREAM A COMPLETE (PR1 merged) ──
+├── lib.rs                               # Public API: detect_language(), parse_source(), extract_api() [DONE], module declarations, re-exports
 ├── error.rs                             # ParserError enum
-├── parser.rs                            # ast-grep wrapper, SupportLang mapping, custom language parsers
+├── parser.rs                            # ast-grep wrapper, SupportLang mapping, custom language parsers, DetectedLanguage::Text [DONE]
 │   ├── markdown_lang.rs                 # MarkdownLang (tree-sitter-md)
 │   ├── toml_lang.rs                     # TomlLang (tree-sitter-toml-ng)
 │   ├── rst_lang.rs                      # RstLang (tree-sitter-rst)
@@ -267,14 +268,14 @@ zen-parser/src/                          # ── IMPLEMENTED (except items mark
 │       ├── mod.rs                       # SymbolMetadata struct (~50+ fields)
 │       ├── common.rs                    # CommonMetadataExt trait
 │       ├── bash.rs .. typescript.rs     # Per-language *MetadataExt traits (13 files)
-├── test_files.rs                        # [PENDING] is_test_file(), is_test_dir()
-├── doc_chunker.rs                       # [PENDING] split_into_chunks() for README/docs
+├── test_files.rs                        # [DONE] is_test_file(), is_test_dir() — 12 tests
+├── doc_chunker.rs                       # [DONE] chunk_document() — ast-grep KindMatcher for md/rst, smart text routing, ~2048 char chunks, ~200 char overlap, section_path breadcrumbs — 35 tests (21 + 14 text_helpers)
 ├── spike_ast_grep.rs                    # #[cfg(test)] — spike 0.8 validation
 └── extractors/
-    ├── mod.rs                           # Re-exports all dispatcher modules
+    ├── mod.rs                           # Re-exports all dispatcher modules (including text)
     ├── helpers.rs                        # Shared: extract_source(), extract_signature()
     └── dispatcher/
-        ├── mod.rs                       # pub mod for all 24 languages + #[cfg(test)] conformance
+        ├── mod.rs                       # pub mod for all 25 languages + #[cfg(test)] conformance
         ├── rust.rs                      # Rust dispatcher → rust/processors/ via #[path]
         ├── python.rs                    # Python dispatcher → python/processors/ via #[path]
         ├── typescript.rs                # TypeScript dispatcher (root, lang)
@@ -282,38 +283,21 @@ zen-parser/src/                          # ── IMPLEMENTED (except items mark
         ├── javascript.rs                # JavaScript dispatcher (root)
         ├── c.rs                         # C dispatcher (root, source)
         ├── cpp.rs                       # C++ dispatcher (root, source)
+        ├── text.rs                      # [DONE] Text dispatcher — smart format routing for .txt files — 9 tests
         ├── ... (16 more)               # All other languages
         └── conformance.rs               # #[cfg(test)] cross-language taxonomy tests
     # Each language also has: extractors/<lang>/processors/, helpers.rs, tests/
     # These are #[path]-imported by the dispatcher, not mod-declared.
-
-zen-embeddings/src/                      # ── STUB (pending PR 2) ──
-├── lib.rs                               # [PENDING] EmbeddingEngine struct
-├── error.rs                             # [PENDING] EmbeddingError enum
-└── spike_fastembed.rs                   # #[cfg(test)] — spike 0.6 validation
-
-zen-lake/src/                            # ── STUB (pending PR 3) ──
-├── lib.rs                               # [PENDING] ZenLake struct, open_local()
-├── error.rs                             # [PENDING] LakeError enum
-├── schemas.rs                           # [PENDING] DuckDB table DDL (LOCAL CACHE ONLY)
-├── store.rs                             # [PENDING] store_symbols(), store_doc_chunks()
-├── source_files.rs                      # [PENDING] SourceFileStore (.zenith/source_files.duckdb)
-└── spike_*.rs                           # #[cfg(test)] — spikes 0.4, 0.5, 0.18, 0.19
-
-zen-search/src/                          # ── STUB (pending PR 4) ──
-├── lib.rs                               # [PENDING] + re-export walk module
-├── walk.rs                              # [PENDING] WalkMode, build_walker()
-└── spike_*.rs                           # #[cfg(test)] — spikes 0.14, 0.21, 0.22
-
-zen-cli/src/                             # ── PENDING PR 4 ──
-└── pipeline.rs                          # [PENDING] IndexingPipeline orchestration
+    # Text extractor also has: extractors/text/helpers.rs, text/processors.rs, text/tests/mod.rs
 ```
 
 ---
 
-## 5. PR 1 — Stream A: zen-parser (Reconciliation)
+## 5. PR 1 — Stream A: zen-parser (Reconciliation) — COMPLETE
 
-Stream A is **substantially complete**. This PR covers the remaining gaps — not the extraction logic itself, which is already implemented across 24 language dispatchers with 1250 passing tests.
+> **PR1 merged**: https://github.com/wrath-codes/agents-ctx-plus/pull/1 — 1328 tests passing (1324 unit + 4 doc-tests), clippy clean.
+
+Stream A is **COMPLETE**. All remaining gaps have been implemented, reviewed via CodeRabbit CLI (7 findings addressed), and merged to main. Below documents what was delivered.
 
 ### What Already Exists (DO NOT recreate)
 
@@ -327,7 +311,7 @@ Stream A is **substantially complete**. This PR covers the remaining gaps — no
 | Shared extraction helpers | `src/extractors/helpers.rs` | **DONE** — `extract_source()`, `extract_signature()` |
 | Language dispatchers | `src/extractors/dispatcher/<lang>.rs` (24 files) | **DONE** — All have `pub fn extract()`. Architecture: dispatcher uses `#[path]` to pull in `<lang>/processors/` and `<lang>/helpers.rs`. |
 | Language processors | `src/extractors/<lang>/processors/` (24 dirs) | **DONE** — Rich extraction for all 24 languages |
-| Language tests | `src/extractors/<lang>/tests/` (24 dirs) | **DONE** — 1250 tests passing |
+| Language tests | `src/extractors/<lang>/tests/` (25 dirs, incl. text) | **DONE** — 1328 tests passing (1324 unit + 4 doc-tests) |
 | Conformance tests | `src/extractors/dispatcher/conformance.rs` | **DONE** — Cross-language Constructor, Field, Property, owner_name taxonomy |
 | Test fixtures | `tests/fixtures/` (30 files) | **DONE** |
 | `lib.rs` public API | `src/lib.rs` | **DONE** — Exports `ParserError`, `ParsedItem`, `SymbolKind`, `SymbolMetadata`, `DocSections`, `Visibility`, `detect_language`, `detect_language_ext`, all parse functions |
@@ -545,7 +529,7 @@ pub use extractors::extract_api;  // or wherever extract_api lives
 
 ### A5. Existing Test Coverage (reference — already passing)
 
-The following test suites are already complete and passing (1250 tests total). They are listed here for reference but are **not part of PR 1 scope**.
+The following test suites are complete and passing (1328 tests total, including the PR1 additions). They are listed here for reference.
 
 **Extractor tests** (per-language, in `src/extractors/<lang>/tests/`):
 - Rust (5 test files): functions, structs, enums, traits, impl blocks, async/unsafe detection, generics, lifetimes, doc comments, attributes, visibility, error types, PyO3
@@ -1470,19 +1454,21 @@ sha2.workspace = true             # for deterministic symbol/chunk IDs
 Phase 3 Remaining Execution (from 2026-02-13 baseline):
 
  ┌──────────────────────────────────────────────────────────┐
- │ PR 1 (A), PR 2 (B), and PR 3 (C) can run in parallel   │
- │ — no runtime dependencies between them                   │
+ │ PR 1 (A) is COMPLETE and merged to main.                │
+ │ PR 2 (B) and PR 3 (C) can run in parallel.              │
  └──────────────────────────────────────────────────────────┘
 
- 1. [A1]   Create zen-parser/src/test_files.rs
- 2. [A2]   Create zen-parser/src/doc_chunker.rs
- 3. [A3]   Add extract_api() top-level orchestrator (new module or in lib.rs)
- 4. [A4]   Update zen-parser/src/lib.rs (add test_files, doc_chunker, extract_api exports)
- 5. [A5]   Write tests for new modules (test_files, doc_chunker, extract_api)
-    ─── cargo test -p zen-parser passes (existing 1250 + new) ───
+ 1. [A1] ✅ Create zen-parser/src/test_files.rs (12 tests)
+ 2. [A2] ✅ Create zen-parser/src/doc_chunker.rs (35 tests)
+ 3. [A3] ✅ Add extract_api() top-level orchestrator in lib.rs (6 tests)
+ 4. [A4] ✅ Create Text extractor: dispatcher/text.rs + text/helpers.rs + text/processors.rs + text/tests/mod.rs (9 tests)
+ 5. [A5] ✅ Add DetectedLanguage::Text + .mdx extension mapping in parser.rs
+ 6. [A6] ✅ Fix 49 clippy errors across crate (new + pre-existing files)
+ 7. [A7] ✅ Address 7 CodeRabbit review findings (unicode, CRLF, overlap, edge cases)
+    ─── cargo test -p zen-parser passes (1328 tests) ── DONE (PR1 merged) ───
 
     ┌─────────────────────────────────────┐
-    │ PR 2 (B) in parallel with PR 1 (A) │
+    │ PR 2 (B) — next up                  │
     └─────────────────────────────────────┘
 
  6. [B1]   Create zen-embeddings/src/error.rs
@@ -1609,21 +1595,25 @@ cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search
 
 ### Acceptance Criteria
 
-**Already passing (as of 2026-02-13)**:
-- [x] `zen-parser` extracts rich API symbols from all 24 supported languages (20 builtin + 4 custom-lane)
+**Already passing (PR1 merged)**:
+- [x] `zen-parser` extracts rich API symbols from all 25 supported languages (20 builtin + 4 custom-lane + Text)
 - [x] All extracted `ParsedItem` structs have correct: kind, name, signature (no body), visibility, start/end lines
 - [x] Rust extractor: async/unsafe detection, generics, lifetimes, doc comments, attributes, impl block methods, enum variants, struct fields, error types
 - [x] Python extractor: classes, decorators, docstrings (Google/NumPy/Sphinx), dataclass/pydantic/protocol
 - [x] TypeScript extractor: exports, interfaces, type aliases, JSDoc, ambient declarations, namespaces
 - [x] Go extractor: exported detection, doc comments, methods, struct fields with owner metadata
 - [x] Cross-language taxonomy conformance: Constructor, Field, Property, owner_name/owner_kind
-- [x] 1250 zen-parser tests passing
+- [x] 1328 zen-parser tests passing (1324 unit + 4 doc-tests)
 - [x] `cargo build --workspace` succeeds
+- [x] `extract_api()` orchestrator dispatches to all 25 languages via file path (6 tests)
+- [x] Test file detection: `is_test_file()` and `is_test_dir()` correct for all patterns (12 tests)
+- [x] Doc chunker: ast-grep-based section splitting with ~2048 char max (~512 tokens), ~200 char overlap, heading breadcrumbs (35 tests)
+- [x] Text extractor: smart format routing for .txt files (9 tests)
+- [x] `DetectedLanguage::Text` variant + `.mdx` extension mapping
+- [x] Clippy clean across entire crate (49 errors fixed)
+- [x] CodeRabbit review: 7 findings addressed
 
-**Remaining gates**:
-- [ ] `extract_api()` orchestrator dispatches to all 24 languages via file path
-- [ ] Test file detection: `is_test_file()` and `is_test_dir()` correct for all patterns
-- [ ] Doc chunker: section-based splitting with ~512 token max
+**Remaining gates (PRs 2–4)**:
 - [ ] `zen-embeddings` generates 384-dim vectors, similar texts cluster
 - [ ] `zen-lake` stores and retrieves symbols, doc chunks in DuckDB local cache (`.zenith/lake/cache.duckdb`)
 - [ ] `SourceFileStore` stores and retrieves source files in separate DuckDB (`.zenith/source_files.duckdb`)
@@ -1683,14 +1673,17 @@ Phase 3 completion unblocks:
 
 | Area | Claim | Status | Evidence | Source |
 |------|-------|--------|----------|--------|
-| Full language extraction (24 langs) | Dedicated extractor for every supported language | **Implemented** | 24 dispatcher modules, 24 processor directories | `zen-parser/src/extractors/dispatcher/*.rs` |
+| Full language extraction (25 langs) | Dedicated extractor for every supported language | **Implemented** | 25 dispatcher modules (20 builtin + 4 custom-lane + Text), 25 processor directories | `zen-parser/src/extractors/dispatcher/*.rs` |
 | Cross-language taxonomy | Constructor/Field/Property/owner normalization | **Implemented** | Conformance tests pass | `zen-parser/src/extractors/dispatcher/conformance.rs` |
 | Types module tree | Split `types.rs` into module tree | **Implemented** | 18 files in `src/types/`, per-language `*MetadataExt` traits | `zen-parser/src/types/mod.rs` |
-| Custom language parsers | Markdown, TOML, RST, Svelte via tree-sitter | **Implemented** | `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang` | `zen-parser/src/parser.rs` |
+| Custom language parsers | Markdown, TOML, RST, Svelte via tree-sitter; Text via smart routing | **Implemented** | `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang`, `DetectedLanguage::Text` | `zen-parser/src/parser.rs` |
 | Test fixtures | Sample files for all languages | **Implemented** | 30 fixture files | `zen-parser/tests/fixtures/` |
-| Test coverage | Comprehensive extractor tests | **Implemented** | 1250 tests passing | `cargo test -p zen-parser` |
-| Two-tier fallback | ast-grep empty → regex produces items | **Design-only** | Will be in `extract_api()` orchestrator | Pending (PR 1, task A3) |
-| Doc chunking | Split by heading, max ~512 tokens | **Design-only** | Will be in `doc_chunker.rs` | Pending (PR 1, task A2) |
+| Test coverage | Comprehensive extractor tests | **Implemented** | 1328 tests passing (1324 unit + 4 doc-tests) | `cargo test -p zen-parser` |
+| extract_api() orchestrator | Unified dispatch to all 25 languages | **Implemented** (PR1) | Takes `(source, file_path)`, dispatches to all extractors, 6 tests | `zen-parser/src/lib.rs` |
+| Test file detection | `is_test_file()` / `is_test_dir()` | **Implemented** (PR1) | 12 tests covering Go/Rust/JS/TS/Python/Elixir/general patterns | `zen-parser/src/test_files.rs` |
+| Doc chunking | ast-grep section splitting, ~512 token max | **Implemented** (PR1) | ~2048 char chunks, ~200 char overlap, heading breadcrumbs, 35 tests | `zen-parser/src/doc_chunker.rs` |
+| Text extraction | Smart format routing for .txt files | **Implemented** (PR1) | Heading detection, key-value pairs, list items, paragraph splitting, 9 tests | `zen-parser/src/extractors/dispatcher/text.rs` |
+| Regex fallback | ast-grep empty → regex produces items | **Deferred** | `extract_api()` logs warning and returns empty Vec; no regex crate dependency | Decision: keep simple until real-world need arises |
 | Full pipeline | clone → walk → parse → embed → store | **Design-only** | Will be in `zen-cli/src/pipeline.rs` | Pending (PR 4, task D2) |
 
 ---
