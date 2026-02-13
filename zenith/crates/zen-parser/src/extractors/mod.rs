@@ -21,3 +21,4 @@ pub use dispatcher::ruby;
 pub use dispatcher::rust;
 pub use dispatcher::tsx;
 pub use dispatcher::typescript;
+pub use dispatcher::yaml;

@@ -127,6 +127,12 @@ mod tests {
     }
 
     #[test]
+    fn detect_yaml() {
+        assert_eq!(detect_language("config.yaml"), Some(SupportLang::Yaml));
+        assert_eq!(detect_language("config.yml"), Some(SupportLang::Yaml));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

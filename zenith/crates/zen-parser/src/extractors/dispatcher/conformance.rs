@@ -75,6 +75,7 @@ fn property_and_field_members_have_owner_metadata() {
     assert_go_member_ownership();
     assert_ruby_member_ownership();
     assert_json_member_ownership();
+    assert_yaml_member_ownership();
 }
 
 fn assert_js_member_ownership() {
@@ -247,6 +248,26 @@ fn assert_json_member_ownership() {
         .iter()
         .find(|i| i.kind == SymbolKind::Property && i.name == "routes[0].path")
         .expect("expected json array-nested property member item");
+    assert_eq!(route_path.metadata.owner_name.as_deref(), Some("routes[0]"));
+    assert_eq!(route_path.metadata.owner_kind, Some(SymbolKind::Module));
+}
+
+fn assert_yaml_member_ownership() {
+    let yaml_source = "app:\n  name: zenith\nroutes:\n  - path: /health\n";
+    let yaml_root = SupportLang::Yaml.ast_grep(yaml_source);
+    let yaml_items = super::yaml::extract(&yaml_root).expect("yaml extraction");
+
+    let app_name = yaml_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "app.name")
+        .expect("expected yaml property member item");
+    assert_eq!(app_name.metadata.owner_name.as_deref(), Some("app"));
+    assert_eq!(app_name.metadata.owner_kind, Some(SymbolKind::Module));
+
+    let route_path = yaml_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "routes[0].path")
+        .expect("expected yaml array-nested property member item");
     assert_eq!(route_path.metadata.owner_name.as_deref(), Some("routes[0]"));
     assert_eq!(route_path.metadata.owner_kind, Some(SymbolKind::Module));
 }
