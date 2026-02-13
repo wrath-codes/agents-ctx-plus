@@ -20,5 +20,10 @@ fn error_method_extracted() {
         .collect();
     assert!(!methods.is_empty());
     let m = methods[0];
-    assert_eq!(m.metadata.for_type.as_deref(), Some("*AppError"));
+    assert_eq!(m.metadata.for_type.as_deref(), Some("AppError"));
+    assert!(m
+        .metadata
+        .attributes
+        .iter()
+        .any(|attribute| attribute == "receiver:pointer"));
 }

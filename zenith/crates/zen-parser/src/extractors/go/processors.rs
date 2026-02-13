@@ -1,13 +1,59 @@
 use ast_grep_core::Node;
 
 use crate::extractors::helpers;
-use crate::types::{GoMetadataExt, ParsedItem, SymbolKind, SymbolMetadata};
+use crate::types::{GoMetadataExt, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 use super::go_helpers::{
-    extract_go_doc, extract_go_method_parameters, extract_go_parameters, extract_go_receiver,
-    extract_go_return_type, extract_go_type_parameters, extract_go_type_params_from_spec,
-    extract_interface_methods, extract_struct_fields, go_visibility,
+    canonical_go_type_text, canonical_receiver, extract_go_doc, extract_go_method_parameters,
+    extract_go_parameters, extract_go_receiver, extract_go_return_type, extract_go_type_parameters,
+    extract_go_type_params_from_spec, extract_import_specs, extract_interface_methods,
+    extract_package_name, extract_struct_fields, go_visibility,
 };
+
+pub(super) fn process_package_clause<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
+    let name = extract_package_name(node)?;
+
+    Some(ParsedItem {
+        kind: SymbolKind::Module,
+        name,
+        signature: helpers::extract_signature(node),
+        source: helpers::extract_source(node, 20),
+        doc_comment: String::new(),
+        start_line: node.start_pos().line() as u32 + 1,
+        end_line: node.end_pos().line() as u32 + 1,
+        visibility: Visibility::Public,
+        metadata: SymbolMetadata::default(),
+    })
+}
+
+pub(super) fn process_import_declaration<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedItem> {
+    extract_import_specs(node)
+        .into_iter()
+        .map(|(path, alias)| {
+            let mut metadata = SymbolMetadata::default();
+            metadata.attributes.push(format!("go:import_path:{path}"));
+            if !alias.is_empty() {
+                metadata.attributes.push(format!("go:import_alias:{alias}"));
+            }
+
+            ParsedItem {
+                kind: SymbolKind::Module,
+                name: if alias.is_empty() {
+                    path
+                } else {
+                    format!("{path} as {alias}")
+                },
+                signature: helpers::extract_signature(node),
+                source: helpers::extract_source(node, 20),
+                doc_comment: String::new(),
+                start_line: node.start_pos().line() as u32 + 1,
+                end_line: node.end_pos().line() as u32 + 1,
+                visibility: Visibility::Public,
+                metadata,
+            }
+        })
+        .collect()
+}
 
 pub(super) fn process_function<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<ParsedItem> {
     let name = node
@@ -21,11 +67,17 @@ pub(super) fn process_function<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<
     let type_params = extract_go_type_parameters(node);
 
     let mut metadata = SymbolMetadata::default();
-    metadata.set_return_type(return_type);
+    metadata.set_return_type(return_type.map(|t| canonical_go_type_text(&t)));
     for parameter in parameters {
-        metadata.push_parameter(parameter);
+        metadata.push_parameter(canonical_go_type_text(&parameter));
+        if parameter.contains("...") {
+            metadata.attributes.push("go:variadic".to_string());
+        }
     }
     metadata.set_type_parameters(type_params);
+    if let Some(tp) = &metadata.type_parameters {
+        metadata.attributes.push(format!("go:type_param:{tp}"));
+    }
 
     Some(ParsedItem {
         kind: SymbolKind::Function,
@@ -55,11 +107,24 @@ pub(super) fn process_method<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Pa
     let receiver = extract_go_receiver(node);
 
     let mut metadata = SymbolMetadata::default();
-    metadata.set_return_type(return_type);
+    metadata.set_return_type(return_type.map(|t| canonical_go_type_text(&t)));
     for parameter in parameters {
-        metadata.push_parameter(parameter);
+        metadata.push_parameter(canonical_go_type_text(&parameter));
+        if parameter.contains("...") {
+            metadata.attributes.push("go:variadic".to_string());
+        }
     }
-    metadata.set_receiver(receiver);
+    if let Some(receiver_raw) = receiver {
+        let (owner, is_pointer) = canonical_receiver(&receiver_raw);
+        metadata.set_receiver(Some(owner.clone()));
+        metadata.owner_name = Some(owner);
+        metadata.owner_kind = Some(SymbolKind::Struct);
+        if is_pointer {
+            metadata.attributes.push("receiver:pointer".to_string());
+        } else {
+            metadata.attributes.push("receiver:value".to_string());
+        }
+    }
 
     Some(ParsedItem {
         kind: SymbolKind::Method,
@@ -116,6 +181,11 @@ fn extract_type_member_items<D: ast_grep_core::Doc>(
                     let metadata = SymbolMetadata {
                         owner_name: Some(owner_name.to_string()),
                         owner_kind: Some(owner_kind),
+                        attributes: if field.chars().next().is_some_and(char::is_uppercase) {
+                            vec!["go:embedded_field".to_string()]
+                        } else {
+                            Vec::new()
+                        },
                         ..Default::default()
                     };
                     items.push(ParsedItem {
@@ -136,6 +206,8 @@ fn extract_type_member_items<D: ast_grep_core::Doc>(
                     let metadata = SymbolMetadata {
                         owner_name: Some(owner_name.to_string()),
                         owner_kind: Some(owner_kind),
+                        is_static_member: false,
+                        attributes: vec!["go:embedded_interface".to_string()],
                         ..Default::default()
                     };
                     items.push(ParsedItem {
@@ -196,6 +268,9 @@ pub(super) fn classify_type_spec<D: ast_grep_core::Doc>(
                 let mut metadata = SymbolMetadata::default();
                 metadata.set_fields(fields);
                 metadata.set_type_parameters(extract_go_type_params_from_spec(node));
+                if let Some(tp) = &metadata.type_parameters {
+                    metadata.attributes.push(format!("go:type_param:{tp}"));
+                }
                 if is_error {
                     metadata.mark_error_type();
                 }
@@ -205,6 +280,10 @@ pub(super) fn classify_type_spec<D: ast_grep_core::Doc>(
                 let methods = extract_interface_methods(&child);
                 let mut metadata = SymbolMetadata::default();
                 metadata.set_methods(methods);
+                metadata.set_type_parameters(extract_go_type_params_from_spec(node));
+                if let Some(tp) = &metadata.type_parameters {
+                    metadata.attributes.push(format!("go:type_param:{tp}"));
+                }
                 return (SymbolKind::Interface, metadata);
             }
             "function_type" => {

@@ -16,6 +16,8 @@ mod go_helpers;
 mod processors;
 
 const GO_TOP_KINDS: &[&str] = &[
+    "package_clause",
+    "import_declaration",
     "function_declaration",
     "method_declaration",
     "type_declaration",
@@ -40,6 +42,14 @@ pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
     for node in root.root().find_all(&matcher) {
         let kind = node.kind();
         match kind.as_ref() {
+            "package_clause" => {
+                if let Some(item) = processors::process_package_clause(&node) {
+                    items.push(item);
+                }
+            }
+            "import_declaration" => {
+                items.extend(processors::process_import_declaration(&node));
+            }
             "function_declaration" => {
                 if let Some(item) = processors::process_function(&node) {
                     items.push(item);

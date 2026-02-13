@@ -141,6 +141,60 @@ pub(super) fn extract_go_receiver<D: ast_grep_core::Doc>(node: &Node<D>) -> Opti
     None
 }
 
+pub(super) fn canonical_receiver(receiver: &str) -> (String, bool) {
+    let trimmed = receiver.trim();
+    let is_pointer = trimmed.starts_with('*');
+    let base = trimmed.trim_start_matches('*').trim().to_string();
+    (base, is_pointer)
+}
+
+pub(super) fn canonical_go_type_text(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+pub(super) fn extract_package_name<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
+    node.children()
+        .find(|c| c.kind().as_ref() == "package_identifier")
+        .map(|n| n.text().to_string())
+}
+
+pub(super) fn extract_import_specs<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<(String, String)> {
+    let mut specs = Vec::new();
+    for child in node.children() {
+        if child.kind().as_ref() == "import_spec" {
+            if let Some(spec) = extract_import_spec(&child) {
+                specs.push(spec);
+            }
+            continue;
+        }
+        if child.kind().as_ref() == "import_spec_list" {
+            specs.extend(
+                child
+                    .children()
+                    .filter(|c| c.kind().as_ref() == "import_spec")
+                    .filter_map(|c| extract_import_spec(&c)),
+            );
+        }
+    }
+    specs
+}
+
+fn extract_import_spec<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<(String, String)> {
+    let path = node.field("path")?.text().to_string();
+    let path = path
+        .trim_matches('"')
+        .trim_start_matches('`')
+        .trim_end_matches('`')
+        .to_string();
+
+    let alias = node
+        .field("name")
+        .map(|n| n.text().to_string())
+        .unwrap_or_default();
+
+    Some((path, alias))
+}
+
 /// Extract parameter declarations from a `parameter_list` node.
 ///
 /// Includes both regular and variadic (`...`) parameter declarations.

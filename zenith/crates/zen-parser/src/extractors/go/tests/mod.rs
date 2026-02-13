@@ -4,15 +4,21 @@ use super::*;
 pub(super) use crate::types::{SymbolKind, Visibility};
 
 mod constants_vars;
+mod dedupe_edge_cases;
+mod embedded_types_edge_cases;
 mod errors;
 mod functions_private;
 mod functions_public;
 mod generics;
 mod interfaces;
+mod metadata_contract_edge_cases;
 mod methods;
 mod misc;
+mod package_import_edge_cases;
+mod receiver_owner_edge_cases;
 mod signatures_and_docs;
 mod structs;
+mod type_canonicalization_edge_cases;
 mod types_aliases;
 mod variadics;
 
