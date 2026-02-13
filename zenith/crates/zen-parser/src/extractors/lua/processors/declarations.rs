@@ -20,6 +20,7 @@ pub(super) fn process_function_declaration<D: ast_grep_core::Doc>(
             owner_kind: Some(lua_helpers::owner_kind_for_table()),
             is_static_member: !member.is_method_syntax,
             parameters,
+            attributes: vec![format!("member_access:{}", member.access_kind)],
             ..Default::default()
         };
         lua_helpers::apply_luadoc_metadata(&doc, &mut metadata);
@@ -94,6 +95,12 @@ pub(super) fn process_variable_declaration<D: ast_grep_core::Doc>(
                 attributes: attrs,
                 ..Default::default()
             };
+            let local_attrs = metadata.attributes.clone();
+            lua_helpers::add_local_attrs(&mut metadata, &local_attrs);
+            metadata
+                .attributes
+                .push("callable_origin:assignment".to_string());
+            metadata.attributes.push(format!("callable_alias:{name}"));
             lua_helpers::apply_luadoc_metadata(&doc, &mut metadata);
             items.push(build_item(
                 node,
@@ -116,6 +123,8 @@ pub(super) fn process_variable_declaration<D: ast_grep_core::Doc>(
             attributes: attrs,
             ..Default::default()
         };
+        let local_attrs = metadata.attributes.clone();
+        lua_helpers::add_local_attrs(&mut metadata, &local_attrs);
         lua_helpers::apply_luadoc_metadata(&doc, &mut metadata);
 
         items.push(build_item(
@@ -200,11 +209,22 @@ pub(super) fn extract_table_constructor_members<D: ast_grep_core::Doc>(
             owner_name: Some(owner_name.to_string()),
             owner_kind: Some(lua_helpers::owner_kind_for_table()),
             is_static_member: true,
+            attributes: vec![format!(
+                "member_access:{}",
+                if name_field.kind().as_ref() == "string" {
+                    "bracket"
+                } else {
+                    "dot"
+                }
+            )],
             ..Default::default()
         };
 
         if kind == SymbolKind::Method {
             metadata.parameters = lua_helpers::extract_parameters(&value_field);
+            metadata
+                .attributes
+                .push("callable_origin:table_ctor".to_string());
         }
 
         items.push(build_item(

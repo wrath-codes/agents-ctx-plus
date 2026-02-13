@@ -29,12 +29,19 @@ pub(super) fn dedupe(items: Vec<ParsedItem>) -> Vec<ParsedItem> {
 
     for item in items {
         let key = format!(
-            "{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}",
             item.kind,
             item.name,
             item.signature,
             item.metadata.owner_name.as_deref().unwrap_or_default(),
-            item.start_line
+            item.start_line,
+            item.end_line,
+            item.metadata
+                .attributes
+                .iter()
+                .find(|a| a.starts_with("member_access:"))
+                .cloned()
+                .unwrap_or_default()
         );
         if seen.insert(key) {
             out.push(item);

@@ -3,8 +3,16 @@ use ast_grep_language::LanguageExt;
 use super::*;
 pub(super) use crate::types::{ParsedItem, SymbolKind, Visibility};
 
+mod callable_context_edge_cases;
+mod dedupe_edge_cases;
 mod docs_signatures_lines;
 mod functions_and_members;
+mod local_attribute_edge_cases;
+mod luadoc_edge_cases;
+mod member_access_edge_cases;
+mod ownership_edge_cases;
+mod table_constructor_edge_cases;
+mod type_enrichment_edge_cases;
 mod variables_and_attributes;
 
 fn parse_and_extract(source: &str) -> Vec<ParsedItem> {

@@ -41,6 +41,12 @@ pub(super) fn process_assignment_statement<D: ast_grep_core::Doc>(
                 parameters: value.map_or_else(Vec::new, lua_helpers::extract_parameters),
                 ..Default::default()
             };
+            if kind == SymbolKind::Function {
+                metadata
+                    .attributes
+                    .push("callable_origin:assignment".to_string());
+                metadata.attributes.push(format!("callable_alias:{name}"));
+            }
             lua_helpers::apply_luadoc_metadata(&doc, &mut metadata);
 
             items.push(build_item(
@@ -74,6 +80,7 @@ pub(super) fn process_assignment_statement<D: ast_grep_core::Doc>(
                 owner_name: Some(member.owner),
                 owner_kind: Some(lua_helpers::owner_kind_for_table()),
                 is_static_member: true,
+                attributes: vec![format!("member_access:{}", member.access_kind)],
                 ..Default::default()
             };
 
@@ -81,6 +88,9 @@ pub(super) fn process_assignment_statement<D: ast_grep_core::Doc>(
                 value.filter(|v| v.kind().as_ref() == "function_definition")
             {
                 metadata.parameters = lua_helpers::extract_parameters(function_value);
+                metadata
+                    .attributes
+                    .push("callable_origin:table_field".to_string());
             }
             lua_helpers::apply_luadoc_metadata(&doc, &mut metadata);
 

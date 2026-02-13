@@ -42,7 +42,7 @@ end
         sum.metadata
             .attributes
             .iter()
-            .any(|a| a == "luadoc:param:x number")
+            .any(|a| a == "luadoc:param:x:number")
     );
     assert!(
         sum.metadata
