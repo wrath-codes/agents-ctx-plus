@@ -117,6 +117,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_ruby() {
+        assert_eq!(detect_language("user.rb"), Some(SupportLang::Ruby));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

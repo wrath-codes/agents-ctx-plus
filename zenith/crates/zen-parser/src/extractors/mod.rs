@@ -16,6 +16,7 @@ pub use dispatcher::javascript;
 pub use dispatcher::lua;
 pub use dispatcher::php;
 pub use dispatcher::python;
+pub use dispatcher::ruby;
 pub use dispatcher::rust;
 pub use dispatcher::tsx;
 pub use dispatcher::typescript;

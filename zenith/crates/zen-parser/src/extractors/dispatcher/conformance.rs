@@ -56,6 +56,13 @@ fn constructor_normalization_across_languages() {
     assert!(php_items.iter().any(|i| {
         i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
     }));
+
+    let ruby_source = "class User; def initialize(name); @name = name; end; end";
+    let ruby_root = SupportLang::Ruby.ast_grep(ruby_source);
+    let ruby_items = super::ruby::extract(&ruby_root).expect("ruby extraction");
+    assert!(ruby_items.iter().any(|i| {
+        i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
+    }));
 }
 
 #[test]
@@ -66,6 +73,7 @@ fn property_and_field_members_have_owner_metadata() {
     assert_lua_member_ownership();
     assert_php_member_ownership();
     assert_go_member_ownership();
+    assert_ruby_member_ownership();
 }
 
 fn assert_js_member_ownership() {
@@ -198,4 +206,26 @@ fn assert_go_member_ownership() {
     assert_eq!(go_method.metadata.owner_name.as_deref(), Some("Card"));
     assert_eq!(go_method.metadata.owner_kind, Some(SymbolKind::Struct));
     assert!(!go_method.metadata.is_static_member);
+}
+
+fn assert_ruby_member_ownership() {
+    let ruby_source =
+        "class Card; attr_reader :id; def initialize(id); @id = id; end; def total; id; end; end";
+    let ruby_root = SupportLang::Ruby.ast_grep(ruby_source);
+    let ruby_items = super::ruby::extract(&ruby_root).expect("ruby extraction");
+
+    let property = ruby_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "id")
+        .expect("expected ruby property member item");
+    assert_eq!(property.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(property.metadata.owner_kind, Some(SymbolKind::Class));
+
+    let method = ruby_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Method && i.name == "total")
+        .expect("expected ruby method member item");
+    assert_eq!(method.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(method.metadata.owner_kind, Some(SymbolKind::Class));
+    assert!(!method.metadata.is_static_member);
 }
