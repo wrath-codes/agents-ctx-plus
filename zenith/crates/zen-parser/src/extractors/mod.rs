@@ -19,6 +19,7 @@ pub use dispatcher::markdown;
 pub use dispatcher::php;
 pub use dispatcher::python;
 pub use dispatcher::ruby;
+pub use dispatcher::rst;
 pub use dispatcher::rust;
 pub use dispatcher::toml;
 pub use dispatcher::tsx;

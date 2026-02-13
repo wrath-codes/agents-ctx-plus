@@ -5,6 +5,8 @@ use ast_grep_language::SupportLang;
 
 mod markdown_lang;
 pub use markdown_lang::MarkdownLang;
+mod rst_lang;
+pub use rst_lang::RstLang;
 mod toml_lang;
 pub use toml_lang::TomlLang;
 
@@ -17,11 +19,15 @@ pub type MarkdownAstTree = ast_grep_core::AstGrep<StrDoc<MarkdownLang>>;
 /// The concrete AST type returned by `parse_toml_source`.
 pub type TomlAstTree = ast_grep_core::AstGrep<StrDoc<TomlLang>>;
 
+/// The concrete AST type returned by `parse_rst_source`.
+pub type RstAstTree = ast_grep_core::AstGrep<StrDoc<RstLang>>;
+
 /// Extended language detection that includes custom languages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetectedLanguage {
     Builtin(SupportLang),
     Markdown,
+    Rst,
     Toml,
 }
 
@@ -68,6 +74,7 @@ pub fn detect_language_ext(file_path: &str) -> Option<DetectedLanguage> {
     let ext = file_path.rsplit('.').next()?;
     match ext {
         "md" | "markdown" => Some(DetectedLanguage::Markdown),
+        "rst" | "rest" => Some(DetectedLanguage::Rst),
         "toml" => Some(DetectedLanguage::Toml),
         _ => detect_language(file_path).map(DetectedLanguage::Builtin),
     }
@@ -92,6 +99,13 @@ pub fn parse_markdown_source(source: &str) -> MarkdownAstTree {
 pub fn parse_toml_source(source: &str) -> TomlAstTree {
     use ast_grep_core::tree_sitter::LanguageExt;
     TomlLang.ast_grep(source)
+}
+
+/// Parse reStructuredText source using the custom `tree-sitter-rst` language.
+#[must_use]
+pub fn parse_rst_source(source: &str) -> RstAstTree {
+    use ast_grep_core::tree_sitter::LanguageExt;
+    RstLang.ast_grep(source)
 }
 
 #[cfg(test)]
@@ -203,6 +217,18 @@ mod tests {
     }
 
     #[test]
+    fn detect_rst_extended() {
+        assert_eq!(
+            detect_language_ext("docs/spec.rst"),
+            Some(DetectedLanguage::Rst)
+        );
+        assert_eq!(
+            detect_language_ext("docs/spec.rest"),
+            Some(DetectedLanguage::Rst)
+        );
+    }
+
+    #[test]
     fn detect_builtin_via_extended() {
         assert_eq!(
             detect_language_ext("src/main.rs"),
@@ -233,6 +259,12 @@ mod tests {
     #[test]
     fn parse_toml_source_produces_document_root() {
         let tree = parse_toml_source("title = \"Zen\"\n");
+        assert_eq!(tree.root().kind().as_ref(), "document");
+    }
+
+    #[test]
+    fn parse_rst_source_produces_document_root() {
+        let tree = parse_rst_source("Title\n=====\n\nText\n");
         assert_eq!(tree.root().kind().as_ref(), "document");
     }
 }

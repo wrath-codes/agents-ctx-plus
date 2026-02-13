@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod php;
 pub mod python;
 pub mod ruby;
+pub mod rst;
 pub mod rust;
 pub mod tsx;
 pub mod typescript;
