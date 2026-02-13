@@ -15,7 +15,7 @@ pub(super) fn root_item(total_lines: u32) -> ParsedItem {
         source: None,
         doc_comment: String::new(),
         start_line: 1,
-        end_line: total_lines,
+        end_line: total_lines.max(1),
         visibility: Visibility::Public,
         metadata,
     }
@@ -62,10 +62,12 @@ pub(super) fn paragraph_item(start_line: u32, end_line: u32, first_line_text: &s
 /// Truncate a string to at most `max_len` chars, appending `...` if truncated.
 fn truncate_name(s: &str, max_len: usize) -> String {
     let trimmed = s.trim();
-    if trimmed.len() <= max_len {
+    let char_count = trimmed.chars().count();
+    if char_count <= max_len {
         trimmed.to_string()
     } else {
-        let truncated: String = trimmed.chars().take(max_len - 3).collect();
+        let take = max_len.saturating_sub(3);
+        let truncated: String = trimmed.chars().take(take).collect();
         format!("{truncated}...")
     }
 }

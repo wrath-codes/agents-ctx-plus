@@ -213,5 +213,9 @@ fn single_line_text() {
     let content = "type Foo = Bar;";
     let items = extract(content).unwrap();
     // Root + 1 paragraph
-    assert!(items.len() >= 1);
+    assert!(
+        items.len() >= 2,
+        "expected root + at least 1 paragraph, got {}",
+        items.len()
+    );
 }

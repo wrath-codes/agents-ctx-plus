@@ -14,7 +14,7 @@ pub(super) enum DetectedTextFormat {
 /// Detect whether the content of a `.txt` file is Markdown, RST, or plain text.
 ///
 /// Uses a simple scoring system: each signal adds a point to its format.
-/// The format with the most signals wins. Tie or zero signals → Plain.
+/// The format with the most signals wins. Ties favor Markdown; zero signals → Plain.
 pub(super) fn detect_text_format(content: &str) -> DetectedTextFormat {
     let mut md_score: u32 = 0;
     let mut rst_score: u32 = 0;

@@ -132,9 +132,13 @@ fn split_paragraphs<'a>(lines: &'a [&'a str]) -> Vec<(usize, usize, &'a str)> {
         }
     }
 
-    // Flush last paragraph
+    // Flush last paragraph, excluding trailing blank lines
     if let Some(start) = para_start {
-        paragraphs.push((start, lines.len().saturating_sub(1), lines[start]));
+        let mut end = lines.len().saturating_sub(1);
+        while end > start && lines[end].trim().is_empty() {
+            end -= 1;
+        }
+        paragraphs.push((start, end, lines[start]));
     }
 
     paragraphs

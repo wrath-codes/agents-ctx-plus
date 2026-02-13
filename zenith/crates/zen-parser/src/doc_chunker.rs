@@ -672,14 +672,18 @@ fn split_plain_text(content: &str) -> Vec<Section> {
 /// Split content by double blank lines (paragraph boundaries).
 /// No heading hierarchy is tracked.
 fn split_by_double_blanks(content: &str) -> Vec<Section> {
+    let line_offsets = build_line_offsets(content);
     let mut sections = Vec::new();
     let mut current_body = String::new();
     let mut current_byte_offset: usize = 0;
-    let mut byte_cursor: usize = 0;
     let mut blank_count = 0u32;
 
-    for line in content.lines() {
-        let line_byte_len = line.len() + 1;
+    for (line_idx, line) in content.lines().enumerate() {
+        let line_start = line_offsets.get(line_idx).copied().unwrap_or(0);
+        let next_line_start = line_offsets
+            .get(line_idx + 1)
+            .copied()
+            .unwrap_or(content.len());
 
         if line.trim().is_empty() {
             blank_count += 1;
@@ -690,20 +694,18 @@ fn split_by_double_blanks(content: &str) -> Vec<Section> {
                     body: std::mem::take(&mut current_body),
                     byte_offset: current_byte_offset,
                 });
-                current_byte_offset = byte_cursor + line_byte_len;
+                current_byte_offset = next_line_start;
             } else {
                 current_body.push('\n');
             }
         } else {
             if blank_count >= 2 {
-                current_byte_offset = byte_cursor;
+                current_byte_offset = line_start;
             }
             blank_count = 0;
             current_body.push_str(line);
             current_body.push('\n');
         }
-
-        byte_cursor += line_byte_len;
     }
 
     if !current_body.trim().is_empty() {
@@ -766,9 +768,10 @@ fn split_to_max_size(text: &str, base_byte_offset: usize) -> Vec<SubChunk> {
             byte_offset: base_byte_offset + byte_off,
         });
 
-        // Advance with overlap
+        // Advance with overlap, ensuring forward progress
+        let prev_start = start;
         start = split_at.saturating_sub(OVERLAP_CHARS);
-        if start <= sub_chunks.last().map_or(0, |_| start) && sub_chunks.len() > 1 {
+        if start <= prev_start {
             start = split_at;
         }
     }
