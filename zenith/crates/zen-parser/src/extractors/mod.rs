@@ -13,6 +13,7 @@ pub use dispatcher::haskell;
 pub use dispatcher::html;
 pub use dispatcher::java;
 pub use dispatcher::javascript;
+pub use dispatcher::json;
 pub use dispatcher::lua;
 pub use dispatcher::php;
 pub use dispatcher::python;

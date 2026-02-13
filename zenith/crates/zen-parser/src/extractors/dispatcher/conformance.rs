@@ -74,6 +74,7 @@ fn property_and_field_members_have_owner_metadata() {
     assert_php_member_ownership();
     assert_go_member_ownership();
     assert_ruby_member_ownership();
+    assert_json_member_ownership();
 }
 
 fn assert_js_member_ownership() {
@@ -228,4 +229,24 @@ fn assert_ruby_member_ownership() {
     assert_eq!(method.metadata.owner_name.as_deref(), Some("Card"));
     assert_eq!(method.metadata.owner_kind, Some(SymbolKind::Class));
     assert!(!method.metadata.is_static_member);
+}
+
+fn assert_json_member_ownership() {
+    let json_source = "{\"app\":{\"name\":\"zenith\"},\"routes\":[{\"path\":\"/health\"}]}";
+    let json_root = SupportLang::Json.ast_grep(json_source);
+    let json_items = super::json::extract(&json_root).expect("json extraction");
+
+    let app_name = json_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "app.name")
+        .expect("expected json property member item");
+    assert_eq!(app_name.metadata.owner_name.as_deref(), Some("app"));
+    assert_eq!(app_name.metadata.owner_kind, Some(SymbolKind::Module));
+
+    let route_path = json_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "routes[0].path")
+        .expect("expected json array-nested property member item");
+    assert_eq!(route_path.metadata.owner_name.as_deref(), Some("routes[0]"));
+    assert_eq!(route_path.metadata.owner_kind, Some(SymbolKind::Module));
 }

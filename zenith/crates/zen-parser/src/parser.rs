@@ -122,6 +122,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_json() {
+        assert_eq!(detect_language("config.json"), Some(SupportLang::Json));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);
