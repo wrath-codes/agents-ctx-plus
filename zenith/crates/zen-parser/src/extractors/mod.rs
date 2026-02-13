@@ -20,6 +20,7 @@ pub use dispatcher::php;
 pub use dispatcher::python;
 pub use dispatcher::ruby;
 pub use dispatcher::rust;
+pub use dispatcher::toml;
 pub use dispatcher::tsx;
 pub use dispatcher::typescript;
 pub use dispatcher::yaml;

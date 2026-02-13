@@ -1,0 +1,23 @@
+[dependencies]
+serde = "1.0"
+tokio = { version = "1.45", features = ["rt"], optional = true }
+my-local = { path = "../my-local", package = "my-local-lib" }
+
+[dev-dependencies]
+insta = { version = "1.39", registry = "crates-io" }
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+requests = "^2.32"
+
+[project]
+dependencies = [
+  "httpx>=0.28",
+  "pydantic>=2.10"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.9"
+]

@@ -1,0 +1,40 @@
+# scalar coverage
+title = "TOML Example"
+active = true
+answer = 42
+pi = 3.1415
+dob = 1979-05-27
+meeting_time = 07:32:00
+published_at = 1979-05-27T07:32:00Z
+
+# arrays
+numbers = [1, 2, 3]
+mixed_numbers = [1, 2.0, 3]
+matrix = [[1, 2], [3, 4]]
+
+# inline tables
+point = { x = 1, y = 2 }
+shape = { kind = "rect", size = { w = 10, h = 20 } }
+
+# quoted + escaped keys
+"a.b" = "quoted dot key"
+"unicode\u03B1" = "alpha"
+literal = '''single # hash not comment'''
+multiline = """line1
+line2 # not comment
+line3"""
+
+[owner]
+name = "zen"
+enabled = true
+
+[owner.child]
+label = "leaf"
+
+[[products]]
+name = "Hammer"
+price = 12.5
+
+[[products]]
+name = "Nail"
+price = 0.5

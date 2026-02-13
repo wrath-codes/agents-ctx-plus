@@ -1,0 +1,20 @@
+title = "Zenith"
+enabled = true
+version = 3
+point = { x = 1, y = 2 }
+
+[database]
+server = "192.168.1.1"
+ports = [8001, 8002, 8003]
+
+[servers.alpha]
+ip = "10.0.0.1"
+
+[servers.beta]
+ip = "10.0.0.2"
+
+[[products]]
+name = "Hammer"
+
+[[products]]
+name = "Nail"

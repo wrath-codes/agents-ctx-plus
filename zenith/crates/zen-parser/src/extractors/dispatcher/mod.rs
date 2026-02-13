@@ -18,6 +18,7 @@ pub mod ruby;
 pub mod rust;
 pub mod tsx;
 pub mod typescript;
+pub mod toml;
 pub mod yaml;
 
 #[cfg(test)]
