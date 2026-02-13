@@ -31,7 +31,7 @@
 | 18 | [18-catalog-visibility-spike-plan.md](./18-catalog-visibility-spike-plan.md) | Turso Catalog + Clerk Visibility spike — DuckLake-inspired catalog, three-tier search, concurrent dedup, org JWT — **DONE**: 9/9 tests |
 | 21 | [21-rlm-recursive-query-spike-plan.md](./21-rlm-recursive-query-spike-plan.md) | Recursive context query spike (RLM-style) on Arrow monorepo — AST/doc symbolic recursion, categorized ref graph, external DataFusion refs — **DONE**: 17/17 tests |
 | 22 | [22-decision-graph-rustworkx-spike-plan.md](./22-decision-graph-rustworkx-spike-plan.md) | Decision traces + context graph spike — decisions as first-class entities, precedent search, graph algorithms via rustworkx-core — **DONE**: 54/54 tests |
-| 23 | [23-phase3-parsing-indexing-plan.md](./23-phase3-parsing-indexing-plan.md) | **Phase 3 detailed plan**: zen-parser (7 rich + 1 generic extractor), zen-embeddings (fastembed wrapper), zen-lake (DuckDB storage), indexing pipeline, walker factory — 4 PRs |
+| 23 | [23-phase3-parsing-indexing-plan.md](./23-phase3-parsing-indexing-plan.md) | **Phase 3 delta plan**: zen-parser (24 dedicated extractors — substantially implemented, 1250 tests), zen-embeddings (pending), zen-lake (pending), indexing pipeline (pending) — reconciliation + 3 remaining PRs |
 
 ---
 

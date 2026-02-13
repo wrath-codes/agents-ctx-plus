@@ -1,7 +1,7 @@
 # Phase 3: Parsing & Indexing Pipeline — Implementation Plan
 
-**Version**: 2026-02-11 (rev 3 — spike 0.18–0.22 alignment review)
-**Status**: Ready to Execute
+**Version**: 2026-02-13 (rev 4 — delta plan from implemented zen-parser baseline)
+**Status**: In Progress — Stream A substantially complete, Streams B/C/D pending
 **Depends on**: Phase 1 (all tasks DONE — 127 tests), Phase 0 (spikes 0.4, 0.5, 0.6, 0.8, 0.14, 0.18, 0.19, 0.20, 0.21)
 **Produces**: Milestone 3 — `cargo test -p zen-parser -p zen-embeddings -p zen-lake` passes, full clone→parse→embed→store pipeline works end-to-end
 
@@ -12,10 +12,10 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Current State](#2-current-state)
+2. [Current State (as of 2026-02-13)](#2-current-state-as-of-2026-02-13)
 3. [Key Decisions](#3-key-decisions)
 4. [Architecture: Three-Crate Split](#4-architecture-three-crate-split)
-5. [PR 1 — Stream A: zen-parser](#5-pr-1--stream-a-zen-parser)
+5. [PR 1 — Stream A: zen-parser (Reconciliation)](#5-pr-1--stream-a-zen-parser-reconciliation)
 6. [PR 2 — Stream B: zen-embeddings](#6-pr-2--stream-b-zen-embeddings)
 7. [PR 3 — Stream C: zen-lake Storage](#7-pr-3--stream-c-zen-lake-storage)
 8. [PR 4 — Stream D: Indexing Pipeline + Walker](#8-pr-4--stream-d-indexing-pipeline--walker)
@@ -24,49 +24,97 @@
 11. [Milestone 3 Validation](#11-milestone-3-validation)
 12. [Validation Traceability Matrix](#12-validation-traceability-matrix)
 13. [Phase Boundary — What Phase 8/9 Replaces](#13-phase-boundary--what-phase-89-replaces)
+14. [Mismatch Log — Plan vs. Implementation](#14-mismatch-log--plan-vs-implementation)
 
 ---
 
 ## 1. Overview
 
-**Goal**: ast-grep-based extraction across all 26 built-in languages (rich extractors for 7, generic for 19), fastembed integration, **local DuckDB cache storage** (temporary — production storage is Lance on R2 + Turso catalog in Phase 8/9), source file caching for `znt grep`, and the local indexing pipeline (clone → walk → parse → extract → embed → store to DuckDB cache).
+**Goal**: ast-grep-based extraction across all supported languages, fastembed integration, **local DuckDB cache storage** (temporary — production storage is Lance on R2 + Turso catalog in Phase 8/9), source file caching for `znt grep`, and the local indexing pipeline (clone → walk → parse → extract → embed → store to DuckDB cache).
 
-**Crates touched**:
-- `zen-parser` (heavy — all new production code, ~3000–4000 LOC)
-- `zen-embeddings` (light — ~200 LOC production, thin wrapper)
-- `zen-lake` (medium — ~1000–1500 LOC production, DuckDB local cache tables + appender)
-- `zen-search` (light — ~200 LOC, walker factory only)
-- `zen-cli` (light — pipeline orchestration module, ~300 LOC)
+**Crate status summary**:
+- `zen-parser` — **substantially implemented**: 24 language dispatchers (20 builtin + 4 custom-lane), 399 source files in extractors tree, 1250 tests passing, types module tree with per-language `*MetadataExt` traits, 30 test fixture files
+- `zen-embeddings` — **stub only**: spike module behind `#[cfg(test)]`, no production code
+- `zen-lake` — **stub only**: 4 spike modules behind `#[cfg(test)]`, no production code
+- `zen-search` — **stub only**: 3 spike modules behind `#[cfg(test)]`, no `walk.rs` yet
+- `zen-cli` — **no pipeline module**: `pipeline.rs` does not exist yet
 
-**Dependency changes**:
+**Remaining dependency changes**:
 - `zen-embeddings`: promote `dirs` from `[dev-dependencies]` to `[dependencies]` (for `~/.zenith/cache/fastembed/` path)
 - `zen-search`: add `zen-parser.workspace = true` (for `is_test_file/is_test_dir` in walker)
 - Workspace: add `sha2` if not present (for deterministic symbol IDs in pipeline)
 
-**Estimated deliverables**: ~30 new files, ~5000–6000 LOC production code, ~3000 LOC tests
+**Remaining estimated deliverables**: ~15 new files, ~2000 LOC production code (embeddings + lake + walker + pipeline + parser gaps), ~500 LOC tests (integration)
 
-**PR strategy**: 4 PRs by stream. Each PR compiles and tests pass before merging.
+**PR strategy**: 4 PRs by stream. Stream A is reconciliation/cleanup. Streams B, C, D are new implementation.
 
-| PR | Stream | Contents |
-|----|--------|----------|
-| PR 1 | A: zen-parser | Types, extractors (7 rich + 1 generic), test detection, orchestrator |
-| PR 2 | B: zen-embeddings | EmbeddingEngine, error type |
-| PR 3 | C: zen-lake | DuckDB local cache schema, ZenLake struct, store_symbols/store_doc_chunks |
-| PR 3b | C2: source_files | Separate DuckDB for source file caching (`.zenith/source_files.duckdb`) |
-| PR 4 | D: Pipeline + Walker | Walk factory (zen-search), indexing pipeline (**zen-cli**), doc chunker |
+| PR | Stream | Contents | Status |
+|----|--------|----------|--------|
+| PR 1 | A: zen-parser (reconciliation) | `extract_api()` orchestrator, `test_files.rs`, `doc_chunker.rs` | Remaining gaps |
+| PR 2 | B: zen-embeddings | EmbeddingEngine, error type | Not started |
+| PR 3 | C: zen-lake | DuckDB local cache schema, ZenLake struct, store_symbols/store_doc_chunks | Not started |
+| PR 3b | C2: source_files | Separate DuckDB for source file caching (`.zenith/source_files.duckdb`) | Not started |
+| PR 4 | D: Pipeline + Walker | Walk factory (zen-search), indexing pipeline (**zen-cli**), doc chunker integration | Not started |
 
 ---
 
-## 2. Current State
+## 2. Current State (as of 2026-02-13)
 
-| Component | Status | What Exists |
-|-----------|--------|-------------|
-| **zen-parser** | Stub | `spike_ast_grep.rs` (19 tests, behind `#[cfg(test)]`). No production modules. Cargo.toml has all deps. |
-| **zen-embeddings** | Stub | `spike_fastembed.rs` (behind `#[cfg(test)]`). No production modules. Cargo.toml has all deps. |
-| **zen-lake** | Stub | 4 spike modules (duckdb, duckdb_vss, r2_parquet, native_lance — behind `#[cfg(test)]`). No production modules. Cargo.toml has all deps. Note: `lancedb`, `arrow-*`, `serde_arrow` are in `[dev-dependencies]` only — Phase 3 doesn't need them (lancedb writes are Phase 8/9). |
-| **zen-search** | Stub | 3 spike modules (grep, recursive_query, graph_algorithms — behind `#[cfg(test)]`). No production modules. Cargo.toml has `grep` + `ignore` in deps. |
-| **zen-core** | Phase 1 DONE | 15 entity structs, 14 enums, `ParsedItem`-compatible types live in design docs but NOT in zen-core. `SymbolKind`, `Visibility` not yet in zen-core (defined in zen-parser). |
-| **Fixtures** | NOT STARTED | No `tests/fixtures/` directory with sample source files. |
+### zen-parser — Substantially Implemented
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **Language dispatchers** | 24/24 | All 20 builtin `SupportLang` + 4 custom-lane (Markdown, TOML, RST, Svelte). Every dispatcher has `pub fn extract()` in `src/extractors/dispatcher/<lang>.rs`. |
+| **Extractor processors** | 24/24 | Each language has a `<lang>/processors/` directory or `processors.rs` file. C has 5 processor files, C++ has 5, PHP has 6. |
+| **Extractor tests** | 24/24 | Every language directory has a `tests/` subdirectory. Total: **1250 tests passing**. |
+| **Test fixtures** | 30 files | `tests/fixtures/` contains sample files for: `.rs`, `.py`, `.ts`, `.tsx`, `.js`, `.go`, `.ex`, `.c`, `.cpp`, `.cs`, `.css`, `.hs`, `.html`, `.java`, `.json`, `.lua`, `.php`, `.rb`, `.sh`, `.yaml`, `.md`, `.toml`, `.rst`, `.svelte` plus edge cases. |
+| **Types** | Refactored | `src/types/` module tree: `ParsedItem`, `SymbolKind` (19 variants), `Visibility`, `SymbolMetadata`, `DocSections`. Per-language `*MetadataExt` traits in `symbol_metadata/`. TYPES_REFACTOR_PLAN.md Sessions 1+2 complete. |
+| **Conformance** | Validated | `dispatcher/conformance.rs`: cross-language Constructor, Property, Field, owner_name/owner_kind taxonomy. |
+| **Custom parsers** | Working | `parser.rs`: `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang` with `detect_language_ext()`. |
+| **Shared helpers** | Working | `extractors/helpers.rs`: `extract_source()`, `extract_signature()`. |
+| **`extract_api()`** | **MISSING** | No top-level orchestrator. Callers must manually dispatch. |
+| **`test_files.rs`** | **MISSING** | Test file/dir detection not implemented. |
+| **`doc_chunker.rs`** | **MISSING** | Document section chunking not implemented. |
+
+**Dispatcher signature families** (design note for `extract_api()` orchestrator):
+- `extract(root)` — 16 dispatchers (csharp, css, elixir, go, haskell, html, java, javascript, json, lua, markdown, php, python, ruby, svelte, toml, rst, yaml)
+- `extract(root, source: &str)` — 4 dispatchers (bash, c, cpp, rust)
+- `extract(root, lang: SupportLang)` — 2 dispatchers (typescript, tsx)
+
+The custom-lane dispatchers (markdown, rst, svelte, toml) use generic `Doc` bounds (no `Lang = SupportLang`), requiring separate parse functions (`parse_markdown_source()` etc.) from `parser.rs`.
+
+### zen-embeddings — Stub Only
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **Production code** | None | `lib.rs` only contains `#[cfg(test)] mod spike_fastembed;` |
+| **Spike** | Validated | `spike_fastembed.rs` confirms `AllMiniLML6V2` 384-dim, determinism, batch, `&mut self` API |
+| **Cargo.toml** | Ready | `fastembed`, `dirs` (dev-only), `thiserror`, `tracing` already declared |
+
+### zen-lake — Stub Only
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **Production code** | None | `lib.rs` only contains 4 `#[cfg(test)] mod spike_*;` declarations |
+| **Spikes** | Validated | `spike_duckdb.rs` (CRUD, Appender, FLOAT[], JSON, persistence), `spike_duckdb_vss.rs`, `spike_r2_parquet.rs`, `spike_native_lance.rs` |
+| **Cargo.toml** | Ready | `duckdb` (bundled), `lancedb`/`arrow-*`/`serde_arrow` in dev-deps only |
+
+### zen-search — Stub Only
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **Production code** | None | 3 spike modules behind `#[cfg(test)]` |
+| **`walk.rs`** | Not started | `grep` + `ignore` crate deps are in Cargo.toml |
+
+### zen-cli — No Pipeline
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **`pipeline.rs`** | Not started | Orchestration module not created |
+
+### zen-core — Phase 1 DONE
+
+Unchanged. 15 entity structs, 14 enums. `ParsedItem`/`SymbolKind`/`Visibility` live in zen-parser (not zen-core).
 
 All extraction patterns exist in validated spike code (`spike_ast_grep.rs`, 19 tests) and design docs (`05-crate-designs.md` §7). They need to be promoted to production modules.
 
@@ -198,784 +246,95 @@ zen-core (types)
 
 ### Module Structure After Phase 3
 
+> **Updated 2026-02-13**: Reflects actual zen-parser implementation + remaining stubs.
+
 ```
-zen-parser/src/
-├── lib.rs               # Public API: parse_file(), extract_api(), detect_language()
-├── error.rs             # ParserError enum
-├── types.rs             # ParsedItem, SymbolMetadata, DocSections, SymbolKind, Visibility
-├── parser.rs            # ast-grep wrapper, SupportLang mapping, language detection
-├── test_files.rs        # is_test_file(), is_test_dir()
-├── doc_chunker.rs       # split_into_chunks() for README/docs
+zen-parser/src/                          # ── IMPLEMENTED (except items marked PENDING) ──
+├── lib.rs                               # Public API: detect_language(), parse_source(), extract_api() [PENDING]
+├── error.rs                             # ParserError enum
+├── parser.rs                            # ast-grep wrapper, SupportLang mapping, custom language parsers
+│   ├── markdown_lang.rs                 # MarkdownLang (tree-sitter-md)
+│   ├── toml_lang.rs                     # TomlLang (tree-sitter-toml-ng)
+│   ├── rst_lang.rs                      # RstLang (tree-sitter-rst)
+│   └── svelte_lang.rs                   # SvelteLang (tree-sitter-svelte-next)
+├── types/                               # Module tree (TYPES_REFACTOR_PLAN Sessions 1+2 complete)
+│   ├── mod.rs                           # Re-exports: ParsedItem, SymbolKind, Visibility, SymbolMetadata, DocSections
+│   ├── parsed_item.rs                   # ParsedItem struct
+│   ├── symbol_kind.rs                   # SymbolKind enum (19 variants) + Display
+│   ├── visibility.rs                    # Visibility enum + Display
+│   ├── doc_sections.rs                  # DocSections struct
+│   └── symbol_metadata/                 # SymbolMetadata + per-language ext traits
+│       ├── mod.rs                       # SymbolMetadata struct (~50+ fields)
+│       ├── common.rs                    # CommonMetadataExt trait
+│       ├── bash.rs .. typescript.rs     # Per-language *MetadataExt traits (13 files)
+├── test_files.rs                        # [PENDING] is_test_file(), is_test_dir()
+├── doc_chunker.rs                       # [PENDING] split_into_chunks() for README/docs
+├── spike_ast_grep.rs                    # #[cfg(test)] — spike 0.8 validation
 └── extractors/
-    ├── mod.rs           # Extraction orchestrator (two-tier fallback)
-    ├── generic.rs       # Generic kind-based extractor (all 26 languages)
-    ├── rust.rs          # Rust rich extractor
-    ├── python.rs        # Python rich extractor
-    ├── typescript.rs    # TypeScript/JavaScript/TSX rich extractor
-    ├── go.rs            # Go rich extractor
-    ├── elixir.rs        # Elixir rich extractor
-    └── helpers.rs       # Shared extraction helpers (signature, doc comments, visibility)
+    ├── mod.rs                           # Re-exports all dispatcher modules
+    ├── helpers.rs                        # Shared: extract_source(), extract_signature()
+    └── dispatcher/
+        ├── mod.rs                       # pub mod for all 24 languages + #[cfg(test)] conformance
+        ├── rust.rs                      # Rust dispatcher → rust/processors/ via #[path]
+        ├── python.rs                    # Python dispatcher → python/processors/ via #[path]
+        ├── typescript.rs                # TypeScript dispatcher (root, lang)
+        ├── tsx.rs                       # TSX dispatcher (root, lang) — React detection
+        ├── javascript.rs                # JavaScript dispatcher (root)
+        ├── c.rs                         # C dispatcher (root, source)
+        ├── cpp.rs                       # C++ dispatcher (root, source)
+        ├── ... (16 more)               # All other languages
+        └── conformance.rs               # #[cfg(test)] cross-language taxonomy tests
+    # Each language also has: extractors/<lang>/processors/, helpers.rs, tests/
+    # These are #[path]-imported by the dispatcher, not mod-declared.
 
-zen-embeddings/src/
-├── lib.rs               # EmbeddingEngine struct
-└── error.rs             # EmbeddingError enum
+zen-embeddings/src/                      # ── STUB (pending PR 2) ──
+├── lib.rs                               # [PENDING] EmbeddingEngine struct
+├── error.rs                             # [PENDING] EmbeddingError enum
+└── spike_fastembed.rs                   # #[cfg(test)] — spike 0.6 validation
 
-zen-lake/src/
-├── lib.rs               # ZenLake struct, open_local()
-├── error.rs             # LakeError enum
-├── schemas.rs           # DuckDB table DDL constants (LOCAL CACHE ONLY), ApiSymbol/DocChunk structs
-├── store.rs             # store_symbols(), store_doc_chunks(), register_package()
-└── source_files.rs      # SourceFileStore: separate DuckDB (.zenith/source_files.duckdb)
+zen-lake/src/                            # ── STUB (pending PR 3) ──
+├── lib.rs                               # [PENDING] ZenLake struct, open_local()
+├── error.rs                             # [PENDING] LakeError enum
+├── schemas.rs                           # [PENDING] DuckDB table DDL (LOCAL CACHE ONLY)
+├── store.rs                             # [PENDING] store_symbols(), store_doc_chunks()
+├── source_files.rs                      # [PENDING] SourceFileStore (.zenith/source_files.duckdb)
+└── spike_*.rs                           # #[cfg(test)] — spikes 0.4, 0.5, 0.18, 0.19
 
-zen-search/src/
-├── lib.rs               # (existing) + re-export walk module
-└── walk.rs              # WalkMode, build_walker() — ignore crate integration
+zen-search/src/                          # ── STUB (pending PR 4) ──
+├── lib.rs                               # [PENDING] + re-export walk module
+├── walk.rs                              # [PENDING] WalkMode, build_walker()
+└── spike_*.rs                           # #[cfg(test)] — spikes 0.14, 0.21, 0.22
 
-zen-cli/src/
-└── pipeline.rs          # IndexingPipeline: walk → parse → embed → store (orchestration only)
+zen-cli/src/                             # ── PENDING PR 4 ──
+└── pipeline.rs                          # [PENDING] IndexingPipeline orchestration
 ```
 
 ---
 
-## 5. PR 1 — Stream A: zen-parser
-
-The largest and most complex PR. All extraction logic lives here.
-
-### A1. `src/error.rs` — ParserError
-
-```rust
-#[derive(Debug, thiserror::Error)]
-pub enum ParserError {
-    #[error("Parse failed for {language}: {message}")]
-    ParseFailed {
-        language: String,
-        message: String,
-    },
-
-    #[error("Language not supported: {0}")]
-    UnsupportedLanguage(String),
-
-    #[error("Extraction failed: {0}")]
-    ExtractionFailed(String),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-}
-```
-
-### A2. `src/types.rs` — ParsedItem, SymbolMetadata, DocSections
-
-Core data structures for extracted symbols. Ported from `05-crate-designs.md` §7.
-
-```rust
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParsedItem {
-    pub kind: SymbolKind,
-    pub name: String,
-    pub signature: String,
-    pub source: Option<String>,     // Full source up to 50 lines
-    pub doc_comment: String,
-    pub start_line: u32,
-    pub end_line: u32,
-    pub visibility: Visibility,
-    pub metadata: SymbolMetadata,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SymbolKind {
-    Function,
-    Method,
-    Struct,
-    Enum,
-    Trait,
-    Interface,
-    Class,
-    TypeAlias,
-    Const,
-    Static,
-    Macro,
-    Module,
-    Union,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Visibility {
-    Public,
-    PublicCrate,
-    Private,
-    Export,
-    Protected,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SymbolMetadata {
-    // Common
-    pub is_async: bool,
-    pub is_unsafe: bool,
-    pub return_type: Option<String>,
-    pub generics: Option<String>,
-    pub attributes: Vec<String>,
-    pub parameters: Vec<String>,
-
-    // Rust-specific
-    pub lifetimes: Vec<String>,
-    pub where_clause: Option<String>,
-    pub trait_name: Option<String>,
-    pub for_type: Option<String>,
-    pub associated_types: Vec<String>,
-    pub abi: Option<String>,
-    pub is_pyo3: bool,
-
-    // Enum/Struct members
-    pub variants: Vec<String>,
-    pub fields: Vec<String>,
-    pub methods: Vec<String>,
-
-    // Python-specific
-    pub is_generator: bool,
-    pub is_property: bool,
-    pub is_classmethod: bool,
-    pub is_staticmethod: bool,
-    pub is_dataclass: bool,
-    pub is_pydantic: bool,
-    pub is_protocol: bool,
-    pub is_enum: bool,
-    pub base_classes: Vec<String>,
-    pub decorators: Vec<String>,
-
-    // TypeScript-specific
-    pub is_exported: bool,
-    pub is_default_export: bool,
-    pub type_parameters: Option<String>,
-    pub implements: Vec<String>,
-
-    // Documentation
-    pub doc_sections: DocSections,
-
-    // Error detection
-    pub is_error_type: bool,
-    pub returns_result: bool,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DocSections {
-    pub errors: Option<String>,
-    pub panics: Option<String>,
-    pub safety: Option<String>,
-    pub examples: Option<String>,
-    pub args: HashMap<String, String>,
-    pub returns: Option<String>,
-    pub raises: HashMap<String, String>,
-    pub yields: Option<String>,
-    pub notes: Option<String>,
-}
-```
-
-**Source**: `05-crate-designs.md` §7, lines 1028–1119.
-
-### A3. `src/parser.rs` — ast-grep Wrapper + Language Detection
-
-Maps file extensions to `ast_grep_language::SupportLang`, wraps `SupportLang::ast_grep()`.
-
-```rust
-use ast_grep_language::SupportLang;
-
-pub fn detect_language(file_path: &str) -> Option<SupportLang> {
-    let ext = file_path.rsplit('.').next()?;
-    match ext {
-        "rs" => Some(SupportLang::Rust),
-        "py" => Some(SupportLang::Python),
-        "ts" => Some(SupportLang::TypeScript),
-        "tsx" => Some(SupportLang::Tsx),
-        "js" | "mjs" | "cjs" => Some(SupportLang::JavaScript),
-        "go" => Some(SupportLang::Go),
-        "ex" | "exs" => Some(SupportLang::Elixir),
-        "c" | "h" => Some(SupportLang::C),
-        "cpp" | "cc" | "cxx" | "hpp" | "hxx" => Some(SupportLang::Cpp),
-        "cs" => Some(SupportLang::CSharp),
-        "css" => Some(SupportLang::Css),
-        "hs" => Some(SupportLang::Haskell),
-        "tf" | "hcl" => Some(SupportLang::Hcl),
-        "html" | "htm" => Some(SupportLang::Html),
-        "java" => Some(SupportLang::Java),
-        "json" => Some(SupportLang::Json),
-        "kt" | "kts" => Some(SupportLang::Kotlin),
-        "lua" => Some(SupportLang::Lua),
-        "nix" => Some(SupportLang::Nix),
-        "php" => Some(SupportLang::Php),
-        "rb" => Some(SupportLang::Ruby),
-        "scala" | "sc" => Some(SupportLang::Scala),
-        "sol" => Some(SupportLang::Solidity),
-        "swift" => Some(SupportLang::Swift),
-        "sh" | "bash" | "zsh" => Some(SupportLang::Bash),
-        "yaml" | "yml" => Some(SupportLang::Yaml),
-        _ => None,
-    }
-}
-
-pub fn parse_source(source: &str, lang: SupportLang) -> ast_grep_core::AstGrep<ast_grep_language::SupportLang> {
-    lang.ast_grep(source)
-}
-```
-
-### A4. `src/extractors/helpers.rs` — Shared Extraction Helpers
-
-Shared functions used by all rich extractors:
-
-```rust
-use ast_grep_core::Node;
-
-/// Extract signature: everything before first `{` or `;`, whitespace-normalized.
-///
-/// **Spike 0.21 finding**: Normalize whitespace (collapse newlines/runs to single space)
-/// for deterministic signatures regardless of source formatting. This matters for
-/// embedding stability and deterministic symbol IDs.
-pub fn extract_signature<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
-    let text = node.text().to_string();
-    let brace = text.find('{');
-    let semi = text.find(';');
-    let end = match (brace, semi) {
-        (Some(b), Some(s)) => b.min(s),
-        (Some(b), None) => b,
-        (None, Some(s)) => s,
-        (None, None) => text.len(),
-    };
-    let sig = text[..end].trim();
-    sig.replace('\n', " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// Extract full source up to `max_lines` lines.
-pub fn extract_source<D: ast_grep_core::Doc>(node: &Node<D>, max_lines: usize) -> Option<String> {
-    let text = node.text().to_string();
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() <= max_lines {
-        Some(text)
-    } else {
-        let truncated: String = lines[..max_lines].join("\n");
-        Some(format!("{truncated}\n    // ... ({} more lines)", lines.len() - max_lines))
-    }
-}
-
-/// Extract doc comments by walking backward through siblings.
-///
-/// **Primary**: Walks `prev()` siblings collecting `///` and `//!` comments (Rust),
-/// skipping attribute_item nodes. Stops at non-comment, non-attribute siblings.
-/// **Spike 0.8 validated**: `prev()` sibling walking for doc comments works.
-///
-/// **Fallback** (spike 0.21 finding): If AST sibling walk yields empty, try
-/// line-based scan above `start_pos().line()` for `///`/`//!` lines. This is
-/// more robust on large repos where AST layout quirks may cause sibling walk
-/// to miss comments (e.g., blank lines between doc and item).
-pub fn extract_doc_comments_rust<D: ast_grep_core::Doc>(node: &Node<D>, source: &str) -> String {
-    // Primary: AST sibling walk (fast, structured)
-    let mut comments = Vec::new();
-    let mut current = node.prev();
-    while let Some(sibling) = current {
-        let kind = sibling.kind();
-        if kind.as_ref() == "line_comment" {
-            let text = sibling.text().to_string();
-            if text.starts_with("///") || text.starts_with("//!") {
-                comments.push(
-                    text.trim_start_matches("///")
-                        .trim_start_matches("//!")
-                        .trim()
-                        .to_string(),
-                );
-            } else {
-                break;
-            }
-        } else if kind.as_ref() == "attribute_item" {
-            // Skip attributes, keep looking for docs
-        } else {
-            break;
-        }
-        current = sibling.prev();
-    }
-    if !comments.is_empty() {
-        comments.reverse();
-        return comments.join("\n");
-    }
-
-    // Fallback: line-based scan (spike 0.21 approach)
-    let lines: Vec<&str> = source.lines().collect();
-    let start_line = node.start_pos().line(); // zero-based
-    if start_line == 0 || lines.is_empty() {
-        return String::new();
-    }
-    let mut idx = start_line.saturating_sub(1);
-    // Skip blank lines between doc and item
-    while idx > 0 && lines.get(idx).map_or(false, |l| l.trim().is_empty()) {
-        idx -= 1;
-    }
-    let mut docs = Vec::new();
-    loop {
-        let line = lines.get(idx).map(|l| l.trim_start()).unwrap_or("");
-        if line.starts_with("///") {
-            docs.push(line.trim_start_matches("///").trim().to_string());
-        } else if line.starts_with("//!") {
-            docs.push(line.trim_start_matches("//!").trim().to_string());
-        } else {
-            break;
-        }
-        if idx == 0 { break; }
-        idx -= 1;
-    }
-    docs.reverse();
-    docs.join("\n")
-}
-
-/// Extract attributes from preceding siblings.
-///
-/// Walks backward collecting `#[attr]` items until a non-attribute,
-/// non-comment sibling is found.
-pub fn extract_attributes<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
-    let mut attrs = Vec::new();
-    let mut current = node.prev();
-    while let Some(sibling) = current {
-        let kind = sibling.kind();
-        if kind.as_ref() == "attribute_item" {
-            let text = sibling.text().to_string();
-            let inner = text
-                .trim_start_matches("#[")
-                .trim_end_matches(']')
-                .to_string();
-            attrs.push(inner);
-        } else if kind.as_ref() == "line_comment" {
-            // Skip comments between attributes
-        } else {
-            break;
-        }
-        current = sibling.prev();
-    }
-    attrs.reverse();
-    attrs
-}
-
-/// Detect visibility from node text or children.
-///
-/// Rust: checks for `pub`, `pub(crate)`, `pub(super)`.
-/// TypeScript/JS: checks for `export` keyword.
-/// Python: checks for `_` prefix convention.
-pub fn extract_visibility_rust<D: ast_grep_core::Doc>(node: &Node<D>) -> crate::types::Visibility {
-    if let Some(vis_node) = node.field("visibility") {
-        let text = vis_node.text().to_string();
-        if text.contains("pub(crate)") {
-            crate::types::Visibility::PublicCrate
-        } else if text.starts_with("pub") {
-            crate::types::Visibility::Public
-        } else {
-            crate::types::Visibility::Private
-        }
-    } else {
-        crate::types::Visibility::Private
-    }
-}
-
-/// Extract return type from function node.
-pub fn extract_return_type<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    node.field("return_type")
-        .map(|rt| rt.text().to_string().trim_start_matches("->").trim().to_string())
-}
-
-/// Extract generic parameters from node.
-pub fn extract_generics<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    node.field("type_parameters")
-        .map(|tp| tp.text().to_string())
-}
-
-/// Extract where clause from function/impl/struct node.
-pub fn extract_where_clause<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<String> {
-    for child in node.children() {
-        if child.kind().as_ref() == "where_clause" {
-            return Some(child.text().to_string());
-        }
-    }
-    None
-}
-
-/// Extract lifetimes from generics text.
-pub fn extract_lifetimes(generics: &Option<String>) -> Vec<String> {
-    match generics {
-        Some(g) => {
-            let mut lifetimes = Vec::new();
-            for part in g.split(',') {
-                let part = part.trim();
-                if part.starts_with('\'') {
-                    let lt = part.split(|c: char| !c.is_alphanumeric() && c != '\'')
-                        .next()
-                        .unwrap_or(part);
-                    lifetimes.push(lt.to_string());
-                }
-            }
-            lifetimes
-        }
-        None => Vec::new(),
-    }
-}
-
-/// Check if a function returns Result.
-pub fn returns_result(return_type: &Option<String>) -> bool {
-    return_type
-        .as_deref()
-        .is_some_and(|rt| rt.contains("Result"))
-}
-
-/// Check if a type name indicates an error type.
-pub fn is_error_type_by_name(name: &str) -> bool {
-    name.ends_with("Error") || name.ends_with("Err")
-}
-
-/// Check if an item has PyO3 attributes.
-pub fn is_pyo3(attrs: &[String]) -> bool {
-    attrs.iter().any(|a| a.starts_with("pyfunction") || a.starts_with("pyclass") || a.starts_with("pymethods"))
-}
-
-/// Detect async/unsafe via function_modifiers child node.
-///
-/// **Spike 0.8 finding (b)**: `async`/`unsafe` appear as children
-/// of `function_modifiers` node, not as direct children of the function.
-pub fn detect_modifiers<D: ast_grep_core::Doc>(node: &Node<D>) -> (bool, bool) {
-    let mut is_async = false;
-    let mut is_unsafe = false;
-    for child in node.children() {
-        let kind = child.kind();
-        let k = kind.as_ref();
-        if k == "function_modifiers" {
-            let text = child.text().to_string();
-            is_async = text.contains("async");
-            is_unsafe = text.contains("unsafe");
-            break;
-        }
-        // Some languages put async/unsafe as direct children
-        if k == "async" {
-            is_async = true;
-        }
-        if k == "unsafe" {
-            is_unsafe = true;
-        }
-    }
-    is_async = is_async || node.text().starts_with("async ");
-    is_unsafe = is_unsafe || node.text().starts_with("unsafe ");
-    (is_async, is_unsafe)
-}
-```
-
-### A5. `src/extractors/rust.rs` — Rust Rich Extractor (task 3.3)
-
-Port from `05-crate-designs.md` §7, lines 1166–1303. Uses KindMatcher-first strategy (decision 3.1).
-
-**Extraction targets** (13 node kinds):
-- `function_item` → Function
-- `struct_item` → Struct (fields, derives)
-- `enum_item` → Enum (variants)
-- `trait_item` → Trait (methods, associated types)
-- `impl_item` → Methods (discriminate inherent vs trait impl via `field("trait")`)
-- `type_item` → TypeAlias
-- `mod_item` → Module
-- `const_item` → Const
-- `static_item` → Static
-- `macro_definition` → Macro
-- `union_item` → Union
-
-**Key patterns validated in spike 0.8**:
-- `field("name")` for symbol names
-- `field("parameters")` for function params
-- `field("return_type")` for return types
-- `field("body")` for bodies (excluded from signatures)
-- `field("trait")` on `impl_item` to discriminate inherent vs trait impl
-- `children()` for enum variants, struct fields, trait methods
-- `prev()` sibling walking for doc comments and attributes
-- `start_pos().line()` is zero-based — add 1 for human-readable lines
-
-**Special handling**:
-- `impl_item` with `field("trait")` → trait_name/for_type extracted; methods get `SymbolKind::Method` with `trait_name` in metadata
-- `impl_item` without `field("trait")` → inherent impl; methods get `SymbolKind::Method` with `for_type` only
-- Enum variants extracted via `children()` filtering for `enum_variant`
-- Struct fields extracted via `children()` filtering for `field_declaration`
-- `#[derive()]` attributes parsed for error type detection
-- Doc section parsing: `# Errors`, `# Panics`, `# Safety`, `# Examples`
-
-```rust
-use ast_grep_core::{matcher::KindMatcher, ops::Any};
-use ast_grep_language::SupportLang;
-
-const RUST_ITEM_KINDS: &[&str] = &[
-    "function_item", "struct_item", "enum_item", "trait_item",
-    "impl_item", "type_item", "mod_item", "const_item",
-    "static_item", "macro_definition", "union_item",
-];
-
-pub fn extract<D: ast_grep_core::Doc<Lang = SupportLang>>(
-    root: &ast_grep_core::AstGrep<D>,
-) -> Result<Vec<crate::types::ParsedItem>, crate::error::ParserError> {
-    let mut items = Vec::new();
-    let matchers: Vec<KindMatcher<SupportLang>> = RUST_ITEM_KINDS
-        .iter()
-        .map(|k| KindMatcher::new(k, SupportLang::Rust))
-        .collect();
-    let matcher = Any::new(matchers);
-
-    for node in root.root().find_all(&matcher) {
-        if let Some(item) = process_rust_node(&node) {
-            items.push(item);
-        }
-    }
-    Ok(items)
-}
-```
-
-**impl_item processing** — extracts each method as a separate `ParsedItem` with `SymbolKind::Method`:
-
-```rust
-fn process_impl_item<D: ast_grep_core::Doc>(
-    node: &ast_grep_core::Node<D>,
-) -> Vec<crate::types::ParsedItem> {
-    let trait_name = node.field("trait").map(|n| n.text().to_string());
-    let for_type = node.field("type").map(|n| n.text().to_string());
-
-    let mut methods = Vec::new();
-    let body = match node.field("body") {
-        Some(b) => b,
-        None => return methods,
-    };
-
-    for child in body.children() {
-        if child.kind().as_ref() == "function_item" {
-            let name = child.field("name")
-                .map(|n| n.text().to_string())
-                .unwrap_or_default();
-            let (is_async, is_unsafe) = helpers::detect_modifiers(&child);
-            let attrs = helpers::extract_attributes(&child);
-            let generics = helpers::extract_generics(&child);
-            let return_type = helpers::extract_return_type(&child);
-
-            methods.push(crate::types::ParsedItem {
-                kind: crate::types::SymbolKind::Method,
-                name,
-                signature: helpers::extract_signature(&child),
-                source: helpers::extract_source(&child, 50),
-                doc_comment: helpers::extract_doc_comments_rust(&child),
-                start_line: child.start_pos().line() as u32 + 1,
-                end_line: child.end_pos().line() as u32 + 1,
-                visibility: helpers::extract_visibility_rust(&child),
-                metadata: crate::types::SymbolMetadata {
-                    is_async,
-                    is_unsafe,
-                    return_type: return_type.clone(),
-                    generics: generics.clone(),
-                    attributes: attrs.clone(),
-                    lifetimes: helpers::extract_lifetimes(&generics),
-                    where_clause: helpers::extract_where_clause(&child),
-                    trait_name: trait_name.clone(),
-                    for_type: for_type.clone(),
-                    is_pyo3: helpers::is_pyo3(&attrs),
-                    is_error_type: false,
-                    returns_result: helpers::returns_result(&return_type),
-                    ..Default::default()
-                },
-            });
-        }
-    }
-    methods
-}
-```
-
-### A6. `src/extractors/python.rs` — Python Rich Extractor (task 3.4)
-
-Port from klaw `python-treesitter.ts`. Key patterns:
-
-- `class_definition` → Class
-  - Detect `dataclass`, `pydantic.BaseModel`, `Protocol`, `Enum` via decorators and base classes
-  - Extract `@classmethod`, `@staticmethod`, `@property` methods
-  - Google/NumPy/Sphinx docstring parsing
-- `function_definition` → Function or Method (depending on parent context)
-  - `@decorator` extraction
-  - `*args`, `**kwargs` parameter handling
-  - Generator detection (`yield` in body)
-  - Type annotation extraction from parameters and return type
-
-**Node kinds**: `function_definition`, `class_definition`, `decorated_definition`, `assignment` (module-level constants)
-
-**Docstring parsing**: Look for `expression_statement` as first child of function/class body containing a `string` node. Parse Google-style (`Args:`, `Returns:`, `Raises:`), NumPy-style (`Parameters\n----------`), and Sphinx-style (`:param`, `:returns:`, `:raises:`).
-
-### A7. `src/extractors/typescript.rs` — TypeScript/JS/TSX Rich Extractor (task 3.5)
-
-Shared extractor for TypeScript, JavaScript, and TSX. Key patterns:
-
-- `function_declaration` → Function (check for `export` keyword)
-- `class_declaration` → Class
-- `interface_declaration` → Interface (TypeScript only)
-- `type_alias_declaration` → TypeAlias (TypeScript only)
-- `method_definition` → Method (within class body)
-- `lexical_declaration` with arrow function → Function (exported arrow functions)
-- `export_statement` wrapping → sets `is_exported = true`
-
-**JSDoc extraction**: Look for `comment` nodes preceding the declaration. Parse `@param`, `@returns`, `@throws`, `@example` tags.
-
-### A8. `src/extractors/go.rs` — Go Rich Extractor (task 3.6)
-
-Key patterns:
-
-- `function_declaration` → Function (exported if name starts with uppercase)
-- `method_declaration` → Method (has receiver parameter)
-- `type_declaration` → Struct/Interface/TypeAlias
-- `const_spec` → Const
-- `var_spec` → Static (module-level vars)
-
-**Go doc comments**: Preceding `// Comment` lines. Go convention: doc comment must start with the function name.
-
-**Exported detection**: `name[0].is_uppercase()` — Go's visibility convention.
-
-### A9. `src/extractors/elixir.rs` — Elixir Rich Extractor (task 3.7)
-
-Key patterns:
-
-- `call` with function name `defmodule` → Module
-- `call` with function name `def` → Function (public)
-- `call` with function name `defp` → Function (private)
-- `call` with function name `defmacro` → Macro
-
-**Elixir doc comments**: `@doc` and `@moduledoc` attributes preceding the definition.
-
-### A10. `src/extractors/generic.rs` — Generic Kind-Based Extractor (task 3.8)
-
-Works for all 26 built-in languages. Uses a language-specific list of "interesting" node kinds and extracts name + signature.
-
-```rust
-pub fn extract<D: ast_grep_core::Doc>(
-    root: &ast_grep_core::AstGrep<D>,
-    lang: SupportLang,
-) -> Result<Vec<crate::types::ParsedItem>, crate::error::ParserError> {
-    let kinds = interesting_kinds(lang);
-    let matchers: Vec<KindMatcher<SupportLang>> = kinds
-        .iter()
-        .map(|k| KindMatcher::new(k, lang))
-        .collect();
-
-    if matchers.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let matcher = Any::new(matchers);
-    let mut items = Vec::new();
-
-    for node in root.root().find_all(&matcher) {
-        let name = node.field("name")
-            .map(|n| n.text().to_string())
-            .unwrap_or_else(|| {
-                // Fallback: first identifier child
-                node.children()
-                    .find(|c| c.kind().as_ref() == "identifier" || c.kind().as_ref() == "type_identifier")
-                    .map(|c| c.text().to_string())
-                    .unwrap_or_default()
-            });
-
-        if name.is_empty() {
-            continue;
-        }
-
-        items.push(crate::types::ParsedItem {
-            kind: map_kind(node.kind().as_ref()),
-            name,
-            signature: helpers::extract_signature(&node),
-            source: helpers::extract_source(&node, 50),
-            doc_comment: String::new(), // Generic: no doc comment extraction
-            start_line: node.start_pos().line() as u32 + 1,
-            end_line: node.end_pos().line() as u32 + 1,
-            visibility: crate::types::Visibility::Public, // Generic: assume public
-            metadata: crate::types::SymbolMetadata::default(),
-        });
-    }
-    Ok(items)
-}
-```
-
-**`interesting_kinds()` mapping**: Returns language-specific node kinds that represent extractable symbols. Key examples:
-- C: `function_definition`, `struct_specifier`, `type_definition`, `enum_specifier`
-- C++: above + `class_specifier`, `namespace_definition`, `template_declaration`
-- Java: `class_declaration`, `method_declaration`, `interface_declaration`, `enum_declaration`
-- Ruby: `class`, `module`, `method`, `singleton_method`
-- Swift: `class_declaration`, `struct_declaration`, `protocol_declaration`, `function_declaration`
-
-### A11. `src/extractors/mod.rs` — Extraction Orchestrator (task 3.10)
-
-Two-tier fallback: ast-grep → regex.
-
-```rust
-use ast_grep_language::SupportLang;
-
-pub mod generic;
-pub mod rust;
-pub mod python;
-pub mod typescript;
-pub mod go;
-pub mod elixir;
-pub(crate) mod helpers;
-
-pub fn extract_api(
-    source: &str,
-    language: SupportLang,
-) -> Result<Vec<crate::types::ParsedItem>, crate::error::ParserError> {
-    // Tier 1: ast-grep KindMatcher + Node traversal
-    match extract_with_ast_grep(source, language) {
-        Ok(items) if !items.is_empty() => return Ok(items),
-        Ok(_) => tracing::debug!("ast-grep returned no items for {language:?}"),
-        Err(e) => tracing::warn!("ast-grep extraction failed for {language:?}: {e}"),
-    }
-
-    // Tier 2: Regex fallback
-    match extract_with_regex(source, language) {
-        Ok(items) => Ok(items),
-        Err(e) => {
-            tracing::warn!("regex extraction failed for {language:?}: {e}");
-            Ok(vec![])
-        }
-    }
-}
-
-fn extract_with_ast_grep(
-    source: &str,
-    language: SupportLang,
-) -> Result<Vec<crate::types::ParsedItem>, crate::error::ParserError> {
-    let root = language.ast_grep(source);
-    match language {
-        SupportLang::Rust => rust::extract(&root),
-        SupportLang::Python => python::extract(&root),
-        SupportLang::TypeScript | SupportLang::Tsx | SupportLang::JavaScript => {
-            typescript::extract(&root)
-        }
-        SupportLang::Go => go::extract(&root),
-        SupportLang::Elixir => elixir::extract(&root),
-        _ => generic::extract(&root, language),
-    }
-}
-
-fn extract_with_regex(
-    source: &str,
-    _language: SupportLang,
-) -> Result<Vec<crate::types::ParsedItem>, crate::error::ParserError> {
-    // Basic regex patterns for common definitions
-    // fn/def/function/class patterns across languages
-    let mut items = Vec::new();
-    for (line_num, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if let Some(item) = try_regex_extract(trimmed, line_num as u32 + 1) {
-            items.push(item);
-        }
-    }
-    Ok(items)
-}
-```
-
-### A12. `src/test_files.rs` — Test File/Dir Detection (task 3.9)
+## 5. PR 1 — Stream A: zen-parser (Reconciliation)
+
+Stream A is **substantially complete**. This PR covers the remaining gaps — not the extraction logic itself, which is already implemented across 24 language dispatchers with 1250 passing tests.
+
+### What Already Exists (DO NOT recreate)
+
+| Artifact | Location | Status |
+|----------|----------|--------|
+| `ParserError` | `src/error.rs` | **DONE** — `ParseFailed`, `UnsupportedLanguage`, `ExtractionFailed`, `Io` variants |
+| `ParsedItem`, `SymbolKind`, `Visibility`, `SymbolMetadata`, `DocSections` | `src/types/` module tree | **DONE** — Full module split with per-language `*MetadataExt` traits. `SymbolKind` has 19 variants (added Constructor, Field, Property, Event, Indexer, Component beyond original plan). |
+| `detect_language()` | `src/parser.rs` | **DONE** — 20 builtin extensions mapped |
+| `detect_language_ext()` | `src/parser.rs` | **DONE** — Adds Markdown, TOML, RST, Svelte detection |
+| `parse_source()` + custom parse functions | `src/parser.rs` | **DONE** — `parse_source()`, `parse_markdown_source()`, `parse_toml_source()`, `parse_rst_source()`, `parse_svelte_source()` |
+| Shared extraction helpers | `src/extractors/helpers.rs` | **DONE** — `extract_source()`, `extract_signature()` |
+| Language dispatchers | `src/extractors/dispatcher/<lang>.rs` (24 files) | **DONE** — All have `pub fn extract()`. Architecture: dispatcher uses `#[path]` to pull in `<lang>/processors/` and `<lang>/helpers.rs`. |
+| Language processors | `src/extractors/<lang>/processors/` (24 dirs) | **DONE** — Rich extraction for all 24 languages |
+| Language tests | `src/extractors/<lang>/tests/` (24 dirs) | **DONE** — 1250 tests passing |
+| Conformance tests | `src/extractors/dispatcher/conformance.rs` | **DONE** — Cross-language Constructor, Field, Property, owner_name taxonomy |
+| Test fixtures | `tests/fixtures/` (30 files) | **DONE** |
+| `lib.rs` public API | `src/lib.rs` | **DONE** — Exports `ParserError`, `ParsedItem`, `SymbolKind`, `SymbolMetadata`, `DocSections`, `Visibility`, `detect_language`, `detect_language_ext`, all parse functions |
+
+### What Needs to Be Added (PR 1 scope)
+
+#### A1. `src/test_files.rs` — Test File/Dir Detection (task 3.9)
 
 ```rust
 const TEST_DIRS: &[&str] = &[
@@ -1010,7 +369,13 @@ pub fn is_test_file(file_name: &str) -> bool {
 
 **Source**: `03-architecture-overview.md` §7 (test file patterns).
 
-### A13. `src/doc_chunker.rs` — Documentation Chunker (task 3.15)
+Update `src/lib.rs` to add:
+```rust
+pub mod test_files;
+pub use test_files::{is_test_file, is_test_dir};
+```
+
+#### A2. `src/doc_chunker.rs` — Documentation Chunker (task 3.15)
 
 Splits markdown/rst/txt files by section headings, chunks to ~512 tokens.
 
@@ -1060,76 +425,105 @@ pub fn chunk_document(
 }
 ```
 
-### A14. `src/lib.rs` — Public API
-
+Update `src/lib.rs` to add:
 ```rust
-pub mod error;
-pub mod types;
-pub mod parser;
-pub mod extractors;
-pub mod test_files;
 pub mod doc_chunker;
-
-pub use error::ParserError;
-pub use types::{ParsedItem, SymbolKind, SymbolMetadata, DocSections, Visibility};
-pub use parser::{detect_language, parse_source};
-pub use extractors::extract_api;
-pub use test_files::{is_test_file, is_test_dir};
 pub use doc_chunker::{chunk_document, DocChunk};
-
-// Keep spike modules behind cfg(test)
-#[cfg(test)]
-mod spike_ast_grep;
 ```
 
-### A15. Tests
+#### A3. `extract_api()` — Top-Level Orchestrator (task 3.10)
 
-Test fixtures: create `zen-parser/tests/fixtures/` with small sample source files for each rich language.
+Unified entrypoint that detects language and dispatches to the correct extractor. Must handle the three different dispatcher signatures:
+- `extract(root)` — 16 languages
+- `extract(root, source)` — bash, c, cpp, rust
+- `extract(root, lang)` — typescript, tsx
 
-**Unit tests** (`src/extractors/rust.rs` tests):
-- Parse a Rust file with functions, structs, enums, traits, impl blocks
-- Verify `ParsedItem` count and names
-- Verify async detection (via `function_modifiers` child, not text prefix)
-- Verify unsafe detection
-- Verify visibility (`pub`, `pub(crate)`, private)
-- Verify generics extraction (`<T: Clone + Send>`)
-- Verify lifetime extraction (`<'a, 'b>`)
-- Verify where clause extraction
-- Verify doc comment extraction (`///` and `//!`)
-- Verify attribute extraction (`#[derive()]`, `#[cfg()]`)
-- Verify impl block processing (inherent vs trait impl)
-- Verify enum variant extraction
-- Verify struct field extraction
-- Verify signature: no body leaks
-- Verify error type detection (name pattern + `derive(Error)`)
-- Verify PyO3 detection
+Also handles custom-lane languages (markdown, rst, svelte, toml) via `detect_language_ext()` and their separate parse functions.
 
-**Unit tests** (`src/extractors/python.rs` tests):
-- Parse Python file with classes, functions, decorators
-- Verify docstring extraction (Google/NumPy/Sphinx styles)
-- Verify dataclass/pydantic/protocol detection
-- Verify decorator extraction
-- Verify `@classmethod`, `@staticmethod`, `@property`
-- Verify generator detection (yield)
+Two-tier fallback: ast-grep → regex.
 
-**Unit tests** (`src/extractors/typescript.rs` tests):
-- Parse TS file with functions, classes, interfaces, type aliases
-- Verify export detection
-- Verify JSDoc extraction
-- Verify type parameter extraction
+```rust
+/// Extract API symbols from source code for any supported language.
+///
+/// Detects the language from `file_path`, parses with ast-grep (or custom parser
+/// for Markdown/TOML/RST/Svelte), and extracts symbols. Falls back to regex
+/// extraction if ast-grep yields no results.
+pub fn extract_api(
+    source: &str,
+    file_path: &str,
+) -> Result<Vec<ParsedItem>, ParserError> {
+    let lang = detect_language_ext(file_path)
+        .ok_or_else(|| ParserError::UnsupportedLanguage(file_path.to_string()))?;
 
-**Unit tests** (`src/extractors/go.rs` tests):
-- Parse Go file with exported/unexported functions, types, methods
-- Verify exported detection (uppercase first letter)
-- Verify Go doc comment extraction
+    // Tier 1: ast-grep extraction via language dispatcher
+    let items = match lang {
+        DetectedLanguage::Builtin(builtin) => extract_builtin(source, builtin)?,
+        DetectedLanguage::Markdown => {
+            let root = parse_markdown_source(source);
+            extractors::markdown::extract(&root)?
+        }
+        DetectedLanguage::Toml => {
+            let root = parse_toml_source(source);
+            extractors::toml::extract(&root)?
+        }
+        DetectedLanguage::Rst => {
+            let root = parse_rst_source(source);
+            extractors::rst::extract(&root)?
+        }
+        DetectedLanguage::Svelte => {
+            let root = parse_svelte_source(source);
+            extractors::svelte::extract(&root)?
+        }
+    };
 
-**Unit tests** (`src/extractors/elixir.rs` tests):
-- Parse Elixir file with defmodule, def, defp, defmacro
-- Verify @doc/@moduledoc extraction
+    if !items.is_empty() {
+        return Ok(items);
+    }
 
-**Unit tests** (`src/extractors/generic.rs` tests):
-- Parse C, Java, Ruby, Swift files
-- Verify basic name + signature extraction
+    // Tier 2: Regex fallback
+    tracing::debug!("ast-grep returned no items for {file_path}, trying regex fallback");
+    extract_with_regex(source)
+}
+
+fn extract_builtin(
+    source: &str,
+    lang: SupportLang,
+) -> Result<Vec<ParsedItem>, ParserError> {
+    let root = parse_source(source, lang);
+    match lang {
+        SupportLang::Rust => extractors::rust::extract(&root, source),
+        SupportLang::Python => extractors::python::extract(&root),
+        SupportLang::TypeScript => extractors::typescript::extract(&root, lang),
+        SupportLang::Tsx => extractors::tsx::extract(&root, lang),
+        SupportLang::JavaScript => extractors::javascript::extract(&root),
+        SupportLang::Go => extractors::go::extract(&root),
+        SupportLang::Elixir => extractors::elixir::extract(&root),
+        SupportLang::C => extractors::c::extract(&root, source),
+        SupportLang::Cpp => extractors::cpp::extract(&root, source),
+        SupportLang::CSharp => extractors::csharp::extract(&root),
+        SupportLang::Css => extractors::css::extract(&root),
+        SupportLang::Haskell => extractors::haskell::extract(&root),
+        SupportLang::Html => extractors::html::extract(&root),
+        SupportLang::Java => extractors::java::extract(&root),
+        SupportLang::Json => extractors::json::extract(&root),
+        SupportLang::Lua => extractors::lua::extract(&root),
+        SupportLang::Php => extractors::php::extract(&root),
+        SupportLang::Ruby => extractors::ruby::extract(&root),
+        SupportLang::Bash => extractors::bash::extract(&root, source),
+        SupportLang::Yaml => extractors::yaml::extract(&root),
+        _ => Err(ParserError::UnsupportedLanguage(format!("{lang:?}"))),
+    }
+}
+```
+
+Update `src/lib.rs` to add:
+```rust
+pub use extractors::extract_api;  // or wherever extract_api lives
+```
+
+**Design note**: The `extract_api()` function takes `file_path: &str` (not `SupportLang`) because it needs to handle custom-lane languages that are outside the `SupportLang` enum. The pipeline in `zen-cli/src/pipeline.rs` calls `extract_api(source, rel_path)` without needing to know about dispatcher signatures.
+
+### A4. Tests for New Modules
 
 **Unit tests** (`src/test_files.rs` tests):
 - `is_test_file()` returns true for all test file patterns
@@ -1142,10 +536,30 @@ Test fixtures: create `zen-parser/tests/fixtures/` with small sample source file
 - Verify oversized sections get sub-chunked
 - Verify empty sections are skipped
 
-**Integration tests** (`tests/integration.rs`):
-- Parse real Rust source (include_str! from tokio or similar)
-- Parse real Python source
+**Integration tests** for `extract_api()`:
+- Call `extract_api(source, "sample.rs")` → dispatches to Rust extractor, returns items
+- Call `extract_api(source, "sample.py")` → dispatches to Python extractor
+- Call `extract_api(source, "sample.md")` → dispatches to Markdown extractor (custom-lane)
+- Call `extract_api(source, "unknown.xyz")` → returns `UnsupportedLanguage` error
 - Two-tier fallback: empty ast-grep result triggers regex
+
+### A5. Existing Test Coverage (reference — already passing)
+
+The following test suites are already complete and passing (1250 tests total). They are listed here for reference but are **not part of PR 1 scope**.
+
+**Extractor tests** (per-language, in `src/extractors/<lang>/tests/`):
+- Rust (5 test files): functions, structs, enums, traits, impl blocks, async/unsafe detection, generics, lifetimes, doc comments, attributes, visibility, error types, PyO3
+- Python (7 test files): classes, functions, decorators, docstrings (Google/NumPy/Sphinx), dataclass/pydantic/protocol, generators
+- TypeScript (13 test files): functions, classes, interfaces, type aliases, enums, exports, JSDoc, ambient declarations, namespaces
+- JavaScript (7 test files): functions, classes, arrow functions, generators, async, exports, constants
+- TSX (9 test files): React components, hooks, HOC, forward_ref, memo, error boundaries
+- Go (14 test files): exported/unexported functions, types, methods, struct fields, doc comments
+- Elixir (15 test files): defmodule, def/defp, defmacro, doc attrs
+- C (28 test files): functions, structs, enums, unions, typedefs, preprocessor, variables, arrays, inline
+- C++ (38 test files): classes, templates, namespaces, qualified identifiers, template instantiation
+- C# (5 test files): types, namespaces, members, visibility, events/indexers/operators, using directives
+- Plus: Haskell, Java, Lua, PHP, Ruby, Bash, HTML, CSS, JSON, YAML, Markdown, TOML, RST, Svelte
+- Conformance: cross-language Constructor, Property, Field, owner taxonomy
 
 ---
 
@@ -2053,67 +1467,56 @@ sha2.workspace = true             # for deterministic symbol/chunk IDs
 ## 9. Execution Order
 
 ```
-Phase 3 Execution:
+Phase 3 Remaining Execution (from 2026-02-13 baseline):
 
- ┌──────────────────────────────────────────┐
- │ PR 1 (A) and PR 2 (B) can run in        │
- │ parallel — no dependencies between them  │
- └──────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────┐
+ │ PR 1 (A), PR 2 (B), and PR 3 (C) can run in parallel   │
+ │ — no runtime dependencies between them                   │
+ └──────────────────────────────────────────────────────────┘
 
- 1. [A1]   Create zen-parser/src/error.rs
- 2. [A2]   Create zen-parser/src/types.rs
- 3. [A3]   Create zen-parser/src/parser.rs
- 4. [A4]   Create zen-parser/src/extractors/helpers.rs
- 5. [A5]   Create zen-parser/src/extractors/rust.rs
- 6. [A6]   Create zen-parser/src/extractors/python.rs
- 7. [A7]   Create zen-parser/src/extractors/typescript.rs
- 8. [A8]   Create zen-parser/src/extractors/go.rs
- 9. [A9]   Create zen-parser/src/extractors/elixir.rs
-10. [A10]  Create zen-parser/src/extractors/generic.rs
-11. [A11]  Create zen-parser/src/extractors/mod.rs
-12. [A12]  Create zen-parser/src/test_files.rs
-13. [A13]  Create zen-parser/src/doc_chunker.rs
-14. [A14]  Update zen-parser/src/lib.rs
-15. [A15]  Create test fixtures + write all tests
-    ─── cargo test -p zen-parser passes ───
+ 1. [A1]   Create zen-parser/src/test_files.rs
+ 2. [A2]   Create zen-parser/src/doc_chunker.rs
+ 3. [A3]   Add extract_api() top-level orchestrator (new module or in lib.rs)
+ 4. [A4]   Update zen-parser/src/lib.rs (add test_files, doc_chunker, extract_api exports)
+ 5. [A5]   Write tests for new modules (test_files, doc_chunker, extract_api)
+    ─── cargo test -p zen-parser passes (existing 1250 + new) ───
 
     ┌─────────────────────────────────────┐
     │ PR 2 (B) in parallel with PR 1 (A) │
     └─────────────────────────────────────┘
 
-16. [B1]   Create zen-embeddings/src/error.rs
-17. [B2]   Rewrite zen-embeddings/src/lib.rs
-18. [B3]   Update zen-embeddings/Cargo.toml (add dirs)
-19. [B4]   Write zen-embeddings tests
+ 6. [B1]   Create zen-embeddings/src/error.rs
+ 7. [B2]   Rewrite zen-embeddings/src/lib.rs
+ 8. [B3]   Update zen-embeddings/Cargo.toml (promote dirs to deps)
+ 9. [B4]   Write zen-embeddings tests
     ─── cargo test -p zen-embeddings passes ───
 
-    ┌────────────────────────────────────────────────────────┐
-    │ PR 3 (C) can start after PR 2 lands (dims constant)   │
-    │ but no runtime dependency — can start in parallel      │
-    └────────────────────────────────────────────────────────┘
+    ┌─────────────────────────────────────┐
+    │ PR 3 (C) in parallel with PR 1 (A) │
+    └─────────────────────────────────────┘
 
-20. [C1]   Create zen-lake/src/error.rs
-21. [C2]   Create zen-lake/src/schemas.rs
-22. [C3]   Rewrite zen-lake/src/lib.rs
-23. [C4]   Create zen-lake/src/store.rs
-24. [C5]   Create zen-lake/src/source_files.rs
-25. [C6]   Write zen-lake tests
+10. [C1]   Create zen-lake/src/error.rs
+11. [C2]   Create zen-lake/src/schemas.rs
+12. [C3]   Rewrite zen-lake/src/lib.rs
+13. [C4]   Create zen-lake/src/store.rs
+14. [C5]   Create zen-lake/src/source_files.rs
+15. [C6]   Write zen-lake tests
     ─── cargo test -p zen-lake passes ───
 
     ┌─────────────────────────────────────────────────┐
     │ PR 4 (D) must wait for all 3 PRs above to land │
     └─────────────────────────────────────────────────┘
 
-26. [D1]   Create zen-search/src/walk.rs
-27. [D1b]  Update zen-search/src/lib.rs + Cargo.toml (add zen-parser dep)
-28. [D2]   Create zen-cli/src/pipeline.rs (pipeline orchestration)
-29. [D2b]  Update zen-cli/Cargo.toml (add zen-parser, sha2 deps)
-30. [D3]   Write integration tests
+16. [D1]   Create zen-search/src/walk.rs
+17. [D1b]  Update zen-search/src/lib.rs + Cargo.toml (add zen-parser dep)
+18. [D2]   Create zen-cli/src/pipeline.rs (pipeline orchestration)
+19. [D2b]  Update zen-cli/Cargo.toml (add zen-parser, sha2 deps)
+20. [D3]   Write integration tests
     ─── cargo test --workspace passes (Phase 3) ───
 ```
 
-Steps 1–15 and 16–19 are independent and can be parallelized.
-Steps 20–25 can start once types are defined (no runtime dependency).
+Steps 1–5, 6–9, and 10–15 are independent and can be parallelized.
+Steps 16–20 depend on all three PRs above.
 
 ---
 
@@ -2206,23 +1609,28 @@ cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search
 
 ### Acceptance Criteria
 
-- [ ] All tests pass (zen-parser, zen-embeddings, zen-lake, zen-search)
-- [ ] `zen-parser` extracts rich API symbols from Rust, Python, TypeScript, Go, Elixir source files
-- [ ] `zen-parser` extracts basic symbols from at least 3 non-rich languages (C, Java, Ruby)
-- [ ] All extracted `ParsedItem` structs have correct: kind, name, signature (no body), visibility, start/end lines
-- [ ] Rust extractor: async/unsafe detection, generics, lifetimes, doc comments, attributes, impl block methods, enum variants, struct fields, error types
-- [ ] Python extractor: classes, decorators, docstrings (at least Google style)
-- [ ] TypeScript extractor: exports, interfaces, type aliases, JSDoc
-- [ ] Go extractor: exported detection, doc comments, methods
-- [ ] Generic extractor: produces ≥1 item for C, Java, Ruby test fixtures
+**Already passing (as of 2026-02-13)**:
+- [x] `zen-parser` extracts rich API symbols from all 24 supported languages (20 builtin + 4 custom-lane)
+- [x] All extracted `ParsedItem` structs have correct: kind, name, signature (no body), visibility, start/end lines
+- [x] Rust extractor: async/unsafe detection, generics, lifetimes, doc comments, attributes, impl block methods, enum variants, struct fields, error types
+- [x] Python extractor: classes, decorators, docstrings (Google/NumPy/Sphinx), dataclass/pydantic/protocol
+- [x] TypeScript extractor: exports, interfaces, type aliases, JSDoc, ambient declarations, namespaces
+- [x] Go extractor: exported detection, doc comments, methods, struct fields with owner metadata
+- [x] Cross-language taxonomy conformance: Constructor, Field, Property, owner_name/owner_kind
+- [x] 1250 zen-parser tests passing
+- [x] `cargo build --workspace` succeeds
+
+**Remaining gates**:
+- [ ] `extract_api()` orchestrator dispatches to all 24 languages via file path
 - [ ] Test file detection: `is_test_file()` and `is_test_dir()` correct for all patterns
+- [ ] Doc chunker: section-based splitting with ~512 token max
 - [ ] `zen-embeddings` generates 384-dim vectors, similar texts cluster
 - [ ] `zen-lake` stores and retrieves symbols, doc chunks in DuckDB local cache (`.zenith/lake/cache.duckdb`)
 - [ ] `SourceFileStore` stores and retrieves source files in separate DuckDB (`.zenith/source_files.duckdb`)
 - [ ] `array_cosine_similarity()` works on stored embeddings (FLOAT[] → FLOAT[384] cast) — local cache only
 - [ ] Walker: `build_walker()` with `WalkMode::Raw` and `WalkMode::LocalProject` both produce correct file lists
 - [ ] Full pipeline: index a temp directory with mixed-language source → all tables populated correctly
-- [ ] `cargo build --workspace` still succeeds (no regressions)
+- [ ] `cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search` all pass
 
 ### What This Unlocks
 
@@ -2234,6 +1642,8 @@ Phase 3 completion unblocks:
 ---
 
 ## 12. Validation Traceability Matrix
+
+### Spike Evidence (from Phase 0)
 
 | Area | Claim | Status | Spike/Test Evidence | Source |
 |------|-------|--------|---------------------|--------|
@@ -2261,9 +1671,6 @@ Phase 3 completion unblocks:
 | source_files table | DuckDB CRUD + Appender for source storage | Validated | `spike_source_files_crud` | `zen-search/src/spike_grep.rs` |
 | Source cached flag | `source_cached` boolean on indexed_packages | Validated | `spike_source_cached_flag` | `zen-search/src/spike_grep.rs` |
 | Walker + test skip | `filter_entry` skips test files/dirs | Validated | `spike_ignore_test_file_skipping` | `zen-search/src/spike_grep.rs` |
-| Two-tier fallback | ast-grep empty → regex produces items | Design-only | `05-crate-designs.md` §7 | crate design |
-| Doc chunking | Split by heading, max ~512 tokens | Design-only | `02-data-architecture.md` §8 | data architecture |
-| Full pipeline | clone → walk → parse → embed → store | Design-only | `02-data-architecture.md` §8, `07-implementation-plan.md` task 3.14 | integration |
 | Signature normalization | Whitespace collapse for deterministic signatures | Validated | `extract_signature_from_node_text()` in 600+ files | `zen-search/src/spike_recursive_query.rs` (spike 0.21) |
 | Doc comment line-based fallback | Line-based `leading_doc_comment()` robust on large repos | Validated | 14,929 symbols extracted from Arrow monorepo | `zen-search/src/spike_recursive_query.rs` (spike 0.21) |
 | Extended impl extraction | Generic/scoped/trait impl patterns need extended queries | Validated | +580 matches vs baseline on Arrow monorepo | `zen-search/src/spike_recursive_query.rs` (spike 0.21) |
@@ -2271,6 +1678,20 @@ Phase 3 completion unblocks:
 | serde_arrow FixedSizeList override | `embedding` must be overridden to `FixedSizeList(384)` | Validated | Spike 0.19 test M1 | `zen-lake/src/spike_native_lance.rs` (spike 0.19) |
 | Turso catalog visibility | `dl_data_file` with public/team/private scoping | Validated | 9/9 tests | `zen-db/src/spike_catalog_visibility.rs` (spike 0.20) |
 | Lance on R2 — vector/FTS/hybrid search | `lance_vector_search`, `lance_fts`, `lance_hybrid_search` | Validated | 18/18 tests | `zen-lake/src/spike_r2_parquet.rs` (spike 0.18) |
+
+### Production Evidence (from implemented zen-parser, as of 2026-02-13)
+
+| Area | Claim | Status | Evidence | Source |
+|------|-------|--------|----------|--------|
+| Full language extraction (24 langs) | Dedicated extractor for every supported language | **Implemented** | 24 dispatcher modules, 24 processor directories | `zen-parser/src/extractors/dispatcher/*.rs` |
+| Cross-language taxonomy | Constructor/Field/Property/owner normalization | **Implemented** | Conformance tests pass | `zen-parser/src/extractors/dispatcher/conformance.rs` |
+| Types module tree | Split `types.rs` into module tree | **Implemented** | 18 files in `src/types/`, per-language `*MetadataExt` traits | `zen-parser/src/types/mod.rs` |
+| Custom language parsers | Markdown, TOML, RST, Svelte via tree-sitter | **Implemented** | `MarkdownLang`, `TomlLang`, `RstLang`, `SvelteLang` | `zen-parser/src/parser.rs` |
+| Test fixtures | Sample files for all languages | **Implemented** | 30 fixture files | `zen-parser/tests/fixtures/` |
+| Test coverage | Comprehensive extractor tests | **Implemented** | 1250 tests passing | `cargo test -p zen-parser` |
+| Two-tier fallback | ast-grep empty → regex produces items | **Design-only** | Will be in `extract_api()` orchestrator | Pending (PR 1, task A3) |
+| Doc chunking | Split by heading, max ~512 tokens | **Design-only** | Will be in `doc_chunker.rs` | Pending (PR 1, task A2) |
+| Full pipeline | clone → walk → parse → embed → store | **Design-only** | Will be in `zen-cli/src/pipeline.rs` | Pending (PR 4, task D2) |
 
 ---
 
@@ -2334,3 +1755,67 @@ Phase 8/9 introduces a `ProductionApiSymbol` struct (matching spike 0.19) for `s
   - `zen-lake/src/spike_native_lance.rs` (spike 0.19 — serde_arrow production path, ApiSymbol struct)
   - `zen-search/src/spike_grep.rs` (spike 0.14 — grep, ignore, source_files, walker, symbol correlation)
   - `zen-search/src/spike_recursive_query.rs` (spike 0.21 — signature normalization, doc comment fallback, extended impl extraction)
+
+---
+
+## 14. Mismatch Log — Plan vs. Implementation
+
+This section documents where the original plan text (rev 3 and earlier) diverges from the actual implementation as of 2026-02-13. It serves as an audit trail for the delta update.
+
+### 14.1 Language Coverage: "7 rich + 19 generic" → 24 dedicated
+
+**Original plan**: 7 rich extractors (Rust, Python, TypeScript/JS/TSX, Go, Elixir) + 1 generic kind-based extractor for the remaining 19 built-in languages.
+
+**Actual implementation**: Every language has a dedicated extractor with its own dispatcher, processors, helpers, and tests. There is no generic extractor. Coverage far exceeds the original target:
+- 20 builtin `SupportLang` dispatchers: Rust, Python, TypeScript, TSX, JavaScript (separate from TS, not shared), Go, Elixir, C (5 processor files), C++ (5 processor files), C# (3 processor files), CSS, Haskell, HTML, Java (3 processor files), JSON, Lua (3 processor files), PHP (6 processor files), Ruby, Bash (5 processor files), YAML
+- 4 custom-lane dispatchers: Markdown (tree-sitter-md), TOML (tree-sitter-toml-ng), RST (tree-sitter-rst), Svelte (tree-sitter-svelte-next)
+
+### 14.2 Module Architecture: Flat extractors → Dispatcher + #[path] pattern
+
+**Original plan**: `src/extractors/mod.rs` with direct `pub mod rust;`, `pub mod python;`, etc. `extract_api()` lives in `extractors/mod.rs`.
+
+**Actual implementation**: Two-level architecture:
+- `src/extractors/dispatcher/mod.rs` declares 24 language modules
+- Each `dispatcher/<lang>.rs` uses `#[path = "../<lang>/processors/mod.rs"] mod processors;` to pull in the implementation from `src/extractors/<lang>/` directories
+- `src/extractors/mod.rs` re-exports all dispatcher modules via `pub use dispatcher::<lang>;`
+- The `<lang>/` directories are filesystem-only organizational units, not Rust modules declared in `mod.rs`
+
+### 14.3 SymbolKind: 13 → 19 variants
+
+**Original plan**: Function, Method, Struct, Enum, Trait, Interface, Class, TypeAlias, Const, Static, Macro, Module, Union.
+
+**Actual implementation**: Adds Constructor, Field, Property, Event, Indexer, Component. This supports cross-language member taxonomy and Svelte component detection.
+
+### 14.4 SymbolMetadata: Flat struct expanded
+
+**Original plan**: ~30 fields covering Common, Rust, Python, TypeScript, Documentation, Error detection.
+
+**Actual implementation**: ~50+ fields. Added sections for HTML-specific (`tag_name`, `element_id`, `class_names`, `html_attributes`, `is_custom_element`, `is_self_closing`), CSS-specific (`selector`, `media_query`, `at_rule_name`, `css_properties`, `is_custom_property`), TSX/React-specific (`is_component`, `is_hook`, `is_hoc`, `is_forward_ref`, `is_memo`, `is_lazy`, `is_class_component`, `is_error_boundary`, `component_directive`, `props_type`, `hooks_used`, `jsx_elements`), and owner metadata (`owner_name`, `owner_kind`, `is_static_member`).
+
+### 14.5 TypeScript/JS/TSX: Shared → Separate
+
+**Original plan**: Single `typescript.rs` extractor shared across TypeScript, JavaScript, and TSX via language parameter.
+
+**Actual implementation**: Three separate dispatchers:
+- `dispatcher/typescript.rs` — takes `(root, lang: SupportLang)` for TypeScript
+- `dispatcher/javascript.rs` — takes `(root)` for JavaScript
+- `dispatcher/tsx.rs` — takes `(root, lang: SupportLang)` for TSX with React-specific detection
+
+### 14.6 Dispatcher Signature Inconsistency
+
+The plan assumed a uniform `extract(root)` or `extract(source, language)` signature. The actual implementation has three families:
+- `extract(root)` — 16 dispatchers
+- `extract(root, source: &str)` — 4 dispatchers (bash, c, cpp, rust — need raw source for doc comment fallback)
+- `extract(root, lang: SupportLang)` — 2 dispatchers (typescript, tsx — need lang for shared processor logic)
+
+This means the `extract_api()` orchestrator must handle all three signatures, which is why it takes `(source: &str, file_path: &str)` and internally constructs the right arguments.
+
+### 14.7 detect_language: Plan included unsupported languages
+
+**Original plan** (`§A3`): `detect_language()` mapped Hcl, Kotlin, Nix, Scala, Solidity, Swift extensions.
+
+**Actual implementation**: `detect_language()` maps only languages with corresponding dispatchers. Hcl, Kotlin, Nix, Scala, Solidity, Swift are **not** mapped (no dispatchers exist for them).
+
+### 14.8 Code examples in plan sections A4–A14 are historical reference
+
+The inline Rust code for `helpers.rs`, `rust.rs`, `python.rs`, `typescript.rs`, `go.rs`, `elixir.rs`, `generic.rs`, `mod.rs`, `test_files.rs`, `doc_chunker.rs`, `lib.rs` shown in the original plan (§A4–A14) are **historical design sketches**. The actual implementations in `src/extractors/` diverge significantly — they are richer, handle more edge cases, and follow the dispatcher+processors+helpers architecture instead of flat modules. These code blocks are preserved in this document as design archaeology but should NOT be used as implementation templates.
