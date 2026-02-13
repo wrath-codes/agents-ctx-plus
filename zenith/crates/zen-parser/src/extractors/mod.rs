@@ -21,6 +21,7 @@ pub use dispatcher::python;
 pub use dispatcher::ruby;
 pub use dispatcher::rst;
 pub use dispatcher::rust;
+pub use dispatcher::svelte;
 pub use dispatcher::toml;
 pub use dispatcher::tsx;
 pub use dispatcher::typescript;

@@ -7,6 +7,8 @@ mod markdown_lang;
 pub use markdown_lang::MarkdownLang;
 mod rst_lang;
 pub use rst_lang::RstLang;
+mod svelte_lang;
+pub use svelte_lang::SvelteLang;
 mod toml_lang;
 pub use toml_lang::TomlLang;
 
@@ -22,12 +24,16 @@ pub type TomlAstTree = ast_grep_core::AstGrep<StrDoc<TomlLang>>;
 /// The concrete AST type returned by `parse_rst_source`.
 pub type RstAstTree = ast_grep_core::AstGrep<StrDoc<RstLang>>;
 
+/// The concrete AST type returned by `parse_svelte_source`.
+pub type SvelteAstTree = ast_grep_core::AstGrep<StrDoc<SvelteLang>>;
+
 /// Extended language detection that includes custom languages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetectedLanguage {
     Builtin(SupportLang),
     Markdown,
     Rst,
+    Svelte,
     Toml,
 }
 
@@ -75,6 +81,7 @@ pub fn detect_language_ext(file_path: &str) -> Option<DetectedLanguage> {
     match ext {
         "md" | "markdown" => Some(DetectedLanguage::Markdown),
         "rst" | "rest" => Some(DetectedLanguage::Rst),
+        "svelte" => Some(DetectedLanguage::Svelte),
         "toml" => Some(DetectedLanguage::Toml),
         _ => detect_language(file_path).map(DetectedLanguage::Builtin),
     }
@@ -106,6 +113,13 @@ pub fn parse_toml_source(source: &str) -> TomlAstTree {
 pub fn parse_rst_source(source: &str) -> RstAstTree {
     use ast_grep_core::tree_sitter::LanguageExt;
     RstLang.ast_grep(source)
+}
+
+/// Parse Svelte source using the custom `tree-sitter-svelte-next` language.
+#[must_use]
+pub fn parse_svelte_source(source: &str) -> SvelteAstTree {
+    use ast_grep_core::tree_sitter::LanguageExt;
+    SvelteLang.ast_grep(source)
 }
 
 #[cfg(test)]
@@ -229,6 +243,14 @@ mod tests {
     }
 
     #[test]
+    fn detect_svelte_extended() {
+        assert_eq!(
+            detect_language_ext("web/App.svelte"),
+            Some(DetectedLanguage::Svelte)
+        );
+    }
+
+    #[test]
     fn detect_builtin_via_extended() {
         assert_eq!(
             detect_language_ext("src/main.rs"),
@@ -265,6 +287,12 @@ mod tests {
     #[test]
     fn parse_rst_source_produces_document_root() {
         let tree = parse_rst_source("Title\n=====\n\nText\n");
+        assert_eq!(tree.root().kind().as_ref(), "document");
+    }
+
+    #[test]
+    fn parse_svelte_source_produces_document_root() {
+        let tree = parse_svelte_source("<script>let n = 1;</script><h1>{n}</h1>");
         assert_eq!(tree.root().kind().as_ref(), "document");
     }
 }

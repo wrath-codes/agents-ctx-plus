@@ -17,6 +17,7 @@ pub mod python;
 pub mod ruby;
 pub mod rst;
 pub mod rust;
+pub mod svelte;
 pub mod tsx;
 pub mod typescript;
 pub mod toml;

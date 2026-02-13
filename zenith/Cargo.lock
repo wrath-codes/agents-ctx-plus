@@ -10434,6 +10434,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-svelte-next"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56f88190d0743e897c3e148a7e241aba0a8844b8afe816943851426e3f7b9753"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-swift"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11700,6 +11710,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-md",
  "tree-sitter-rst",
+ "tree-sitter-svelte-next",
  "tree-sitter-toml-ng",
  "zen-core",
 ]
