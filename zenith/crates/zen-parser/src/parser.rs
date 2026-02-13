@@ -35,6 +35,8 @@ pub enum DetectedLanguage {
     Rst,
     Svelte,
     Toml,
+    /// Plain text (`.txt`, `llms.txt`, etc.) — uses smart format routing.
+    Text,
 }
 
 /// Detect the programming language from a file path extension.
@@ -73,10 +75,11 @@ pub fn detect_language(file_path: &str) -> Option<SupportLang> {
 pub fn detect_language_ext(file_path: &str) -> Option<DetectedLanguage> {
     let ext = file_path.rsplit('.').next()?;
     match ext {
-        "md" | "markdown" => Some(DetectedLanguage::Markdown),
+        "md" | "markdown" | "mdx" => Some(DetectedLanguage::Markdown),
         "rst" | "rest" => Some(DetectedLanguage::Rst),
         "svelte" => Some(DetectedLanguage::Svelte),
         "toml" => Some(DetectedLanguage::Toml),
+        "txt" => Some(DetectedLanguage::Text),
         _ => detect_language(file_path).map(DetectedLanguage::Builtin),
     }
 }
