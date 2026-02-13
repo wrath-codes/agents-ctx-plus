@@ -16,21 +16,27 @@ class C {
         .find(|i| i.kind == SymbolKind::Module && i.name.contains(" as private "))
         .expect("expected as clause symbol");
 
-    assert!(as_clause
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "trait_use:mode=as"));
-    assert!(as_clause
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "trait_use:visibility=private"));
-    assert!(as_clause
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "trait_use:alias=pingA"));
+    assert!(
+        as_clause
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "trait_use:mode=as")
+    );
+    assert!(
+        as_clause
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "trait_use:visibility=private")
+    );
+    assert!(
+        as_clause
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "trait_use:alias=pingA")
+    );
 }
 
 #[test]
@@ -50,16 +56,20 @@ class C {
         .iter()
         .find(|i| i.kind == SymbolKind::Module && i.name.contains("insteadof"))
         .expect("expected insteadof clause symbol");
-    assert!(insteadof
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "trait_use:mode=insteadof"));
-    assert!(insteadof
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a.starts_with("trait_use:instead_of=")));
+    assert!(
+        insteadof
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "trait_use:mode=insteadof")
+    );
+    assert!(
+        insteadof
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a.starts_with("trait_use:instead_of="))
+    );
     assert!(
         insteadof
             .metadata

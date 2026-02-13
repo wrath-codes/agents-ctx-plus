@@ -54,10 +54,11 @@ class RepoImpl {}
 
     let items = parse_and_extract(source);
     let repo = find_by_name(&items, "RepoImpl");
-    assert!(repo
-        .metadata
-        .base_classes
-        .iter()
-        .any(|b| b == "BaseRepo<User>"));
+    assert!(
+        repo.metadata
+            .base_classes
+            .iter()
+            .any(|b| b == "BaseRepo<User>")
+    );
     assert!(repo.metadata.base_classes.iter().any(|b| b == "Repo<User>"));
 }

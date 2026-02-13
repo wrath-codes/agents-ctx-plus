@@ -15,21 +15,25 @@ $tmp = new class() {
         .iter()
         .find(|i| i.kind == SymbolKind::Method && i.name == "value")
         .expect("expected anonymous class method");
-    assert!(method
-        .metadata
-        .owner_name
-        .as_deref()
-        .is_some_and(|o| o.starts_with("<anonymous_class@")));
+    assert!(
+        method
+            .metadata
+            .owner_name
+            .as_deref()
+            .is_some_and(|o| o.starts_with("<anonymous_class@"))
+    );
 
     let property = items
         .iter()
         .find(|i| i.kind == SymbolKind::Property && i.name == "name")
         .expect("expected anonymous class property");
-    assert!(property
-        .metadata
-        .owner_name
-        .as_deref()
-        .is_some_and(|o| o.starts_with("<anonymous_class@")));
+    assert!(
+        property
+            .metadata
+            .owner_name
+            .as_deref()
+            .is_some_and(|o| o.starts_with("<anonymous_class@"))
+    );
 }
 
 #[test]

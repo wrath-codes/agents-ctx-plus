@@ -13,16 +13,20 @@ $cb = function () { return 1; };
         .find(|i| i.kind == SymbolKind::Function && i.name.starts_with("<closure@"))
         .expect("expected closure symbol");
 
-    assert!(closure
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "callable_origin:assignment"));
-    assert!(closure
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a.starts_with("callable_alias:")));
+    assert!(
+        closure
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "callable_origin:assignment")
+    );
+    assert!(
+        closure
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a.starts_with("callable_alias:"))
+    );
 }
 
 #[test]
@@ -38,11 +42,13 @@ $x = ['k' => function () { return 1; }];
         .find(|i| i.kind == SymbolKind::Function && i.name.starts_with("<closure@"))
         .expect("expected closure symbol");
 
-    assert!(closure
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "callable_origin:array_pair" || a == "callable_origin:assignment"));
+    assert!(
+        closure
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "callable_origin:array_pair" || a == "callable_origin:assignment")
+    );
 }
 
 #[test]
@@ -60,11 +66,13 @@ function mk() {
         .find(|i| i.kind == SymbolKind::Function && i.name.starts_with("<arrow@"))
         .expect("expected arrow symbol");
 
-    assert!(arrow
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "callable_origin:return"));
+    assert!(
+        arrow
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "callable_origin:return")
+    );
 }
 
 #[test]
@@ -80,9 +88,11 @@ consume(function () { return 1; });
         .find(|i| i.kind == SymbolKind::Function && i.name.starts_with("<closure@"))
         .expect("expected closure symbol");
 
-    assert!(closure
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "callable_origin:argument"));
+    assert!(
+        closure
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "callable_origin:argument")
+    );
 }

@@ -10,11 +10,12 @@ function a(string|int|int $x): string|int|int { return $x; }
     let items = parse_and_extract(source);
     let a = find_by_name(&items, "a");
     assert_eq!(a.metadata.return_type.as_deref(), Some("int|string"));
-    assert!(a
-        .metadata
-        .parameters
-        .iter()
-        .any(|p| p.contains("x: int|string")));
+    assert!(
+        a.metadata
+            .parameters
+            .iter()
+            .any(|p| p.contains("x: int|string"))
+    );
 }
 
 #[test]
