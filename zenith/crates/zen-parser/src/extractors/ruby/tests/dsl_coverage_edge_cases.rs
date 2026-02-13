@@ -16,53 +16,66 @@ end
     let items = parse_and_extract(source);
 
     let owner = find_by_name(&items, "owner");
-    assert!(owner
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:has_one"));
+    assert!(
+        owner
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:has_one")
+    );
 
     let tags = find_by_name(&items, "tags");
-    assert!(tags
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:habtm"));
+    assert!(
+        tags.metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:habtm")
+    );
 
     let state = find_by_name(&items, "state");
-    assert!(state
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:enum"));
+    assert!(
+        state
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:enum")
+    );
 
     let delegate = find_by_name(&items, "name");
-    assert!(delegate
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:delegate"));
+    assert!(
+        delegate
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:delegate")
+    );
 
     let validate = find_by_name(&items, "validate");
-    assert!(validate
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:validate"));
+    assert!(
+        validate
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:validate")
+    );
 
     let helper_method = find_by_name(&items, "helper_method");
-    assert!(helper_method
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:helper_method"));
+    assert!(
+        helper_method
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:helper_method")
+    );
 
     let around_save = find_by_name(&items, "around_save");
-    assert!(around_save
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:around_save"));
+    assert!(
+        around_save
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:around_save")
+    );
 }
 
 #[test]

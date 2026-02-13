@@ -251,7 +251,7 @@ fn is_adornment(line: &str) -> bool {
     chars.all(|c| c == first)
 }
 
-fn adornment_rank(ch: char) -> u8 {
+const fn adornment_rank(ch: char) -> u8 {
     match ch {
         '=' => 1,
         '-' => 2,

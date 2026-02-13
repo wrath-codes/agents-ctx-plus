@@ -13,7 +13,9 @@ pub(super) fn scalar_type_name<D: ast_grep_core::Doc>(node: &Node<D>) -> String 
         }
     }
 
-    if kr == "plain_scalar" && let Some(child) = node.children().next() {
+    if kr == "plain_scalar"
+        && let Some(child) = node.children().next()
+    {
         return scalar_type_name(&child);
     }
 

@@ -13,31 +13,41 @@ literal: |
     let items = parse_and_extract(source);
 
     let message = find_by_name(&items, "message");
-    assert!(message
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:tag:str"));
-    assert!(message
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:block_style:folded"));
-    assert!(message
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:block_header:>-"));
+    assert!(
+        message
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:tag:str")
+    );
+    assert!(
+        message
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:block_style:folded")
+    );
+    assert!(
+        message
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:block_header:>-")
+    );
 
     let literal = find_by_name(&items, "literal");
-    assert!(literal
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:block_style:literal"));
-    assert!(literal
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:block_header:|"));
+    assert!(
+        literal
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:block_style:literal")
+    );
+    assert!(
+        literal
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:block_header:|")
+    );
 }

@@ -4,10 +4,10 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../yaml/helpers.rs"]
-mod yaml_helpers;
 #[path = "../yaml/processors.rs"]
 mod processors;
+#[path = "../yaml/helpers.rs"]
+mod yaml_helpers;
 
 /// Extract significant YAML symbols from a document stream.
 ///

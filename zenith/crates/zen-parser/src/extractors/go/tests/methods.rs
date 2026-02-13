@@ -8,11 +8,12 @@ fn pointer_receiver_method_extracted() {
     assert_eq!(m.kind, SymbolKind::Method);
     assert_eq!(m.visibility, Visibility::Public);
     assert_eq!(m.metadata.for_type.as_deref(), Some("Config"));
-    assert!(m
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "receiver:pointer"));
+    assert!(
+        m.metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "receiver:pointer")
+    );
 }
 
 #[test]

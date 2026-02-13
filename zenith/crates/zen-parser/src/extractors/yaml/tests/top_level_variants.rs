@@ -13,9 +13,10 @@ fn comments_are_tagged_as_nonstandard() {
     let source = "# note\na: 1\n";
     let items = parse_and_extract(source);
     let key = find_by_name(&items, "a");
-    assert!(key
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:nonstandard:comments"));
+    assert!(
+        key.metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:nonstandard:comments")
+    );
 }

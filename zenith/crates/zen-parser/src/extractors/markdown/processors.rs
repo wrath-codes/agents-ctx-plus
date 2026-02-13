@@ -157,6 +157,7 @@ pub(super) fn frontmatter_item<D: ast_grep_core::Doc>(node: &Node<D>, flavor: &s
     )
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn inline_items_from_node<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<ParsedItem> {
     let text = node.text().to_string();
     let base_line = node.start_pos().line() as u32 + 1;

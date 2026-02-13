@@ -14,16 +14,19 @@ fn adds_scalar_and_shape_metadata() {
     assert_eq!(note.metadata.return_type.as_deref(), Some("null"));
 
     let routes = find_by_name(&items, "routes");
-    assert!(routes
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:array_count:2"));
+    assert!(
+        routes
+            .metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:array_count:2")
+    );
 
     let app = find_by_name(&items, "app");
-    assert!(app
-        .metadata
-        .attributes
-        .iter()
-        .any(|attr| attr == "yaml:object_keys:5"));
+    assert!(
+        app.metadata
+            .attributes
+            .iter()
+            .any(|attr| attr == "yaml:object_keys:5")
+    );
 }

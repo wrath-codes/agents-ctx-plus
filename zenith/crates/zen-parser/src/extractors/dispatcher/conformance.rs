@@ -7,34 +7,36 @@ fn constructor_normalization_across_languages() {
     let js_source = "class User { constructor(name) { this.name = name; } }";
     let js_root = ast_grep_language::SupportLang::JavaScript.ast_grep(js_source);
     let js_items = super::javascript::extract(&js_root).expect("js extraction");
-    assert!(js_items
-        .iter()
-        .any(|i| i.kind == SymbolKind::Constructor
-            && i.metadata.owner_name.as_deref() == Some("User")));
+    assert!(
+        js_items.iter().any(|i| i.kind == SymbolKind::Constructor
+            && i.metadata.owner_name.as_deref() == Some("User"))
+    );
 
     let ts_source = "class User { constructor(public name: string) {} }";
     let ts_root = SupportLang::TypeScript.ast_grep(ts_source);
     let ts_items =
         super::typescript::extract(&ts_root, SupportLang::TypeScript).expect("ts extraction");
-    assert!(ts_items
-        .iter()
-        .any(|i| i.kind == SymbolKind::Constructor
-            && i.metadata.owner_name.as_deref() == Some("User")));
+    assert!(
+        ts_items.iter().any(|i| i.kind == SymbolKind::Constructor
+            && i.metadata.owner_name.as_deref() == Some("User"))
+    );
 
     let py_source = "class User:\n    def __init__(self, name):\n        self.name = name\n";
     let py_root = ast_grep_language::SupportLang::Python.ast_grep(py_source);
     let py_items = super::python::extract(&py_root).expect("python extraction");
-    assert!(py_items
-        .iter()
-        .any(|i| i.kind == SymbolKind::Constructor
-            && i.metadata.owner_name.as_deref() == Some("User")));
+    assert!(
+        py_items.iter().any(|i| i.kind == SymbolKind::Constructor
+            && i.metadata.owner_name.as_deref() == Some("User"))
+    );
 
     let rust_source = "struct User; impl User { fn new() -> Self { Self } }";
     let rust_root = SupportLang::Rust.ast_grep(rust_source);
     let rust_items = super::rust::extract(&rust_root, rust_source).expect("rust extraction");
-    assert!(rust_items
-        .iter()
-        .any(|i| i.kind == SymbolKind::Constructor && i.name == "new"));
+    assert!(
+        rust_items
+            .iter()
+            .any(|i| i.kind == SymbolKind::Constructor && i.name == "new")
+    );
 
     let csharp_source = "class User { public User(string name) {} }";
     let csharp_root = SupportLang::CSharp.ast_grep(csharp_source);

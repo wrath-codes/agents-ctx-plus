@@ -18,16 +18,20 @@ fn arrays_include_shape_and_elements() {
     let items = fixture_items();
 
     let ports = find_by_name(&items, "database.ports");
-    assert!(ports
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_count:3"));
-    assert!(ports
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_elements:integer"));
+    assert!(
+        ports
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_count:3")
+    );
+    assert!(
+        ports
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_elements:integer")
+    );
 
     assert_eq!(
         find_by_name(&items, "database.ports[0]").kind,

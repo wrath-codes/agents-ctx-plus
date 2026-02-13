@@ -20,11 +20,13 @@ fn primitive_array_elements_are_emitted() {
 
     let first = find_by_name(&items, "[0]");
     assert_eq!(first.metadata.return_type.as_deref(), Some("number"));
-    assert!(first
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "json:array_element"));
+    assert!(
+        first
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "json:array_element")
+    );
 
     let second = find_by_name(&items, "[1]");
     assert_eq!(second.metadata.return_type.as_deref(), Some("boolean"));
@@ -51,9 +53,10 @@ fn comments_are_ignored_when_present() {
     let items = parse_and_extract(source);
     let a = find_by_name(&items, "a");
     assert_eq!(a.metadata.return_type.as_deref(), Some("number"));
-    assert!(a
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "json:nonstandard:comments"));
+    assert!(
+        a.metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "json:nonstandard:comments")
+    );
 }

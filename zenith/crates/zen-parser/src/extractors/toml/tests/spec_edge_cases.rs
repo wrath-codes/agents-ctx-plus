@@ -16,18 +16,22 @@ fn marks_duplicate_and_conflicting_tables() {
     let items = edge_fixture_items();
     let dup_tables = find_all_by_name(&items, "dup");
     assert_eq!(dup_tables.len(), 2);
-    assert!(dup_tables[1]
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:duplicate_table:dup"));
+    assert!(
+        dup_tables[1]
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:duplicate_table:dup")
+    );
 
     let mix_table = find_by_name(&items, "mix");
-    assert!(mix_table
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:table_kind_conflict:mix"));
+    assert!(
+        mix_table
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:table_kind_conflict:mix")
+    );
 }
 
 #[test]
@@ -36,34 +40,42 @@ fn marks_duplicate_keys_and_mixed_arrays() {
 
     let dup_v = find_all_by_name(&items, "dup.v");
     assert_eq!(dup_v.len(), 2);
-    assert!(dup_v[1]
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:duplicate_key:dup.v"));
+    assert!(
+        dup_v[1]
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:duplicate_key:dup.v")
+    );
 
     let mixed = find_by_name(&items, "mix.mixed");
-    assert!(mixed
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_mixed"));
+    assert!(
+        mixed
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_mixed")
+    );
 }
 
 #[test]
 fn table_array_has_context_attributes() {
     let items = edge_fixture_items();
     let array_table = find_by_name(&items, "mix[0]");
-    assert!(array_table
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:table_array:path:mix"));
-    assert!(array_table
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:table_array:index:0"));
+    assert!(
+        array_table
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:table_array:path:mix")
+    );
+    assert!(
+        array_table
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:table_array:index:0")
+    );
 }
 
 #[test]
@@ -81,25 +93,31 @@ fn detects_key_hierarchy_conflicts() {
     let items = edge_fixture_items();
 
     let child = find_by_name(&items, "mix.key_parent.child");
-    assert!(child
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:key_parent_conflict:mix.key_parent"));
+    assert!(
+        child
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:key_parent_conflict:mix.key_parent")
+    );
 
     let parent = find_by_name(&items, "mix.key_child");
-    assert!(parent
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:key_child_conflict:mix.key_child"));
+    assert!(
+        parent
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:key_child_conflict:mix.key_child")
+    );
 
     let root_scalar_child = find_by_name(&items, "root_scalar.child");
-    assert!(root_scalar_child
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:table_key_conflict:root_scalar"));
+    assert!(
+        root_scalar_child
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:table_key_conflict:root_scalar")
+    );
 }
 
 #[test]

@@ -59,9 +59,11 @@ end
     let compute = find_by_name(&items, "compute");
     assert_eq!(compute.visibility, Visibility::Private);
     assert!(compute.metadata.is_static_member);
-    assert!(compute
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "ruby:private_class_method"));
+    assert!(
+        compute
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "ruby:private_class_method")
+    );
 }

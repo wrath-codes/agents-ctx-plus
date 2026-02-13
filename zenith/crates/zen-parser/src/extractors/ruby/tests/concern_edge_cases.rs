@@ -21,30 +21,38 @@ end
 
     let events = find_by_name(&items, "events");
     assert_eq!(events.kind, SymbolKind::Property);
-    assert!(events
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:concern:included"));
+    assert!(
+        events
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:concern:included")
+    );
 
     let before_save = find_by_name(&items, "before_save");
-    assert!(before_save
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:before_save"));
-    assert!(before_save
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:concern:included"));
+    assert!(
+        before_save
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:before_save")
+    );
+    assert!(
+        before_save
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:concern:included")
+    );
 
     let recent = find_by_name(&items, "recent");
     assert_eq!(recent.kind, SymbolKind::Method);
     assert!(recent.metadata.is_static_member);
-    assert!(recent
-        .metadata
-        .attributes
-        .iter()
-        .any(|attribute| attribute == "rails:concern:class_methods"));
+    assert!(
+        recent
+            .metadata
+            .attributes
+            .iter()
+            .any(|attribute| attribute == "rails:concern:class_methods")
+    );
 }

@@ -23,8 +23,7 @@ fn owner_path_for_line(sections: &[SectionContext], line: u32) -> String {
         .iter()
         .rev()
         .find(|s| s.start_line <= line && line <= s.end_line)
-        .map(|s| s.path.clone())
-        .unwrap_or_else(|| "$".to_string())
+        .map_or_else(|| "$".to_string(), |s| s.path.clone())
 }
 
 fn set_owner(item: &mut ParsedItem, owner: &str) {
@@ -49,15 +48,15 @@ fn resolve_references(items: &mut [ParsedItem]) {
     let mut substitutions: HashMap<String, String> = HashMap::new();
 
     for item in items.iter_mut() {
-        if let Some(label) = attr_value(item, "rst:label:target:") {
-            if let Some(prev) = targets.insert(label.to_string(), item.name.clone()) {
-                item.metadata
-                    .attributes
-                    .push(format!("rst:duplicate_target_label:{label}"));
-                item.metadata
-                    .attributes
-                    .push(format!("rst:duplicate_target_previous:{prev}"));
-            }
+        if let Some(label) = attr_value(item, "rst:label:target:")
+            && let Some(prev) = targets.insert(label.to_string(), item.name.clone())
+        {
+            item.metadata
+                .attributes
+                .push(format!("rst:duplicate_target_label:{label}"));
+            item.metadata
+                .attributes
+                .push(format!("rst:duplicate_target_previous:{prev}"));
         }
         if let Some(label) = attr_value(item, "rst:label:footnote:") {
             footnotes.insert(label.to_string(), item.name.clone());
@@ -128,6 +127,7 @@ fn resolve_references(items: &mut [ParsedItem]) {
 ///
 /// # Errors
 /// Returns `ParserError` if parsing fails.
+#[allow(clippy::too_many_lines)]
 pub fn extract<D: ast_grep_core::Doc>(
     root: &ast_grep_core::AstGrep<D>,
 ) -> Result<Vec<ParsedItem>, crate::error::ParserError> {
@@ -156,11 +156,11 @@ pub fn extract<D: ast_grep_core::Doc>(
             stack.pop();
         }
 
-        let owner_base = if let Some(parent) = stack.last() {
-            Some(parent.path.clone())
-        } else {
-            section_ctx.last().map(|s| s.path.clone())
-        };
+        let owner_base = stack
+            .last()
+            .map_or_else(|| section_ctx.last().map(|s| s.path.clone()), |parent| {
+                Some(parent.path.clone())
+            });
 
         if let Some(owner) = &owner_base {
             set_owner(&mut item, owner);
