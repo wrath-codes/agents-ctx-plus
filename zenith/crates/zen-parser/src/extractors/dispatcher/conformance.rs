@@ -51,6 +51,13 @@ fn constructor_normalization_across_languages() {
     assert!(java_items.iter().any(|i| {
         i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
     }));
+
+    let php_source = "<?php class User { public function __construct(string $name) {} }";
+    let php_root = SupportLang::Php.ast_grep(php_source);
+    let php_items = super::php::extract(&php_root).expect("php extraction");
+    assert!(php_items.iter().any(|i| {
+        i.kind == SymbolKind::Constructor && i.metadata.owner_name.as_deref() == Some("User")
+    }));
 }
 
 #[test]
@@ -136,4 +143,22 @@ fn property_and_field_members_have_owner_metadata() {
         .find(|i| i.kind == SymbolKind::Method && i.name == "make")
         .expect("expected lua table-constructor member method item");
     assert_eq!(lua_make.metadata.owner_name.as_deref(), Some("M"));
+
+    let php_source = "<?php class Card { public const MAX = 1; public string $id; }";
+    let php_root = SupportLang::Php.ast_grep(php_source);
+    let php_items = super::php::extract(&php_root).expect("php extraction");
+
+    let php_max = php_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Const && i.name == "MAX")
+        .expect("expected php const member item");
+    assert_eq!(php_max.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(php_max.metadata.owner_kind, Some(SymbolKind::Class));
+
+    let php_id = php_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Property && i.name == "id")
+        .expect("expected php property member item");
+    assert_eq!(php_id.metadata.owner_name.as_deref(), Some("Card"));
+    assert_eq!(php_id.metadata.owner_kind, Some(SymbolKind::Class));
 }

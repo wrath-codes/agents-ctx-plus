@@ -112,6 +112,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_php() {
+        assert_eq!(detect_language("index.php"), Some(SupportLang::Php));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);
