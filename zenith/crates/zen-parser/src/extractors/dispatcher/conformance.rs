@@ -96,4 +96,44 @@ fn property_and_field_members_have_owner_metadata() {
         .expect("expected field member item");
     assert_eq!(java_id.metadata.owner_name.as_deref(), Some("Card"));
     assert_eq!(java_id.metadata.owner_kind, Some(SymbolKind::Class));
+
+    let lua_source = "local M = { make = function(v) return v end, mode = 'x' }; function M.add(a, b) return a + b end; function M:greet(name) return name end; M.version = '1.0'; M['alias'] = function(v) return v end";
+    let lua_root = SupportLang::Lua.ast_grep(lua_source);
+    let lua_items = super::lua::extract(&lua_root).expect("lua extraction");
+
+    let lua_add = lua_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Method && i.name == "add")
+        .expect("expected lua method member item");
+    assert_eq!(lua_add.metadata.owner_name.as_deref(), Some("M"));
+    assert_eq!(lua_add.metadata.owner_kind, Some(SymbolKind::Module));
+    assert!(lua_add.metadata.is_static_member);
+
+    let lua_greet = lua_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Method && i.name == "greet")
+        .expect("expected lua colon-method member item");
+    assert_eq!(lua_greet.metadata.owner_name.as_deref(), Some("M"));
+    assert_eq!(lua_greet.metadata.owner_kind, Some(SymbolKind::Module));
+    assert!(!lua_greet.metadata.is_static_member);
+
+    let lua_version = lua_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Field && i.name == "version")
+        .expect("expected lua field member item");
+    assert_eq!(lua_version.metadata.owner_name.as_deref(), Some("M"));
+    assert_eq!(lua_version.metadata.owner_kind, Some(SymbolKind::Module));
+
+    let lua_alias = lua_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Method && i.name == "alias")
+        .expect("expected lua bracket member method item");
+    assert_eq!(lua_alias.metadata.owner_name.as_deref(), Some("M"));
+    assert_eq!(lua_alias.metadata.owner_kind, Some(SymbolKind::Module));
+
+    let lua_make = lua_items
+        .iter()
+        .find(|i| i.kind == SymbolKind::Method && i.name == "make")
+        .expect("expected lua table-constructor member method item");
+    assert_eq!(lua_make.metadata.owner_name.as_deref(), Some("M"));
 }

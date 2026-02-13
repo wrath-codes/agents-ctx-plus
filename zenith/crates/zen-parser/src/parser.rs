@@ -107,6 +107,11 @@ mod tests {
     }
 
     #[test]
+    fn detect_lua() {
+        assert_eq!(detect_language("init.lua"), Some(SupportLang::Lua));
+    }
+
+    #[test]
     fn detect_unknown_returns_none() {
         assert_eq!(detect_language("data.csv"), None);
         assert_eq!(detect_language("readme"), None);

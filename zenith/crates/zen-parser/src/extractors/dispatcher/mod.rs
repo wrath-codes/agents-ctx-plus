@@ -9,6 +9,7 @@ pub mod haskell;
 pub mod html;
 pub mod java;
 pub mod javascript;
+pub mod lua;
 pub mod python;
 pub mod rust;
 pub mod tsx;
