@@ -46,7 +46,7 @@ fn extract_ruby_doc_by_line<D: ast_grep_core::Doc>(node: &Node<D>) -> String {
         return String::new();
     }
 
-    let mut idx = start_line.saturating_sub(1);
+    let mut idx = start_line.saturating_sub(2);
     while idx > 0 && lines.get(idx).is_some_and(|line| line.trim().is_empty()) {
         idx -= 1;
     }

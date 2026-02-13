@@ -27,6 +27,18 @@ end
         .iter()
         .any(|attribute| attribute == "rails:concern:included"));
 
+    let before_save = find_by_name(&items, "before_save");
+    assert!(before_save
+        .metadata
+        .attributes
+        .iter()
+        .any(|attribute| attribute == "rails:before_save"));
+    assert!(before_save
+        .metadata
+        .attributes
+        .iter()
+        .any(|attribute| attribute == "rails:concern:included"));
+
     let recent = find_by_name(&items, "recent");
     assert_eq!(recent.kind, SymbolKind::Method);
     assert!(recent.metadata.is_static_member);

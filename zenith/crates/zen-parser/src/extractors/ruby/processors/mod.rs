@@ -402,8 +402,8 @@ fn resolve_method_visibility<D: ast_grep_core::Doc>(
         return Visibility::Public;
     }
 
-    if static_member && has_private_class_method_override(node, method_name) {
-        return Visibility::Private;
+    if let Some(visibility) = explicit_visibility_override(node, method_name, static_member) {
+        return visibility;
     }
 
     let mut section_visibility = None;
@@ -490,31 +490,42 @@ fn symbol_targets_from_directive(text: &str) -> Vec<String> {
         .collect()
 }
 
-fn has_private_class_method_override<D: ast_grep_core::Doc>(
+fn explicit_visibility_override<D: ast_grep_core::Doc>(
     node: &Node<D>,
     method_name: &str,
-) -> bool {
+    static_member: bool,
+) -> Option<Visibility> {
     let mut current = node.parent();
     while let Some(parent) = current {
         if matches!(parent.kind().as_ref(), "class" | "module") {
-            let owner_text = parent.text().to_string();
-            let needle = format!("private_class_method :{method_name}");
-            if owner_text.contains(&needle) {
-                return true;
+            for line in parent.text().lines() {
+                let trimmed = line.trim();
+                if static_member && trimmed.starts_with("private_class_method") {
+                    let symbols = symbol_targets_from_directive(trimmed);
+                    if symbols.iter().any(|symbol| symbol == method_name) {
+                        return Some(Visibility::Private);
+                    }
+                }
+
+                for (directive, visibility) in [
+                    ("private", Visibility::Private),
+                    ("protected", Visibility::Protected),
+                    ("public", Visibility::Public),
+                ] {
+                    if trimmed.starts_with(&format!("{directive} ")) {
+                        let symbols = symbol_targets_from_directive(trimmed);
+                        if symbols.iter().any(|symbol| symbol == method_name) {
+                            return Some(visibility);
+                        }
+                    }
+                }
             }
-            let needle = format!("private_class_method(:{method_name})");
-            if owner_text.contains(&needle) {
-                return true;
-            }
-            if owner_text.contains("private_class_method") && owner_text.contains(method_name) {
-                return true;
-            }
-            return false;
+            return None;
         }
         current = parent.parent();
     }
 
-    false
+    None
 }
 
 fn infer_rails_role<D: ast_grep_core::Doc>(node: &Node<D>, name: &str) -> Option<&'static str> {
