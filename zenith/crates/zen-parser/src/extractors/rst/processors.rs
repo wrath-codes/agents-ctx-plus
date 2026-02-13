@@ -78,9 +78,11 @@ pub(super) fn directive_item<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedIte
             .cloned()
             .or_else(|| options.get("lang").cloned())
             .or_else(|| {
-                rst_helpers::directive_parts(node)
-                    .0
-                    .and_then(|a| a.split_whitespace().next().map(|s| s.to_string()))
+                rst_helpers::directive_parts(node).0.and_then(|a| {
+                    a.split_whitespace()
+                        .next()
+                        .map(std::string::ToString::to_string)
+                })
             })
         {
             metadata.push_attribute(format!("rst:code_lang:{args}"));

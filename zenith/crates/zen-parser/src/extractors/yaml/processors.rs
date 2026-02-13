@@ -134,7 +134,9 @@ fn collect_mapping<D: ast_grep_core::Doc>(
         collect_pair(&child, path, duplicate, ctx, out);
     }
 
-    if !path.is_empty() && let Some(item) = out.iter_mut().find(|item| item.name == path) {
+    if !path.is_empty()
+        && let Some(item) = out.iter_mut().find(|item| item.name == path)
+    {
         item.metadata
             .attributes
             .push(format!("yaml:object_keys:{pair_count}"));
@@ -228,9 +230,9 @@ fn collect_sequence<D: ast_grep_core::Doc>(
         }
 
         let value_node = if child.kind().as_ref() == "block_sequence_item" {
-            child
-                .children()
-                .find(|node| node.kind().as_ref() == "block_node" || node.kind().as_ref() == "flow_node")
+            child.children().find(|node| {
+                node.kind().as_ref() == "block_node" || node.kind().as_ref() == "flow_node"
+            })
         } else {
             Some(child)
         };
@@ -289,12 +291,16 @@ fn collect_sequence<D: ast_grep_core::Doc>(
         idx += 1;
     }
 
-    if !path.is_empty() && let Some(item) = out.iter_mut().find(|item| item.name == path) {
+    if !path.is_empty()
+        && let Some(item) = out.iter_mut().find(|item| item.name == path)
+    {
         item.metadata
             .attributes
             .push(format!("yaml:array_count:{idx}"));
         if kinds.is_empty() {
-            item.metadata.attributes.push("yaml:array_elements:empty".to_string());
+            item.metadata
+                .attributes
+                .push("yaml:array_elements:empty".to_string());
         } else {
             item.metadata.attributes.push(format!(
                 "yaml:array_elements:{}",

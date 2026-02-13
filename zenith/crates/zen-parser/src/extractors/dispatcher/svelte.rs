@@ -4,10 +4,10 @@ use ast_grep_core::matcher::KindMatcher;
 
 use crate::types::ParsedItem;
 
-#[path = "../svelte/helpers.rs"]
-mod svelte_helpers;
 #[path = "../svelte/processors.rs"]
 mod processors;
+#[path = "../svelte/helpers.rs"]
+mod svelte_helpers;
 
 /// Extract significant Svelte symbols from a document.
 ///

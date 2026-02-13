@@ -14,13 +14,14 @@ pub mod lua;
 pub mod markdown;
 pub mod php;
 pub mod python;
-pub mod ruby;
 pub mod rst;
+pub mod ruby;
 pub mod rust;
 pub mod svelte;
+pub mod text;
+pub mod toml;
 pub mod tsx;
 pub mod typescript;
-pub mod toml;
 pub mod yaml;
 
 #[cfg(test)]

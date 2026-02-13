@@ -21,12 +21,11 @@ fn owner_path_for_line(headings: &[HeadingContext], line: u32) -> String {
         .iter()
         .rev()
         .find(|h| h.start_line <= line)
-        .map(|h| h.path.clone())
-        .unwrap_or_else(|| "$".to_string())
+        .map_or_else(|| "$".to_string(), |h| h.path.clone())
 }
 
-fn set_owner(item: &mut ParsedItem, owner: String) {
-    item.metadata.owner_name = Some(owner.clone());
+fn set_owner(item: &mut ParsedItem, owner: &str) {
+    item.metadata.owner_name = Some(owner.to_string());
     item.metadata.owner_kind = Some(crate::types::SymbolKind::Module);
     item.metadata
         .attributes
@@ -65,7 +64,7 @@ pub fn extract<D: ast_grep_core::Doc>(
         }
 
         if let Some(parent) = heading_stack.last() {
-            set_owner(&mut item, parent.path.clone());
+            set_owner(&mut item, &parent.path);
         }
 
         let path = if let Some(parent) = heading_stack.last() {
@@ -107,7 +106,7 @@ pub fn extract<D: ast_grep_core::Doc>(
             };
             let line = item.start_line;
             let owner = owner_path_for_line(&heading_ctx, line);
-            set_owner(&mut item, owner);
+            set_owner(&mut item, &owner);
             items.push(item);
         }
     }
@@ -119,7 +118,7 @@ pub fn extract<D: ast_grep_core::Doc>(
         for mut item in processors::inline_items_from_node(&node) {
             let line = item.start_line;
             let owner = owner_path_for_line(&heading_ctx, line);
-            set_owner(&mut item, owner);
+            set_owner(&mut item, &owner);
             items.push(item);
         }
     }
@@ -131,7 +130,7 @@ pub fn extract<D: ast_grep_core::Doc>(
         for mut item in processors::inline_items_from_node(&node) {
             let line = item.start_line;
             let owner = owner_path_for_line(&heading_ctx, line);
-            set_owner(&mut item, owner);
+            set_owner(&mut item, &owner);
             items.push(item);
         }
     }
@@ -143,7 +142,7 @@ pub fn extract<D: ast_grep_core::Doc>(
         for mut item in processors::inline_items_from_node(&node) {
             let line = item.start_line;
             let owner = owner_path_for_line(&heading_ctx, line);
-            set_owner(&mut item, owner);
+            set_owner(&mut item, &owner);
             items.push(item);
         }
     }

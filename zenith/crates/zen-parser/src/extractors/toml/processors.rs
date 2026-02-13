@@ -64,8 +64,8 @@ fn collect_table<D: ast_grep_core::Doc>(
     ctx: &mut TomlContext,
     out: &mut Vec<ParsedItem>,
 ) {
-    let mut path_parts = toml_helpers::key_parts_from_table_text(&node.text(), is_array_table)
-        .unwrap_or_default();
+    let mut path_parts =
+        toml_helpers::key_parts_from_table_text(&node.text(), is_array_table).unwrap_or_default();
     if path_parts.is_empty() {
         for child in node.children() {
             if child.kind().as_ref() == "pair" {
@@ -220,7 +220,9 @@ fn collect_pair<D: ast_grep_core::Doc>(
     metadata.set_owner_kind(Some(SymbolKind::Module));
     metadata.set_return_type(Some(toml_helpers::toml_value_type(&value_node)));
     metadata.push_attribute(format!("toml:key:{key_name}"));
-    if let Some(norm) = toml_helpers::normalized_scalar(value_node.kind().as_ref(), &value_node.text()) {
+    if let Some(norm) =
+        toml_helpers::normalized_scalar(value_node.kind().as_ref(), &value_node.text())
+    {
         metadata.push_attribute(format!("toml:value_normalized:{norm}"));
     }
     if duplicate_key {
@@ -417,9 +419,7 @@ fn enrich_dependency_metadata<D: ast_grep_core::Doc>(
                 if pair_text.trim_start().starts_with("registry") {
                     metadata.push_attribute("toml:dep_source:registry");
                 }
-                if pair_text.trim_start().starts_with("optional")
-                    && pair_text.contains("= true")
-                {
+                if pair_text.trim_start().starts_with("optional") && pair_text.contains("= true") {
                     metadata.push_attribute("toml:dep_optional");
                 }
                 if pair_text.trim_start().starts_with("package") {
@@ -450,13 +450,11 @@ fn enrich_array_dependency_metadata<D: ast_grep_core::Doc>(
 
     let dep_scope = if array_path == "project.dependencies" {
         Some("pep621:dependencies".to_string())
-    } else if let Some(group) = array_path
-        .strip_prefix("project.optional-dependencies.")
-        .and_then(|s| s.split('.').next())
-    {
-        Some(format!("pep621:optional:{group}"))
     } else {
-        None
+        array_path
+            .strip_prefix("project.optional-dependencies.")
+            .and_then(|s| s.split('.').next())
+            .map(|group| format!("pep621:optional:{group}"))
     };
 
     let Some(dep_scope) = dep_scope else {

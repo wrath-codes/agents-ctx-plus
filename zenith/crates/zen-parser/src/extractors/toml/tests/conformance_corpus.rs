@@ -28,25 +28,31 @@ fn covers_arrays_inline_tables_and_nested_arrays() {
     let items = conformance_items();
 
     let numbers = find_by_name(&items, "numbers");
-    assert!(numbers
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_elements:integer"));
+    assert!(
+        numbers
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_elements:integer")
+    );
 
     let mixed = find_by_name(&items, "mixed_numbers");
-    assert!(mixed
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_mixed"));
+    assert!(
+        mixed
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_mixed")
+    );
 
     let matrix = find_by_name(&items, "matrix");
-    assert!(matrix
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "toml:array_elements:array"));
+    assert!(
+        matrix
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "toml:array_elements:array")
+    );
 
     assert_eq!(find_by_name(&items, "point.x").kind, SymbolKind::Property);
     assert_eq!(

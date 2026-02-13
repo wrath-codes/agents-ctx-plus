@@ -5,8 +5,8 @@ pub(super) use crate::types::{ParsedItem, SymbolKind, Visibility};
 
 mod assignments_and_functions;
 mod concern_edge_cases;
-mod dsl_coverage_edge_cases;
 mod docs_signatures_lines;
+mod dsl_coverage_edge_cases;
 mod members_and_visibility;
 mod rails_dsl;
 mod types_and_modules;

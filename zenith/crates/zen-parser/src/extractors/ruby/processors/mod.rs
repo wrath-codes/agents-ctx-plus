@@ -21,7 +21,9 @@ pub(super) fn process_type_declaration<D: ast_grep_core::Doc>(
     let full_name = qualify_name(node, &local_name);
     let mut metadata = SymbolMetadata::default();
 
-    if kind == SymbolKind::Class && let Some(role) = infer_rails_role(node, &full_name) {
+    if kind == SymbolKind::Class
+        && let Some(role) = infer_rails_role(node, &full_name)
+    {
         metadata.push_attribute(format!("rails:kind:{role}"));
     }
 
@@ -419,7 +421,9 @@ fn resolve_method_visibility<D: ast_grep_core::Doc>(
         if kr == "call" {
             let call_name = ruby_helpers::call_method_name(&sibling);
             let receiver = ruby_helpers::call_receiver_text(&sibling);
-            if let Some(call_name) = call_name && receiver.is_none() {
+            if let Some(call_name) = call_name
+                && receiver.is_none()
+            {
                 let args = ruby_helpers::call_argument_texts(&sibling);
                 let symbols: Vec<String> = args
                     .iter()

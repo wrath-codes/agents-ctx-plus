@@ -2,10 +2,10 @@
 
 use crate::types::ParsedItem;
 
-#[path = "../toml/helpers.rs"]
-mod toml_helpers;
 #[path = "../toml/processors.rs"]
 mod processors;
+#[path = "../toml/helpers.rs"]
+mod toml_helpers;
 
 /// Extract significant TOML symbols from a document.
 ///

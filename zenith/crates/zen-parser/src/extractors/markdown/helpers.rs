@@ -270,10 +270,7 @@ pub(super) fn extract_bare_urls(line: &str) -> Vec<String> {
 
         if end > start {
             let mut url = line[start..end].to_string();
-            while matches!(
-                url.chars().last(),
-                Some('.') | Some(',') | Some(';') | Some(':') | Some('!') | Some('?')
-            ) {
+            while matches!(url.chars().last(), Some('.' | ',' | ';' | ':' | '!' | '?')) {
                 url.pop();
             }
             if !url.is_empty() {

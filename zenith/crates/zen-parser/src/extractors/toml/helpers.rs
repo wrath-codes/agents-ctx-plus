@@ -20,7 +20,6 @@ pub(super) fn normalize_key(raw: &str) -> String {
 
 pub(super) fn key_parts<D: ast_grep_core::Doc>(node: &Node<D>) -> Vec<String> {
     match node.kind().as_ref() {
-        "bare_key" | "quoted_key" => vec![normalize_key(&node.text())],
         "dotted_key" => {
             let mut parts = Vec::new();
             for child in node.children() {
@@ -135,11 +134,7 @@ pub(super) fn key_parts_from_table_text(
         line.strip_prefix('[')?.strip_suffix(']')?
     };
     let parts = split_dotted_key_preserving_quotes(inner.trim());
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts)
-    }
+    if parts.is_empty() { None } else { Some(parts) }
 }
 
 pub(super) fn path_prefixes(path: &str) -> Vec<String> {
@@ -181,10 +176,7 @@ pub(super) fn dependency_from_path(full_path: &str) -> Option<(String, String)> 
         return Some(("cargo:dev-dependencies".to_string(), parts[1].to_string()));
     }
     if parts[0] == "build-dependencies" {
-        return Some((
-            "cargo:build-dependencies".to_string(),
-            parts[1].to_string(),
-        ));
+        return Some(("cargo:build-dependencies".to_string(), parts[1].to_string()));
     }
     if parts.len() >= 3 && parts[0] == "workspace" && parts[1] == "dependencies" {
         return Some((
@@ -207,25 +199,16 @@ pub(super) fn dependency_from_path(full_path: &str) -> Option<(String, String)> 
         ));
     }
 
-    if parts.len() >= 4
-        && parts[0] == "tool"
-        && parts[1] == "poetry"
-        && parts[2] == "dependencies"
+    if parts.len() >= 4 && parts[0] == "tool" && parts[1] == "poetry" && parts[2] == "dependencies"
     {
-        return Some((
-            "poetry:dependencies".to_string(),
-            parts[3].to_string(),
-        ));
+        return Some(("poetry:dependencies".to_string(), parts[3].to_string()));
     }
     if parts.len() >= 4
         && parts[0] == "tool"
         && parts[1] == "poetry"
         && parts[2] == "dev-dependencies"
     {
-        return Some((
-            "poetry:dev-dependencies".to_string(),
-            parts[3].to_string(),
-        ));
+        return Some(("poetry:dev-dependencies".to_string(), parts[3].to_string()));
     }
     if parts.len() >= 6
         && parts[0] == "tool"
@@ -233,10 +216,7 @@ pub(super) fn dependency_from_path(full_path: &str) -> Option<(String, String)> 
         && parts[2] == "group"
         && parts[4] == "dependencies"
     {
-        return Some((
-            format!("poetry:group:{}", parts[3]),
-            parts[5].to_string(),
-        ));
+        return Some((format!("poetry:group:{}", parts[3]), parts[5].to_string()));
     }
 
     None
@@ -271,13 +251,13 @@ fn normalize_toml_string(raw: &str) -> Option<String> {
     {
         return Some(unescape_basic_string(inner));
     }
-    if let Some(inner) = trimmed.strip_prefix("'''").and_then(|s| s.strip_suffix("'''")) {
+    if let Some(inner) = trimmed
+        .strip_prefix("'''")
+        .and_then(|s| s.strip_suffix("'''"))
+    {
         return Some(inner.to_string());
     }
-    if let Some(inner) = trimmed
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-    {
+    if let Some(inner) = trimmed.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
         return Some(unescape_basic_string(inner));
     }
     if let Some(inner) = trimmed
@@ -291,11 +271,9 @@ fn normalize_toml_string(raw: &str) -> Option<String> {
 
 fn normalize_integer(raw: &str) -> String {
     let no_underscores = raw.replace('_', "");
-    if let Some(stripped) = no_underscores.strip_prefix('+') {
-        stripped.to_string()
-    } else {
-        no_underscores
-    }
+    no_underscores
+        .strip_prefix('+')
+        .map_or_else(|| no_underscores.clone(), std::string::ToString::to_string)
 }
 
 fn normalize_float(raw: &str) -> String {
@@ -371,7 +349,7 @@ pub(super) fn split_dotted_key_preserving_quotes(raw: &str) -> Vec<String> {
 
 fn unescape_basic_string(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
+    let mut chars = input.chars();
 
     while let Some(ch) = chars.next() {
         if ch != '\\' {

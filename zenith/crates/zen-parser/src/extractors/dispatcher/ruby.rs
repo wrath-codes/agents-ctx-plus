@@ -6,10 +6,10 @@ use ast_grep_language::SupportLang;
 
 use crate::types::ParsedItem;
 
-#[path = "../ruby/helpers.rs"]
-mod ruby_helpers;
 #[path = "../ruby/processors/mod.rs"]
 mod processors;
+#[path = "../ruby/helpers.rs"]
+mod ruby_helpers;
 
 const RUBY_TOP_KINDS: &[&str] = &[
     "class",

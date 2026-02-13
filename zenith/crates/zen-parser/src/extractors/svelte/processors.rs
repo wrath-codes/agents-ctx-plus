@@ -44,8 +44,7 @@ pub(super) fn root_item<D: ast_grep_core::Doc>(root: &Node<D>) -> ParsedItem {
 pub(super) fn script_item<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
     let attrs = svelte_helpers::extract_tag_attrs(node);
     let lang = svelte_helpers::attr_value(&attrs, "lang")
-        .map(|s| s.trim_matches('"').to_string())
-        .unwrap_or_else(|| "js".to_string());
+        .map_or_else(|| "js".to_string(), |s| s.trim_matches('"').to_string());
     let context = svelte_helpers::attr_value(&attrs, "context")
         .map(|s| s.trim_matches('"').to_string())
         .unwrap_or_default();
@@ -95,8 +94,7 @@ pub(super) fn script_item<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
 pub(super) fn style_item<D: ast_grep_core::Doc>(node: &Node<D>) -> ParsedItem {
     let attrs = svelte_helpers::extract_tag_attrs(node);
     let lang = svelte_helpers::attr_value(&attrs, "lang")
-        .map(|s| s.trim_matches('"').to_string())
-        .unwrap_or_else(|| "css".to_string());
+        .map_or_else(|| "css".to_string(), |s| s.trim_matches('"').to_string());
 
     let text = node.text().to_string();
     let mut metadata = SymbolMetadata::default();
@@ -162,8 +160,7 @@ pub(super) fn element_item<D: ast_grep_core::Doc>(node: &Node<D>) -> Option<Pars
         tag.clone()
     } else {
         svelte_helpers::attr_value(&attrs, "id")
-            .map(|s| s.trim_matches('"').to_string())
-            .unwrap_or_else(|| tag.clone())
+            .map_or_else(|| tag.clone(), |s| s.trim_matches('"').to_string())
     };
 
     Some(build_item(
@@ -199,11 +196,7 @@ pub(super) fn directive_attr_items<D: ast_grep_core::Doc>(
         metadata.set_owner_name(Some(owner.to_string()));
         metadata.set_owner_kind(Some(SymbolKind::Struct));
 
-        let signature = if let Some(v) = value {
-            format!("{name}={}", v.trim())
-        } else {
-            name.clone()
-        };
+        let signature = value.map_or_else(|| name.clone(), |v| format!("{name}={}", v.trim()));
         out.push(build_item(
             node,
             SymbolKind::Property,
@@ -276,10 +269,10 @@ pub(super) fn block_item<D: ast_grep_core::Doc>(
 pub(super) fn tag_item<D: ast_grep_core::Doc>(node: &Node<D>, name: &str) -> ParsedItem {
     let mut metadata = SymbolMetadata::default();
     metadata.push_attribute(format!("svelte:kind:{name}"));
-    if name == "render_tag" {
-        if let Some(call) = extract_between(&node.text(), "{@render", "}") {
-            metadata.push_attribute(format!("svelte:render_call:{}", call.trim()));
-        }
+    if name == "render_tag"
+        && let Some(call) = extract_between(&node.text(), "{@render", "}")
+    {
+        metadata.push_attribute(format!("svelte:render_call:{}", call.trim()));
     }
     build_item(
         node,
