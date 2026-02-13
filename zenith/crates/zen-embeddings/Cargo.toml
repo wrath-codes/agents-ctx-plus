@@ -8,11 +8,11 @@ license.workspace = true
 [dependencies]
 zen-core.workspace = true
 fastembed.workspace = true
+dirs.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-dirs.workspace = true
 pretty_assertions.workspace = true
 
 [lints]
