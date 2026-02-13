@@ -8,6 +8,8 @@
 //!   full `ParsedItem` metadata with language-specific features
 //! - **Generic extractor** (all other built-in languages):
 //!   kind-based extraction capturing function/class/type definitions
+//! - **Custom language lane** (currently Markdown via `tree-sitter-md`):
+//!   parser-backed extraction using a custom ast-grep `Language`
 //!
 //! Symbol taxonomy is normalized across extractors:
 //! - top-level callables use `Function`
@@ -25,7 +27,10 @@ pub mod parser;
 pub mod types;
 
 pub use error::ParserError;
-pub use parser::{detect_language, parse_source};
+pub use parser::{
+    DetectedLanguage, MarkdownLang, detect_language, detect_language_ext, parse_markdown_source,
+    parse_source,
+};
 pub use types::{DocSections, ParsedItem, SymbolKind, SymbolMetadata, Visibility};
 
 #[cfg(test)]

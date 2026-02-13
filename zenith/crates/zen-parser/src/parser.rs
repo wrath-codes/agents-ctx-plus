@@ -3,8 +3,21 @@
 use ast_grep_core::tree_sitter::StrDoc;
 use ast_grep_language::SupportLang;
 
+mod markdown_lang;
+pub use markdown_lang::MarkdownLang;
+
 /// The concrete AST tree type returned by `parse_source`.
 pub type AstTree = ast_grep_core::AstGrep<StrDoc<SupportLang>>;
+
+/// The concrete AST type returned by `parse_markdown_source`.
+pub type MarkdownAstTree = ast_grep_core::AstGrep<StrDoc<MarkdownLang>>;
+
+/// Extended language detection that includes custom languages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DetectedLanguage {
+    Builtin(SupportLang),
+    Markdown,
+}
 
 /// Detect the programming language from a file path extension.
 ///
@@ -43,11 +56,28 @@ pub fn detect_language(file_path: &str) -> Option<SupportLang> {
     }
 }
 
+/// Detect language including custom parser-backed extensions.
+#[must_use]
+pub fn detect_language_ext(file_path: &str) -> Option<DetectedLanguage> {
+    let ext = file_path.rsplit('.').next()?;
+    match ext {
+        "md" | "markdown" => Some(DetectedLanguage::Markdown),
+        _ => detect_language(file_path).map(DetectedLanguage::Builtin),
+    }
+}
+
 /// Parse source code into an ast-grep tree for the given language.
 #[must_use]
 pub fn parse_source(source: &str, lang: SupportLang) -> AstTree {
     use ast_grep_language::LanguageExt;
     lang.ast_grep(source)
+}
+
+/// Parse markdown source using the custom `tree-sitter-md` language.
+#[must_use]
+pub fn parse_markdown_source(source: &str) -> MarkdownAstTree {
+    use ast_grep_core::tree_sitter::LanguageExt;
+    MarkdownLang.ast_grep(source)
 }
 
 #[cfg(test)]
@@ -139,6 +169,26 @@ mod tests {
     }
 
     #[test]
+    fn detect_markdown_extended() {
+        assert_eq!(
+            detect_language_ext("docs/README.md"),
+            Some(DetectedLanguage::Markdown)
+        );
+        assert_eq!(
+            detect_language_ext("docs/spec.markdown"),
+            Some(DetectedLanguage::Markdown)
+        );
+    }
+
+    #[test]
+    fn detect_builtin_via_extended() {
+        assert_eq!(
+            detect_language_ext("src/main.rs"),
+            Some(DetectedLanguage::Builtin(SupportLang::Rust))
+        );
+    }
+
+    #[test]
     fn detect_nested_path() {
         assert_eq!(
             detect_language("src/parser/mod.rs"),
@@ -150,5 +200,11 @@ mod tests {
     fn parse_source_produces_valid_tree() {
         let tree = parse_source("fn hello() {}", SupportLang::Rust);
         assert_eq!(tree.root().kind().as_ref(), "source_file");
+    }
+
+    #[test]
+    fn parse_markdown_source_produces_document_root() {
+        let tree = parse_markdown_source("# Title\n\nText\n");
+        assert_eq!(tree.root().kind().as_ref(), "document");
     }
 }
