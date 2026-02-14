@@ -34,6 +34,11 @@ impl ZenLake {
     /// Inserts symbols with their embeddings using parameterized INSERT statements.
     /// Embeddings are stored as `FLOAT[]` and cast to `FLOAT[384]` at query time.
     ///
+    /// ID generation: If `sym.id` is non-empty, it is used as-is. If empty, the ID
+    /// is generated server-side as `substr(md5(concat(ecosystem, ':', package, ':',
+    /// version, ':', file_path, ':', kind, ':', name)), 1, 16)` — a deterministic
+    /// 16-character hex hash. This avoids a Rust-side hashing dependency.
+    ///
     /// # Errors
     ///
     /// Returns [`LakeError::DuckDb`] if any INSERT fails.
@@ -45,7 +50,11 @@ impl ZenLake {
                 visibility, is_async, is_unsafe, is_error_type, returns_result,
                 return_type, generics, attributes, metadata, embedding
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?,
+                COALESCE(
+                    NULLIF(?, ''),
+                    substr(md5(concat(?, ':', ?, ':', ?, ':', ?, ':', ?, ':', ?)), 1, 16)
+                ),
+                ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?::FLOAT[]
@@ -60,28 +69,37 @@ impl ZenLake {
             };
 
             stmt.execute(params![
-                sym.id,
-                sym.ecosystem,
-                sym.package,
-                sym.version,
-                sym.file_path,
-                sym.kind,
-                sym.name,
-                sym.signature,
-                sym.source,
-                sym.doc_comment,
-                sym.line_start,
-                sym.line_end,
-                sym.visibility,
-                sym.is_async,
-                sym.is_unsafe,
-                sym.is_error_type,
-                sym.returns_result,
-                sym.return_type,
-                sym.generics,
-                sym.attributes,
-                sym.metadata,
-                embedding_sql,
+                // For ID: first is candidate, next 6 are md5 inputs (used only if candidate is empty)
+                sym.id,        // 1: candidate id
+                sym.ecosystem, // 2: md5 input
+                sym.package,   // 3
+                sym.version,   // 4
+                sym.file_path, // 5
+                sym.kind,      // 6
+                sym.name,      // 7
+                // Remaining columns (21-6 = 15? Actually we already gave 7 params, now 15 more = 22 total? Let's count)
+                // After id (computed), we need: ecosystem, package, version, file_path, kind, name (6) + remaining 15 = 21
+                sym.ecosystem,      // 8
+                sym.package,        // 9
+                sym.version,        // 10
+                sym.file_path,      // 11
+                sym.kind,           // 12
+                sym.name,           // 13
+                sym.signature,      // 14
+                sym.source,         // 15
+                sym.doc_comment,    // 16
+                sym.line_start,     // 17
+                sym.line_end,       // 18
+                sym.visibility,     // 19
+                sym.is_async,       // 20
+                sym.is_unsafe,      // 21
+                sym.is_error_type,  // 22
+                sym.returns_result, // 23
+                sym.return_type,    // 24
+                sym.generics,       // 25
+                sym.attributes,     // 26
+                sym.metadata,       // 27
+                embedding_sql,      // 28
             ])?;
         }
 
@@ -89,6 +107,10 @@ impl ZenLake {
     }
 
     /// Store doc chunks in the local `DuckDB` cache.
+    ///
+    /// ID generation: If `chunk.id` is non-empty, it is used as-is. If empty, the ID
+    /// is generated server-side as `substr(md5(concat(ecosystem, ':', package, ':',
+    /// version, ':', source_file, ':', chunk_index)), 1, 16)`.
     ///
     /// # Errors
     ///
@@ -98,7 +120,13 @@ impl ZenLake {
             "INSERT INTO doc_chunks (
                 id, ecosystem, package, version, chunk_index,
                 title, content, source_file, format, embedding
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::FLOAT[])",
+            ) VALUES (
+                COALESCE(
+                    NULLIF(?, ''),
+                    substr(md5(concat(?, ':', ?, ':', ?, ':', ?, ':', ?)), 1, 16)
+                ),
+                ?, ?, ?, ?, ?, ?, ?, ?, ?::FLOAT[]
+            )",
         )?;
 
         for chunk in chunks {
@@ -109,16 +137,23 @@ impl ZenLake {
             };
 
             stmt.execute(params![
-                chunk.id,
-                chunk.ecosystem,
-                chunk.package,
-                chunk.version,
-                chunk.chunk_index,
-                chunk.title,
-                chunk.content,
-                chunk.source_file,
-                chunk.format,
-                embedding_sql,
+                // For ID: candidate then md5 inputs
+                chunk.id,          // 1: candidate id
+                chunk.ecosystem,   // 2
+                chunk.package,     // 3
+                chunk.version,     // 4
+                chunk.source_file, // 5
+                chunk.chunk_index, // 6
+                // Remaining columns: ecosystem, package, version, chunk_index, title, content, source_file, format, embedding
+                chunk.ecosystem,   // 7
+                chunk.package,     // 8
+                chunk.version,     // 9
+                chunk.chunk_index, // 10
+                chunk.title,       // 11
+                chunk.content,     // 12
+                chunk.source_file, // 13
+                chunk.format,      // 14
+                embedding_sql,     // 15
             ])?;
         }
 
@@ -186,6 +221,28 @@ impl ZenLake {
             .query_row(params![ecosystem, package, version], |_| Ok(true))
             .unwrap_or(false);
         Ok(exists)
+    }
+
+    /// Mark the source files as cached for a package in `indexed_packages`.
+    ///
+    /// Sets `source_cached = TRUE` for the given package. Called after the
+    /// indexing pipeline stores source files to track cache state (see spike 0.14).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if the UPDATE fails.
+    pub fn set_source_cached(
+        &self,
+        ecosystem: &str,
+        package: &str,
+        version: &str,
+    ) -> Result<(), LakeError> {
+        self.conn.execute(
+            "UPDATE indexed_packages SET source_cached = TRUE
+             WHERE ecosystem = ? AND package = ? AND version = ?",
+            params![ecosystem, package, version],
+        )?;
+        Ok(())
     }
 
     /// Delete all data for a specific package version from the local cache.

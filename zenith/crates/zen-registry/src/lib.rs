@@ -4,7 +4,7 @@
 //!
 //! Resolves package names to repository URLs via ecosystem-specific registries:
 //! - crates.io (Rust)
-//! - PyPI (Python)
+//! - `PyPI` (Python)
 //! - npm (JavaScript/TypeScript)
 //! - pkg.go.dev (Go)
 //! - hex.pm (Elixir)

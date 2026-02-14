@@ -156,11 +156,10 @@ pub fn extract<D: ast_grep_core::Doc>(
             stack.pop();
         }
 
-        let owner_base = stack
-            .last()
-            .map_or_else(|| section_ctx.last().map(|s| s.path.clone()), |parent| {
-                Some(parent.path.clone())
-            });
+        let owner_base = stack.last().map_or_else(
+            || section_ctx.last().map(|s| s.path.clone()),
+            |parent| Some(parent.path.clone()),
+        );
 
         if let Some(owner) = &owner_base {
             set_owner(&mut item, owner);

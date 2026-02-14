@@ -16,11 +16,12 @@ fn extracts_inline_link_and_code_from_paragraph() {
         .expect("should extract inline link");
     assert_eq!(link.name, "Zen");
     assert_eq!(link.start_line, 3);
-    assert!(link
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:url:https://zen.dev"));
+    assert!(
+        link.metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:url:https://zen.dev")
+    );
 
     let code = items
         .iter()
@@ -50,11 +51,13 @@ fn extracts_inline_image_and_autolink_without_image_link_duplication() {
         })
         .expect("should extract inline image");
     assert_eq!(image.name, "Logo");
-    assert!(image
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:src:https://cdn.example/logo.png"));
+    assert!(
+        image
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:src:https://cdn.example/logo.png")
+    );
 
     let autolink = items
         .iter()
@@ -94,11 +97,13 @@ fn extracts_reference_links_and_bare_urls_without_link_target_duplication() {
                 .any(|a| a == "md:kind:inline_ref_link")
         })
         .expect("should extract reference-style link");
-    assert!(ref_link
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:ref:docs"));
+    assert!(
+        ref_link
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:ref:docs")
+    );
 
     let bare = items
         .iter()
@@ -133,31 +138,36 @@ fn assigns_heading_hierarchy_and_owner_paths() {
         .iter()
         .find(|i| i.name == "A" && i.metadata.attributes.iter().any(|a| a == "md:kind:heading"))
         .expect("heading A should exist");
-    assert!(heading_a
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:path:A"));
+    assert!(
+        heading_a
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:path:A")
+    );
 
     let heading_b = items
         .iter()
         .find(|i| i.name == "B" && i.metadata.attributes.iter().any(|a| a == "md:kind:heading"))
         .expect("heading B should exist");
     assert_eq!(heading_b.metadata.owner_name.as_deref(), Some("A"));
-    assert!(heading_b
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:path:A/B"));
+    assert!(
+        heading_b
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:path:A/B")
+    );
 
     let list = items
         .iter()
         .find(|i| i.name.starts_with("list-"))
         .expect("list item should exist");
     assert_eq!(list.metadata.owner_name.as_deref(), Some("A/B"));
-    assert!(list
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "md:owner_path:A/B"));
+    assert!(
+        list.metadata
+            .attributes
+            .iter()
+            .any(|a| a == "md:owner_path:A/B")
+    );
 }

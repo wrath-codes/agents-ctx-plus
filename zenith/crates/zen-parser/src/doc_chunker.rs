@@ -576,16 +576,13 @@ fn is_rst_adornment_line(line: &str) -> bool {
 
 /// Get or assign a heading level for the given adornment character.
 fn rst_adornment_level(adornment_levels: &mut Vec<char>, ch: char) -> usize {
-    adornment_levels
-        .iter()
-        .position(|c| *c == ch)
-        .map_or_else(
-            || {
-                adornment_levels.push(ch);
-                adornment_levels.len()
-            },
-            |pos| pos + 1,
-        )
+    adornment_levels.iter().position(|c| *c == ch).map_or_else(
+        || {
+            adornment_levels.push(ch);
+            adornment_levels.len()
+        },
+        |pos| pos + 1,
+    )
 }
 
 // ── Plain text splitting (smart routing + heuristics) ────────

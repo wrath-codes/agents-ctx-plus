@@ -70,11 +70,13 @@ fn resolves_targets_and_marks_broken_references() {
                     .any(|a| a.starts_with("rst:broken_reference:"))
         })
         .expect("broken reference should exist");
-    assert!(broken
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a == "rst:broken_reference:missing-ref"));
+    assert!(
+        broken
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a == "rst:broken_reference:missing-ref")
+    );
 }
 
 #[test]
@@ -88,14 +90,18 @@ fn extracts_substitutions_and_table_metadata() {
         .iter()
         .find(|i| has_attr(i, "rst:kind:grid_table"))
         .expect("grid table item should exist");
-    assert!(table
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a.starts_with("rst:table_rows:")));
-    assert!(table
-        .metadata
-        .attributes
-        .iter()
-        .any(|a| a.starts_with("rst:table_cols:")));
+    assert!(
+        table
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a.starts_with("rst:table_rows:"))
+    );
+    assert!(
+        table
+            .metadata
+            .attributes
+            .iter()
+            .any(|a| a.starts_with("rst:table_cols:"))
+    );
 }

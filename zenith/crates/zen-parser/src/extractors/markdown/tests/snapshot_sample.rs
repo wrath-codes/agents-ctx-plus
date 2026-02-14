@@ -1,4 +1,4 @@
-use super::common::{assert_items_match_snapshot, extract_md, Expected};
+use super::common::{Expected, assert_items_match_snapshot, extract_md};
 use crate::types::SymbolKind;
 
 #[test]

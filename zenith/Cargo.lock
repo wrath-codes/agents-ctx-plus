@@ -11768,6 +11768,7 @@ dependencies = [
  "zen-db",
  "zen-embeddings",
  "zen-lake",
+ "zen-parser",
 ]
 
 [[package]]
