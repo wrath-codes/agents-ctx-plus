@@ -1613,14 +1613,14 @@ cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search
 - [x] Clippy clean across entire crate (49 errors fixed)
 - [x] CodeRabbit review: 7 findings addressed
 
-**Remaining gates (PRs 2–4)**:
-- [ ] `zen-embeddings` generates 384-dim vectors, similar texts cluster
-- [ ] `zen-lake` stores and retrieves symbols, doc chunks in DuckDB local cache (`.zenith/lake/cache.duckdb`)
-- [ ] `SourceFileStore` stores and retrieves source files in separate DuckDB (`.zenith/source_files.duckdb`)
-- [ ] `array_cosine_similarity()` works on stored embeddings (FLOAT[] → FLOAT[384] cast) — local cache only
-- [ ] Walker: `build_walker()` with `WalkMode::Raw` and `WalkMode::LocalProject` both produce correct file lists
-- [ ] Full pipeline: index a temp directory with mixed-language source → all tables populated correctly
-- [ ] `cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search` all pass
+**Remaining gates (PRs 2–4)** — all verified 2026-02-13:
+- [x] `zen-embeddings` generates 384-dim vectors, similar texts cluster (7 tests: init, single, batch, cosine clustering, determinism, empty, dimension)
+- [x] `zen-lake` stores and retrieves symbols, doc chunks in DuckDB local cache (`.zenith/lake/cache.duckdb`) (8 tests incl. store+query, register, duplicate, embedding roundtrip, delete, persistence, index existence)
+- [x] `SourceFileStore` stores and retrieves source files in separate DuckDB (`.zenith/source_files.duckdb`) (4 tests: schema, store+query, separation, delete)
+- [x] `array_cosine_similarity()` works on stored embeddings (FLOAT[] → FLOAT[384] cast) — local cache only (`cosine_similarity_query` test)
+- [x] Walker: `build_walker()` with `WalkMode::Raw` and `WalkMode::LocalProject` both produce correct file lists (6 tests + 1 doc-test)
+- [x] Full pipeline: index a temp directory with mixed-language source → all tables populated correctly (`pipeline_full_end_to_end` — Rust + README, verifies symbols, doc chunks, source files, 384-dim embeddings, source_cached=TRUE)
+- [x] `cargo test -p zen-parser -p zen-embeddings -p zen-lake -p zen-search` all pass (1497+ tests, 0 failures)
 
 ### What This Unlocks
 
@@ -1812,3 +1812,27 @@ This means the `extract_api()` orchestrator must handle all three signatures, wh
 ### 14.8 Code examples in plan sections A4–A14 are historical reference
 
 The inline Rust code for `helpers.rs`, `rust.rs`, `python.rs`, `typescript.rs`, `go.rs`, `elixir.rs`, `generic.rs`, `mod.rs`, `test_files.rs`, `doc_chunker.rs`, `lib.rs` shown in the original plan (§A4–A14) are **historical design sketches**. The actual implementations in `src/extractors/` diverge significantly — they are richer, handle more edge cases, and follow the dispatcher+processors+helpers architecture instead of flat modules. These code blocks are preserved in this document as design archaeology but should NOT be used as implementation templates.
+
+### 14.9 ID Generation: sha2 (Rust-side) → md5 (DuckDB server-side)
+
+**Original plan** (§D2, §10.8): Symbol and chunk IDs generated Rust-side via `sha2::Sha256::digest()`, truncated to 16 hex chars. `sha2` added as workspace dependency.
+
+**Actual implementation**: IDs generated server-side in DuckDB via `substr(md5(concat(ecosystem, ':', package, ':', version, ':', file_path, ':', kind, ':', name)), 1, 16)`. `pipeline.rs` passes empty `id: String::new()` and the `COALESCE(NULLIF(?, ''), ...)` SQL expression falls through to `md5()`. No `sha2` dependency needed.
+
+**Impact**: Both produce deterministic 16-char hex IDs. md5 is 128-bit (32 hex, truncated to 16) vs sha256 256-bit (64 hex, truncated to 16). Collision probability is identical at 16 chars (~2^64 birthday bound). Eliminates a Rust dependency.
+
+### 14.10 Embedding Storage: Appender → Parameterized INSERT
+
+**Original plan** (§C4): `store_symbols()` and `store_doc_chunks()` use DuckDB `Appender` for bulk insert.
+
+**Actual implementation**: Uses parameterized `INSERT` statements with `?::FLOAT[]` cast for embedding columns. Appender could not reliably handle `Vec<f32>` for `FLOAT[]` columns (gotcha §10.6 materialized). `source_files.rs` still uses Appender (no embedding column) — correct.
+
+**Impact**: Slightly slower for very large batches (parameterized INSERT vs Appender). Not a concern at Phase 3 scale. The `store.rs` doc comment explains the decision.
+
+### 14.11 fastembed API: InitOptions → TextInitOptions
+
+**Original plan** (§B2): `TextEmbedding::try_new(InitOptions { model_name, cache_dir, show_download_progress, ..Default::default() })`.
+
+**Actual implementation**: `TextEmbedding::try_new(TextInitOptions::new(EmbeddingModel::AllMiniLML6V2).with_cache_dir(cache_dir).with_show_download_progress(true))`.
+
+**Impact**: None — `TextInitOptions` is the current fastembed API (builder pattern). `InitOptions` was the older struct-based API. Both achieve identical behavior.

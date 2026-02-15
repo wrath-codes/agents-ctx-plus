@@ -210,7 +210,7 @@ impl IndexingPipeline {
             )));
         }
 
-        let mut doc_chunk_rows: Vec<DocChunkRow> = doc_chunks
+        let doc_chunk_rows: Vec<DocChunkRow> = doc_chunks
             .into_iter()
             .zip(doc_embeddings.into_iter())
             .map(|((chunk, eco, pkg, ver), emb)| DocChunkRow {

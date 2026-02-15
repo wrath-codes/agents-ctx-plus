@@ -77,8 +77,6 @@ impl ZenLake {
                 sym.file_path, // 5
                 sym.kind,      // 6
                 sym.name,      // 7
-                // Remaining columns (21-6 = 15? Actually we already gave 7 params, now 15 more = 22 total? Let's count)
-                // After id (computed), we need: ecosystem, package, version, file_path, kind, name (6) + remaining 15 = 21
                 sym.ecosystem,      // 8
                 sym.package,        // 9
                 sym.version,        // 10

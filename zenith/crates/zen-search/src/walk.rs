@@ -51,6 +51,11 @@ pub enum WalkMode {
 ///     None,           // no exclude glob
 /// );
 /// ```
+///
+/// # Panics
+///
+/// Panics if the provided glob patterns are invalid.
+#[must_use]
 pub fn build_walker(
     root: &Path,
     mode: WalkMode,

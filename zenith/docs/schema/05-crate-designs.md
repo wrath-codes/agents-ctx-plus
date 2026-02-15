@@ -1541,6 +1541,7 @@ zen-core.workspace = true
 zen-db.workspace = true
 zen-lake.workspace = true
 zen-embeddings.workspace = true
+zen-parser.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -1553,6 +1554,14 @@ ignore.workspace = true      # gitignore-aware file walking
 
 # Graph analytics — decision context graph (spike 0.22)
 rustworkx-core.workspace = true  # toposort, centrality, shortest path, connected components
+
+# Vector search + grep package mode (promoted from dev-deps in Phase 4)
+duckdb.workspace = true
+
+# Recursive query — AST extraction (promoted from dev-deps in Phase 4)
+ast-grep-core.workspace = true
+ast-grep-language.workspace = true
+tree-sitter.workspace = true
 ```
 
 ### Module Structure
@@ -1573,48 +1582,77 @@ zen-search/src/
 ### Key Types
 
 ```rust
-pub struct SearchEngine {
-    db: ZenDb,
-    lake: ZenLake,
-    embeddings: EmbeddingEngine,
+/// Unified search orchestrator that dispatches to the right engine.
+///
+/// Borrows all resources — the CLI owns them. `EmbeddingEngine` requires
+/// `&mut self` for `embed_single()` / `embed_batch()` (fastembed constraint,
+/// validated in spike 0.6), so it's passed mutably.
+///
+/// `SourceFileStore` is separate from `ZenLake` (Phase 3 architecture):
+/// source files live in `.zenith/source_files.duckdb`, lake cache in
+/// `.zenith/cache.duckdb`.
+pub struct SearchEngine<'a> {
+    db: &'a ZenDb,
+    lake: &'a ZenLake,
+    source_store: &'a SourceFileStore,
+    embeddings: &'a mut EmbeddingEngine,
 }
 
+/// Unified search result — wraps mode-specific typed results for CLI output.
+///
+/// Uses serde tag to distinguish source in JSON serialization. Mode-specific
+/// result types (VectorSearchResult, FtsSearchResult, HybridSearchResult)
+/// carry the full typed fields for their domain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResult {
-    pub package: String,
-    pub ecosystem: String,
-    pub version: String,
-    pub kind: String,
-    pub name: String,
-    pub signature: String,
-    pub doc_comment: String,
-    pub file_path: String,
-    pub line_start: u32,
-    pub line_end: u32,
-    pub score: f64,
+#[serde(tag = "source")]
+pub enum SearchResult {
+    #[serde(rename = "vector")]
+    Vector(VectorSearchResult),
+    #[serde(rename = "fts")]
+    Fts(FtsSearchResult),
+    #[serde(rename = "hybrid")]
+    Hybrid(HybridSearchResult),
 }
 
 #[derive(Debug, Clone)]
 pub enum SearchMode {
     Vector,
     Fts,
-    Hybrid,
+    /// Combined vector + FTS with configurable alpha blending.
+    /// Alpha: 0.0 = FTS only, 1.0 = vector only, default 0.7.
+    Hybrid { alpha: f64 },
+    /// RLM-style recursive query — dispatched via RecursiveQueryEngine
+    /// directly, NOT through SearchEngine (requires ContextStore setup).
     Recursive,
+    /// Graph analytics over entity_links (toposort, centrality, etc.)
     Graph,
 }
 
-impl SearchEngine {
+impl<'a> SearchEngine<'a> {
+    pub fn new(
+        db: &'a ZenDb,
+        lake: &'a ZenLake,
+        source_store: &'a SourceFileStore,
+        embeddings: &'a mut EmbeddingEngine,
+    ) -> Self {
+        Self { db, lake, source_store, embeddings }
+    }
+
     pub async fn search(
-        &self,
+        &mut self,
         query: &str,
         mode: SearchMode,
         filters: SearchFilters,
     ) -> Result<Vec<SearchResult>, SearchError> {
         match mode {
-            SearchMode::Vector => self.vector_search(query, &filters).await,
-            SearchMode::Fts => self.fts_search(query, &filters).await,
-            SearchMode::Hybrid => self.hybrid_search(query, &filters).await,
-            SearchMode::Recursive => self.recursive_search(query, &filters).await,
+            SearchMode::Vector => { /* embed query → DuckDB array_cosine_similarity */ todo!() }
+            SearchMode::Fts => { /* zen-db FTS5 repos */ todo!() }
+            SearchMode::Hybrid { alpha } => { /* vector + FTS combined with alpha */ todo!() }
+            SearchMode::Recursive => {
+                // Intentional: use RecursiveQueryEngine directly (requires ContextStore setup)
+                Err(SearchError::InvalidQuery("use RecursiveQueryEngine::execute() directly".into()))
+            }
+            SearchMode::Graph => { /* DecisionGraph from entity_links */ todo!() }
         }
     }
 }
@@ -1663,9 +1701,12 @@ pub struct RefEdge {
 See [13-zen-grep-design.md](./13-zen-grep-design.md) for full design.
 
 ```rust
-pub struct GrepEngine {
-    lake: Option<ZenLake>,  // For package mode (source_files + symbol correlation)
-}
+/// Stateless grep engine — dependencies passed as method parameters.
+///
+/// Package mode takes both `SourceFileStore` (source content) and `ZenLake`
+/// (symbol correlation via `api_symbols`). These are separate DuckDB files
+/// (Phase 3 architecture).
+pub struct GrepEngine;
 
 pub struct GrepMatch {
     pub path: String,
@@ -1689,17 +1730,20 @@ pub struct GrepResult {
 }
 
 impl GrepEngine {
-    /// Grep indexed package source (DuckDB fetch + Rust regex + symbol correlation)
+    /// Grep indexed package source (DuckDB fetch + Rust regex + symbol correlation).
+    ///
+    /// Takes both `SourceFileStore` (content) and `ZenLake` (symbol correlation).
     pub fn grep_package(
-        &self,
+        source_store: &SourceFileStore,
+        lake: &ZenLake,
         pattern: &str,
         packages: &[(String, String, String)],
         opts: &GrepOptions,
     ) -> Result<GrepResult, SearchError>;
 
-    /// Grep local project files (grep crate + ignore crate)
+    /// Grep local project files (grep crate + ignore crate).
+    /// Symbol correlation is NOT available in local mode.
     pub fn grep_local(
-        &self,
         pattern: &str,
         paths: &[PathBuf],
         opts: &GrepOptions,

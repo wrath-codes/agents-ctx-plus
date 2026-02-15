@@ -20,12 +20,12 @@ tokio.workspace = true
 # Grep feature — local project search (ripgrep library)
 grep.workspace = true
 ignore.workspace = true
+duckdb.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
-duckdb.workspace = true
 ast-grep-core.workspace = true
 ast-grep-language.workspace = true
 tree-sitter.workspace = true

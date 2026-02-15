@@ -276,7 +276,7 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 | 4.1 | Implement vector search: embed query → Lance `lance_vector_search()` or brute-force `array_cosine_similarity()` in DuckDB. **Note**: embeddings stored as `FLOAT[]`, cast to `FLOAT[384]` for cosine ops. | zen-search | 4.4 |
 | 4.2 | Implement FTS search: query zen-db FTS5 tables (findings, tasks, audit, etc.) | zen-search | 4.4 |
 | 4.3 | Implement hybrid search: combine vector + FTS scores. **Note**: Lance FTS is term-exact (no stemming) vs libSQL FTS5 (porter stemming) — vector should be primary signal, FTS as boost. Validate `alpha` parameter with real queries. | zen-search | 4.4 |
-| 4.4 | Implement `SearchEngine` orchestrator with filters (package, kind, ecosystem, limit, context-budget) | zen-search | Phase 5 |
+| 4.4 | Implement `SearchEngine` orchestrator with filters (package, kind, ecosystem, limit) and `DecisionGraph` analytics module (toposort, centrality, shortest path, connected components via rustworkx-core). **Note**: `SearchMode::Recursive` is dispatched directly via `RecursiveQueryEngine` (requires `ContextStore` setup), not through `SearchEngine`. | zen-search | Phase 5 |
 | 4.5 | Implement crates.io client | zen-registry | Phase 5 |
 | 4.6 | Implement npm registry client (+ api.npmjs.org for downloads) | zen-registry | Phase 5 |
 | 4.7 | Implement PyPI client | zen-registry | Phase 5 |
@@ -299,6 +299,8 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 - Recursive query: Arrow monorepo scale test passes with budget controls and deterministic output
 - Reference graph: category counts and signature lookup by stable `ref_id` succeed
 - External references: cached DataFusion Arrow usage is discoverable and tagged as `external`
+- Graph analytics: toposort produces valid ordering, centrality identifies hub nodes, budget caps skip centrality for large graphs
+- SearchEngine mode dispatch: each mode calls the correct engine, Recursive returns guidance error
 
 ### Milestone 4
 
@@ -306,6 +308,8 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 - `znt research registry "http client" --ecosystem rust` returns crates.io results
 - Hybrid search combines vector similarity + FTS relevance
 - Recursive search returns categorized reference results with signatures and optional JSON summary payload
+- Graph analytics over entity_links: toposort, centrality, shortest path, connected components
+- External DataFusion Arrow references discoverable and tagged as `RefCategory::External`
 
 ---
 
