@@ -11752,6 +11752,7 @@ dependencies = [
  "ast-grep-core",
  "ast-grep-language",
  "duckdb",
+ "globset",
  "grep",
  "ignore",
  "pretty_assertions",

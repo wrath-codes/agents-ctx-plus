@@ -10,6 +10,7 @@
 
 pub mod error;
 pub mod fts;
+pub mod grep;
 pub mod hybrid;
 pub mod vector;
 pub mod walk;

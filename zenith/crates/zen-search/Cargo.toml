@@ -20,6 +20,7 @@ tokio.workspace = true
 # Grep feature — local project search (ripgrep library)
 grep.workspace = true
 ignore.workspace = true
+globset.workspace = true
 duckdb.workspace = true
 
 [dev-dependencies]

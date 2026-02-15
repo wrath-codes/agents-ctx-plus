@@ -91,6 +91,7 @@ rustworkx-core = "0.17"
 # Grep (ripgrep library — spike 0.14 zen grep feature)
 grep = "0.4"
 ignore = "0.4"
+globset = "0.4"
 
 # Auth (spike 0.17 — Clerk CLI auth + Turso JWKS)
 clerk-rs = "0.4.2"
