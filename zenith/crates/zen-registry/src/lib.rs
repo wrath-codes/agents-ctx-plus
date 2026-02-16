@@ -258,10 +258,31 @@ mod tests {
     async fn search_ecosystem_aliases() {
         let client = RegistryClient::new();
         for ecosystem in &[
-            "rust", "cargo", "npm", "javascript", "typescript", "pypi", "python",
-            "hex", "elixir", "go", "golang", "ruby", "rubygems", "php",
-            "packagist", "java", "maven", "csharp", "nuget", "dotnet",
-            "haskell", "hackage", "lua", "luarocks", "neovim",
+            "rust",
+            "cargo",
+            "npm",
+            "javascript",
+            "typescript",
+            "pypi",
+            "python",
+            "hex",
+            "elixir",
+            "go",
+            "golang",
+            "ruby",
+            "rubygems",
+            "php",
+            "packagist",
+            "java",
+            "maven",
+            "csharp",
+            "nuget",
+            "dotnet",
+            "haskell",
+            "hackage",
+            "lua",
+            "luarocks",
+            "neovim",
         ] {
             let result = client.search("test", ecosystem, 1).await;
             assert!(

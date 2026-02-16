@@ -145,8 +145,14 @@ mod tests {
     #[test]
     fn split_github_project_url() {
         let (repo, home) = split_project_url(Some("https://github.com/octokit/octokit.net"));
-        assert_eq!(repo.as_deref(), Some("https://github.com/octokit/octokit.net"));
-        assert_eq!(home.as_deref(), Some("https://github.com/octokit/octokit.net"));
+        assert_eq!(
+            repo.as_deref(),
+            Some("https://github.com/octokit/octokit.net")
+        );
+        assert_eq!(
+            home.as_deref(),
+            Some("https://github.com/octokit/octokit.net")
+        );
     }
 
     #[test]

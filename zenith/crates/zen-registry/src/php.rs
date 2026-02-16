@@ -62,16 +62,18 @@ impl RegistryClient {
                 let url = format!("https://repo.packagist.org/p2/{name}.json");
                 let resp = client.get(&url).send().await.ok();
                 let version_info = match resp {
-                    Some(r) if r.status().is_success() => {
-                        r.json::<PackagistPackageResponse>().await.ok().and_then(|data| {
+                    Some(r) if r.status().is_success() => r
+                        .json::<PackagistPackageResponse>()
+                        .await
+                        .ok()
+                        .and_then(|data| {
                             let versions = data.packages.into_values().next()?;
                             let latest = versions.into_iter().next()?;
                             Some((
                                 latest.version,
                                 latest.license.and_then(|l| l.into_iter().next()),
                             ))
-                        })
-                    }
+                        }),
                     _ => None,
                 };
                 (idx, version_info.unwrap_or_default())
@@ -159,7 +161,11 @@ mod tests {
         let versions = data.packages.values().next().unwrap();
         assert_eq!(versions[0].version, "v11.36.1");
         assert_eq!(
-            versions[0].license.as_ref().and_then(|l| l.first()).map(String::as_str),
+            versions[0]
+                .license
+                .as_ref()
+                .and_then(|l| l.first())
+                .map(String::as_str),
             Some("MIT")
         );
     }

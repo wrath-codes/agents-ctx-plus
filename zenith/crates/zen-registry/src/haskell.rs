@@ -63,8 +63,7 @@ impl RegistryClient {
         };
 
         // Step 2: fetch metadata for latest version
-        let meta_url =
-            format!("https://hackage.haskell.org/package/{encoded}-{latest}");
+        let meta_url = format!("https://hackage.haskell.org/package/{encoded}-{latest}");
         let meta_resp = self
             .http
             .get(&meta_url)
@@ -73,18 +72,13 @@ impl RegistryClient {
             .await;
 
         let (description, license, homepage) = match meta_resp {
-            Ok(r) if r.status().is_success() => {
-                match r.json::<HackagePackageMeta>().await {
-                    Ok(meta) => {
-                        let desc = meta
-                            .synopsis
-                            .or(meta.description)
-                            .unwrap_or_default();
-                        (desc, meta.license, meta.homepage)
-                    }
-                    Err(_) => (String::new(), None, None),
+            Ok(r) if r.status().is_success() => match r.json::<HackagePackageMeta>().await {
+                Ok(meta) => {
+                    let desc = meta.synopsis.or(meta.description).unwrap_or_default();
+                    (desc, meta.license, meta.homepage)
                 }
-            }
+                Err(_) => (String::new(), None, None),
+            },
             _ => (String::new(), None, None),
         };
 
@@ -93,7 +87,10 @@ impl RegistryClient {
             .is_some_and(|h| h.contains("github.com") || h.contains("gitlab.com"))
         {
             // GitHub/GitLab URL → use as repository, Hackage page as homepage
-            (homepage, Some(format!("https://hackage.haskell.org/package/{encoded}")))
+            (
+                homepage,
+                Some(format!("https://hackage.haskell.org/package/{encoded}")),
+            )
         } else {
             (None, homepage)
         };
@@ -139,7 +136,10 @@ mod tests {
     #[test]
     fn parse_package_meta() {
         let meta: HackagePackageMeta = serde_json::from_str(META_FIXTURE).unwrap();
-        assert_eq!(meta.synopsis.as_deref(), Some("Fast JSON parsing and encoding"));
+        assert_eq!(
+            meta.synopsis.as_deref(),
+            Some("Fast JSON parsing and encoding")
+        );
         assert_eq!(meta.license.as_deref(), Some("BSD-3-Clause"));
         assert_eq!(
             meta.homepage.as_deref(),
@@ -157,7 +157,10 @@ mod tests {
             .as_deref()
             .is_some_and(|h| h.contains("github.com") || h.contains("gitlab.com"))
         {
-            (homepage, Some("https://hackage.haskell.org/package/aeson".to_string()))
+            (
+                homepage,
+                Some("https://hackage.haskell.org/package/aeson".to_string()),
+            )
         } else {
             (None, homepage)
         };

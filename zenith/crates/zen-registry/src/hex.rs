@@ -54,22 +54,15 @@ impl RegistryClient {
                     ecosystem: "hex".to_string(),
                     description: p.meta.description.unwrap_or_default(),
                     downloads: p.downloads.and_then(|d| d.all).unwrap_or(0),
-                    license: p
-                        .meta
-                        .licenses
-                        .as_ref()
-                        .and_then(|l| l.first().cloned()),
+                    license: p.meta.licenses.as_ref().and_then(|l| l.first().cloned()),
                     repository: links.and_then(|l| {
                         l.get("GitHub")
                             .or_else(|| l.get("github"))
                             .or_else(|| l.get("Repository"))
                             .cloned()
                     }),
-                    homepage: links.and_then(|l| {
-                        l.get("Homepage")
-                            .or_else(|| l.get("homepage"))
-                            .cloned()
-                    }),
+                    homepage: links
+                        .and_then(|l| l.get("Homepage").or_else(|| l.get("homepage")).cloned()),
                 }
             })
             .collect())
@@ -111,11 +104,11 @@ mod tests {
         let data: Vec<HexPackage> = serde_json::from_str(FIXTURE).unwrap();
         assert_eq!(data.len(), 2);
         assert_eq!(data[0].name, "phoenix");
+        assert_eq!(data[0].latest_stable_version.as_deref(), Some("1.7.14"));
         assert_eq!(
-            data[0].latest_stable_version.as_deref(),
-            Some("1.7.14")
+            data[0].downloads.as_ref().and_then(|d| d.all),
+            Some(30_000_000)
         );
-        assert_eq!(data[0].downloads.as_ref().and_then(|d| d.all), Some(30_000_000));
     }
 
     #[test]

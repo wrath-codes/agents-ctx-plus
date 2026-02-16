@@ -14,9 +14,7 @@ use crate::error::RegistryError;
 ///   unparseable).
 /// - **Non-success status** → [`RegistryError::Api`] with status code and
 ///   response body.
-pub async fn check_response(
-    resp: reqwest::Response,
-) -> Result<reqwest::Response, RegistryError> {
+pub async fn check_response(resp: reqwest::Response) -> Result<reqwest::Response, RegistryError> {
     if resp.status() == 429 {
         let retry_after = parse_retry_after(&resp);
         return Err(RegistryError::RateLimited {
@@ -46,12 +44,7 @@ mod tests {
     use super::*;
 
     fn mock_response(status: u16) -> reqwest::Response {
-        reqwest::Response::from(
-            ::http::Response::builder()
-                .status(status)
-                .body("")
-                .unwrap(),
-        )
+        reqwest::Response::from(::http::Response::builder().status(status).body("").unwrap())
     }
 
     fn mock_response_with_retry_after(status: u16, value: &str) -> reqwest::Response {

@@ -57,10 +57,7 @@ impl RegistryClient {
             .map(|pkg| pkg.into_iter().take(limit).collect())
     }
 
-    async fn lookup_go_module(
-        &self,
-        module_path: &str,
-    ) -> Result<Vec<PackageInfo>, RegistryError> {
+    async fn lookup_go_module(&self, module_path: &str) -> Result<Vec<PackageInfo>, RegistryError> {
         let encoded = encode_go_module_path(module_path);
         let url = format!("https://proxy.golang.org/{encoded}/@latest");
         let resp = self.http.get(&url).send().await?;

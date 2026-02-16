@@ -56,12 +56,10 @@ impl RegistryClient {
             .into_iter()
             .map(|d| {
                 let name = format!("{}:{}", d.g, d.a);
-                let homepage = d.latest_version.as_ref().map(|v| {
-                    format!(
-                        "https://search.maven.org/artifact/{}/{}/{v}",
-                        d.g, d.a,
-                    )
-                });
+                let homepage = d
+                    .latest_version
+                    .as_ref()
+                    .map(|v| format!("https://search.maven.org/artifact/{}/{}/{v}", d.g, d.a,));
                 PackageInfo {
                     name,
                     version: d.latest_version.unwrap_or_default(),
@@ -122,12 +120,10 @@ mod tests {
             .docs
             .into_iter()
             .map(|d| {
-                let homepage = d.latest_version.as_ref().map(|v| {
-                    format!(
-                        "https://search.maven.org/artifact/{}/{}/{v}",
-                        d.g, d.a,
-                    )
-                });
+                let homepage = d
+                    .latest_version
+                    .as_ref()
+                    .map(|v| format!("https://search.maven.org/artifact/{}/{}/{v}", d.g, d.a,));
                 PackageInfo {
                     name: format!("{}:{}", d.g, d.a),
                     version: d.latest_version.unwrap_or_default(),

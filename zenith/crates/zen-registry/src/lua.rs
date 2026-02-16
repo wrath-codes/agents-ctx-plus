@@ -75,12 +75,7 @@ impl RegistryClient {
         let http = self.http.clone();
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
         for (idx, pkg) in results.iter().enumerate() {
-            let short_name = pkg
-                .name
-                .rsplit('/')
-                .next()
-                .unwrap_or(&pkg.name)
-                .to_string();
+            let short_name = pkg.name.rsplit('/').next().unwrap_or(&pkg.name).to_string();
             let client = http.clone();
             let sem = semaphore.clone();
             set.spawn(async move {
@@ -112,8 +107,7 @@ impl RegistryClient {
         while let Some(res) = set.join_next().await {
             match res {
                 Ok((idx, config_refs)) => {
-                    results[idx].downloads =
-                        results[idx].downloads.saturating_add(config_refs);
+                    results[idx].downloads = results[idx].downloads.saturating_add(config_refs);
                 }
                 Err(e) => tracing::warn!(%e, "lua config ref count task failed"),
             }
@@ -139,12 +133,22 @@ impl RegistryClient {
             urlencoding::encode(search_query)
         );
         let Ok(resp) = self.http.get(&url).send().await else {
+            tracing::warn!(query = search_query, "github repo search request failed");
             return Vec::new();
         };
         if !resp.status().is_success() {
+            tracing::warn!(
+                query = search_query,
+                status = resp.status().as_u16(),
+                "github repo search returned non-success status"
+            );
             return Vec::new();
         }
         let Ok(data) = resp.json::<GitHubSearchResponse>().await else {
+            tracing::warn!(
+                query = search_query,
+                "github repo search response parse failed"
+            );
             return Vec::new();
         };
         data.items
@@ -237,8 +241,7 @@ mod tests {
 
     #[test]
     fn parse_code_search_response() {
-        let data: GitHubCodeSearchResponse =
-            serde_json::from_str(CODE_SEARCH_FIXTURE).unwrap();
+        let data: GitHubCodeSearchResponse = serde_json::from_str(CODE_SEARCH_FIXTURE).unwrap();
         assert_eq!(data.total_count, 1234);
     }
 }

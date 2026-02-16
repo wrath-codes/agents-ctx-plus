@@ -53,7 +53,11 @@ impl RegistryClient {
         let resp = check_response(self.http.get(&url).send().await?).await?;
 
         let data: NpmSearchResponse = resp.json().await?;
-        let names: Vec<&str> = data.objects.iter().map(|o| o.package.name.as_str()).collect();
+        let names: Vec<&str> = data
+            .objects
+            .iter()
+            .map(|o| o.package.name.as_str())
+            .collect();
         let download_counts = self.fetch_npm_downloads_batch(&names).await;
 
         let packages = data
