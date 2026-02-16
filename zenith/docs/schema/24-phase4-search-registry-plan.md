@@ -30,7 +30,7 @@
 
 ## 1. Overview
 
-**Goal**: Vector search over the local DuckDB lake, FTS over knowledge entities (via zen-db), hybrid search combining both, two-engine grep (package mode via DuckDB + local mode via ripgrep library), RLM-style recursive context query with categorized reference graph, registry HTTP clients (crates.io, npm, PyPI, hex.pm), and a `SearchEngine` orchestrator that ties it all together.
+**Goal**: Vector search over the local DuckDB lake, FTS over knowledge entities (via zen-db), hybrid search combining both, two-engine grep (package mode via DuckDB + local mode via ripgrep library), RLM-style recursive context query with categorized reference graph, registry HTTP clients (crates.io, npm, PyPI, hex.pm, proxy.golang.org, rubygems.org, packagist.org, Maven Central, NuGet, Hackage, LuaRocks), and a `SearchEngine` orchestrator that ties it all together.
 
 **Crate status summary**:
 - `zen-search` — **walk.rs production code only**: `build_walker()` with `WalkMode::LocalProject` and `Raw`, `.zenithignore`, skip_tests, include/exclude globs. 6 tests + 1 doc-test. Three spike modules behind `#[cfg(test)]`: `spike_grep.rs` (26 tests), `spike_recursive_query.rs` (17 tests), `spike_graph_algorithms.rs` (54 tests).
@@ -42,7 +42,7 @@
 - `zen-search`: No separate `regex` dep needed — `grep::regex::RegexMatcher` handles pattern compilation for both local and package grep modes
 - `zen-registry`: Add `urlencoding.workspace = true` to `[dependencies]` (URL-safe query encoding for registry search URLs)
 
-**Estimated deliverables**: ~12 new production files, ~3000 LOC production code, ~800 LOC tests
+**Estimated deliverables**: ~19 new production files, ~3800 LOC production code, ~1100 LOC tests
 
 **PR strategy**: 5 PRs by stream. Streams A–D are independent and can proceed in parallel. Stream E integrates them.
 
@@ -51,7 +51,7 @@
 | PR 1 | A: Vector + FTS + Hybrid | `vector.rs`, `fts.rs`, `hybrid.rs`, `error.rs` | Phase 2 (zen-db FTS repos), Phase 3 (zen-lake) | Not started |
 | PR 2 | B: Grep Engine | `grep.rs` (package + local modes) | Phase 3 (SourceFileStore, walk.rs) | Not started |
 | PR 3 | C: Recursive + Graph | `recursive.rs`, `ref_graph.rs`, `graph.rs` | Phase 3 (zen-lake, zen-parser) | Not started |
-| PR 4 | D: Registry Clients | `crates_io.rs`, `npm.rs`, `pypi.rs`, `hex.rs`, `lib.rs` orchestrator | None (standalone HTTP clients) | Not started |
+| PR 4 | D: Registry Clients | `crates_io.rs`, `npm.rs`, `pypi.rs`, `hex.rs`, `go.rs`, `ruby.rs`, `php.rs`, `java.rs`, `csharp.rs`, `haskell.rs`, `lua.rs`, `lib.rs` orchestrator | None (standalone HTTP clients) | Not started |
 | PR 5 | E: SearchEngine | `lib.rs` orchestrator, `SearchEngine`, `SearchMode` dispatch | Streams A–D | Not started |
 
 ---
@@ -246,7 +246,14 @@ zen-registry/src/
 ├── crates_io.rs        # NEW: crates.io API client
 ├── npm.rs              # NEW: npm registry + api.npmjs.org downloads
 ├── pypi.rs             # NEW: PyPI JSON API client
-└── hex.rs              # NEW: hex.pm API client
+├── hex.rs              # NEW: hex.pm API client
+├── go.rs               # NEW: proxy.golang.org module proxy client
+├── ruby.rs             # NEW: rubygems.org API client
+├── php.rs              # NEW: packagist.org API client
+├── java.rs             # NEW: search.maven.org (Maven Central) API client
+├── csharp.rs           # NEW: nuget.org (NuGet v3) API client
+├── haskell.rs          # NEW: hackage.haskell.org API client
+└── lua.rs              # NEW: luarocks.org API client (Neovim ecosystem)
 ```
 
 ### Cargo.toml Changes
@@ -1106,16 +1113,23 @@ impl DecisionGraph {
 
 ## 8. PR 4 — Stream D: Registry Clients
 
-**Tasks**: 4.5 (crates.io), 4.6 (npm), 4.7 (PyPI), 4.8 (hex.pm), 4.9 (search_all)
+**Tasks**: 4.5 (crates.io), 4.6 (npm), 4.7 (PyPI), 4.8 (hex.pm), 4.16 (Go), 4.17 (Ruby), 4.18 (PHP), 4.19 (Java/Maven), 4.20 (C#/NuGet), 4.21 (Haskell/Hackage), 4.22 (Lua/LuaRocks), 4.9 (search_all)
 **Depends on**: None (standalone HTTP clients)
 
 ### D1. `zen-registry/src/lib.rs` — RegistryClient + PackageInfo
 
 ```rust
 pub mod crates_io;
+pub mod csharp;
+pub mod go;
+pub mod haskell;
 pub mod hex;
+pub mod java;
+pub mod lua;
 pub mod npm;
+pub mod php;
 pub mod pypi;
+pub mod ruby;
 
 mod error;
 
@@ -1160,11 +1174,18 @@ impl RegistryClient {
         query: &str,
         limit: usize,
     ) -> Vec<PackageInfo> {
-        let (crates, npm, pypi, hex) = tokio::join!(
+        let (crates, npm, pypi, hex, go, ruby, php, java, csharp, haskell, lua) = tokio::join!(
             self.search_crates_io(query, limit),
             self.search_npm(query, limit),
             self.search_pypi(query, limit),
             self.search_hex(query, limit),
+            self.search_go(query, limit),
+            self.search_rubygems(query, limit),
+            self.search_packagist(query, limit),
+            self.search_maven(query, limit),
+            self.search_nuget(query, limit),
+            self.search_hackage(query, limit),
+            self.search_luarocks(query, limit),
         );
 
         let mut results = Vec::new();
@@ -1172,6 +1193,13 @@ impl RegistryClient {
         results.extend(npm.unwrap_or_default());
         results.extend(pypi.unwrap_or_default());
         results.extend(hex.unwrap_or_default());
+        results.extend(go.unwrap_or_default());
+        results.extend(ruby.unwrap_or_default());
+        results.extend(php.unwrap_or_default());
+        results.extend(java.unwrap_or_default());
+        results.extend(csharp.unwrap_or_default());
+        results.extend(haskell.unwrap_or_default());
+        results.extend(lua.unwrap_or_default());
         results.sort_by(|a, b| b.downloads.cmp(&a.downloads));
         results.truncate(limit);
         results
@@ -1189,6 +1217,13 @@ impl RegistryClient {
             "npm" | "javascript" | "typescript" => self.search_npm(query, limit).await,
             "pypi" | "python" => self.search_pypi(query, limit).await,
             "hex" | "elixir" => self.search_hex(query, limit).await,
+            "go" | "golang" => self.search_go(query, limit).await,
+            "ruby" | "rubygems" => self.search_rubygems(query, limit).await,
+            "php" | "packagist" => self.search_packagist(query, limit).await,
+            "java" | "maven" => self.search_maven(query, limit).await,
+            "csharp" | "nuget" | "dotnet" => self.search_nuget(query, limit).await,
+            "haskell" | "hackage" => self.search_hackage(query, limit).await,
+            "lua" | "luarocks" | "neovim" => self.search_luarocks(query, limit).await,
             _ => Err(RegistryError::UnsupportedEcosystem(ecosystem.to_string())),
         }
     }
@@ -1288,6 +1323,24 @@ impl RegistryClient {
 
 **Note**: Each client module follows the same pattern as `crates_io.rs`: define serde response structs, implement `search_<ecosystem>()` on `RegistryClient`, map to `PackageInfo`.
 
+### D4b. Additional Per-Ecosystem Clients (tasks 4.16–4.22)
+
+**`go.rs`** (task 4.16): Go module proxy at `https://proxy.golang.org/{module}/@v/list` for version listing and `https://pkg.go.dev/search?q={query}` for search. Module paths are URL-encoded (e.g., `github.com/gin-gonic/gin` → `github.com/gin-gonic/gin`). Download counts from `https://proxy.golang.org` are not directly available — use `0` as default and document the limitation.
+
+**`ruby.rs`** (task 4.17): RubyGems API at `https://rubygems.org/api/v1/search.json?query={query}&page=1`. Response shape: `[{ name, version, info, downloads, licenses, homepage_uri, source_code_uri }]`. Maps directly to `PackageInfo`.
+
+**`php.rs`** (task 4.18): Packagist API at `https://packagist.org/search.json?q={query}&per_page={limit}`. Response shape: `{ results: [{ name, description, url, repository, downloads, favers }] }`. Version requires follow-up call to `https://repo.packagist.org/p2/{vendor}/{package}.json` — use latest version from `packages` key.
+
+**`java.rs`** (task 4.19): Maven Central search API at `https://search.maven.org/solrsearch/select?q={query}&rows={limit}&wt=json`. Response shape: `{ response: { docs: [{ g, a, latestVersion, p, ec }] } }`. `g` = groupId, `a` = artifactId. Download counts not available via search API — use `0`. License from `https://search.maven.org/solrsearch/select?q=g:{g}+AND+a:{a}&core=gav`.
+
+**`csharp.rs`** (task 4.20): NuGet v3 search API at `https://azuresearch-usnc.nuget.org/query?q={query}&take={limit}`. Response shape: `{ data: [{ id, version, description, totalDownloads, licenseUrl, projectUrl }] }`. Well-documented JSON API, maps cleanly to `PackageInfo`.
+
+**`haskell.rs`** (task 4.21): Hackage search at `https://hackage.haskell.org/packages/search?terms={query}` (HTML) or package info at `https://hackage.haskell.org/package/{name}.json`. For search, use `https://hackage.haskell.org/packages/search?terms={query}` with HTML parsing or the deprecated JSON endpoint. For MVP, support direct package lookup via `/{name}.json` and document search limitations (similar to PyPI).
+
+**`lua.rs`** (task 4.22): LuaRocks API at `https://luarocks.org/search?q={query}` (HTML) or manifest API at `https://luarocks.org/manifest`. For programmatic search, use `https://luarocks.org/search?q={query}&type=module` with HTML parsing. Scoped to Neovim ecosystem — tag results with `ecosystem: "lua"`. Download stats not available — use `0`.
+
+**Note**: Go, Java, Haskell, and Lua registries have limited or no download count APIs. These clients set `downloads: 0` and document the limitation. This affects `search_all()` ranking — packages from these ecosystems will sort to the bottom when ordered by downloads. A future enhancement could add a secondary sort by relevance score.
+
 ### D5. Workspace Dependency Addition
 
 `zen-registry/Cargo.toml` needs `urlencoding` for URL-safe query encoding:
@@ -1310,6 +1363,13 @@ urlencoding = "2"
 - `npm.rs`: Parse real npm search response → correct fields, downloads enriched
 - `pypi.rs`: Parse real PyPI JSON response → correct fields
 - `hex.rs`: Parse real hex.pm response → correct fields
+- `go.rs`: Parse real proxy.golang.org / pkg.go.dev response → correct `PackageInfo` fields
+- `ruby.rs`: Parse real rubygems.org search response → correct fields, downloads present
+- `php.rs`: Parse real packagist.org search response → correct fields
+- `java.rs`: Parse real Maven Central search response → correct groupId:artifactId naming
+- `csharp.rs`: Parse real NuGet v3 search response → correct fields, totalDownloads mapped
+- `haskell.rs`: Parse real Hackage package JSON → correct fields
+- `lua.rs`: Parse real LuaRocks response → correct fields, ecosystem tagged "lua"
 
 **Error handling tests**:
 - 404 response → `RegistryError::Api { status: 404 }`
@@ -1328,12 +1388,22 @@ urlencoding = "2"
 - `"npm"` → calls `search_npm`
 - `"python"` / `"pypi"` → calls `search_pypi`
 - `"hex"` / `"elixir"` → calls `search_hex`
+- `"go"` / `"golang"` → calls `search_go`
+- `"ruby"` / `"rubygems"` → calls `search_rubygems`
+- `"php"` / `"packagist"` → calls `search_packagist`
+- `"java"` / `"maven"` → calls `search_maven`
+- `"csharp"` / `"nuget"` / `"dotnet"` → calls `search_nuget`
+- `"haskell"` / `"hackage"` → calls `search_hackage`
+- `"lua"` / `"luarocks"` / `"neovim"` → calls `search_luarocks`
 - Unknown ecosystem → `RegistryError::UnsupportedEcosystem`
 
 **Live integration tests** (`#[ignore]`):
 - `search_crates_io("tokio", 5)` returns results with name containing "tokio"
 - `search_npm("express", 5)` returns results
 - `search_all("http client", 10)` returns results from multiple ecosystems
+- `search_rubygems("rails", 5)` returns results
+- `search_nuget("newtonsoft", 5)` returns results
+- `search_go("gin", 5)` returns results
 
 ---
 
@@ -1582,16 +1652,23 @@ Stream C: Recursive + Graph (tasks 4.13–4.15)
   [ ] C3. Create src/graph.rs — DecisionGraph with rustworkx-core
   [ ] C4. Tests: recursive (8), ref_graph (5), graph (8)
 
-Stream D: Registry Clients (tasks 4.5–4.9)
+Stream D: Registry Clients (tasks 4.5–4.9, 4.16–4.22)
   [ ] D0. Add urlencoding to workspace + zen-registry Cargo.toml
   [ ] D1. Create zen-registry/src/error.rs — RegistryError
   [ ] D2. Create zen-registry/src/crates_io.rs
   [ ] D3. Create zen-registry/src/npm.rs
   [ ] D4. Create zen-registry/src/pypi.rs
   [ ] D5. Create zen-registry/src/hex.rs
-  [ ] D6. Update zen-registry/src/lib.rs — RegistryClient + search_all
-  [ ] D7. Create test fixtures (recorded JSON responses)
-  [ ] D8. Tests: fixture (4), errors (4), search_all (4), dispatch (5)
+  [ ] D6. Create zen-registry/src/go.rs
+  [ ] D7. Create zen-registry/src/ruby.rs
+  [ ] D8. Create zen-registry/src/php.rs
+  [ ] D9. Create zen-registry/src/java.rs
+  [ ] D10. Create zen-registry/src/csharp.rs
+  [ ] D11. Create zen-registry/src/haskell.rs
+  [ ] D12. Create zen-registry/src/lua.rs
+  [ ] D13. Update zen-registry/src/lib.rs — RegistryClient + search_all (11 ecosystems)
+  [ ] D14. Create test fixtures (recorded JSON responses — 11 registries)
+  [ ] D15. Tests: fixture (11), errors (4), search_all (4), dispatch (12)
 
 Stream E: SearchEngine Orchestrator (task 4.4)
   [ ] E1. Update src/lib.rs — SearchEngine, SearchMode, SearchResult
@@ -1699,6 +1776,18 @@ When visibility scoping is active (Phase 9), construct a visibility-filtered sub
 
 **Spike evidence**: Spike 0.22 — "Visibility-scoped subgraph construction" validated (test: `spike_visibility_filtering`).
 
+### 11.16 Some Registries Lack Download Count APIs
+
+Go (proxy.golang.org), Java (Maven Central), Haskell (Hackage), and Lua (LuaRocks) do not expose download counts in their search APIs. These clients set `downloads: 0`. This affects `search_all()` ranking — results from these ecosystems will always sort to the bottom when ordered by downloads descending. Consider adding a secondary relevance-based sort or ecosystem-weighted normalization in a future enhancement.
+
+### 11.17 Go Module Proxy Protocol Is Not a Search API
+
+`proxy.golang.org` is a **module proxy**, not a search API. It serves module versions (`/{module}/@v/list`) and metadata (`/{module}/@v/{version}.info`) but has no search endpoint. For search, use `https://pkg.go.dev/search?q={query}` with HTML parsing or the internal API. Document this dual-source approach in `go.rs`.
+
+### 11.18 Hackage and LuaRocks Have Limited Programmatic Search
+
+Hackage's search endpoint returns HTML. For MVP, support direct package lookup via `https://hackage.haskell.org/package/{name}.json` and document that search requires HTML parsing (similar to PyPI's deprecated search). LuaRocks similarly returns HTML for search — use manifest parsing or HTML extraction.
+
 ---
 
 ## 12. Milestone 4 Validation
@@ -1790,10 +1879,39 @@ cargo clippy -p zen-search -p zen-registry -- -D warnings
 - [ ] `search_hex()` parses real API response (fixture)
 - [ ] Downloads from `downloads.all` field
 
+**Registry — Go/proxy.golang.org** (task 4.16):
+- [ ] `search_go()` parses real API response (fixture)
+- [ ] Module path URL-encoding handled correctly
+
+**Registry — Ruby/rubygems.org** (task 4.17):
+- [ ] `search_rubygems()` parses real API response (fixture)
+- [ ] Downloads field mapped correctly
+
+**Registry — PHP/packagist.org** (task 4.18):
+- [ ] `search_packagist()` parses real API response (fixture)
+- [ ] Version resolved from follow-up package call
+
+**Registry — Java/Maven Central** (task 4.19):
+- [ ] `search_maven()` parses real API response (fixture)
+- [ ] groupId:artifactId mapped to name field
+
+**Registry — C#/NuGet** (task 4.20):
+- [ ] `search_nuget()` parses real NuGet v3 response (fixture)
+- [ ] totalDownloads mapped correctly
+
+**Registry — Haskell/Hackage** (task 4.21):
+- [ ] `search_hackage()` parses real package JSON (fixture)
+- [ ] Returns correct fields
+
+**Registry — Lua/LuaRocks** (task 4.22):
+- [ ] `search_luarocks()` parses real response (fixture)
+- [ ] Ecosystem tagged as "lua" (Neovim scope)
+
 **Registry — search_all** (task 4.9):
-- [ ] `search_all()` merges results from all registries concurrently
+- [ ] `search_all()` merges results from all 11 registries concurrently
 - [ ] Sorted by downloads (descending)
 - [ ] One registry failure doesn't fail the whole search
+- [ ] Registries with no download counts (Go, Java, Haskell, Lua) sort last
 
 **Overall**:
 - [ ] `cargo test -p zen-search -p zen-registry` all pass
