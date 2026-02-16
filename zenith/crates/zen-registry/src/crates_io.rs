@@ -1,6 +1,6 @@
 //! crates.io registry client.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 #[derive(serde::Deserialize)]
 struct CratesResponse {
@@ -35,19 +35,7 @@ impl RegistryClient {
             "https://crates.io/api/v1/crates?q={}&per_page={limit}",
             urlencoding::encode(query)
         );
-        let resp = self.http.get(&url).send().await?;
-
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(self.http.get(&url).send().await?).await?;
 
         let data: CratesResponse = resp.json().await?;
         Ok(data

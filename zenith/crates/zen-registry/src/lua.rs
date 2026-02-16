@@ -109,8 +109,14 @@ impl RegistryClient {
                 (idx, count)
             });
         }
-        while let Some(Ok((idx, config_refs))) = set.join_next().await {
-            results[idx].downloads = results[idx].downloads.saturating_add(config_refs);
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok((idx, config_refs)) => {
+                    results[idx].downloads =
+                        results[idx].downloads.saturating_add(config_refs);
+                }
+                Err(e) => tracing::warn!(%e, "lua config ref count task failed"),
+            }
         }
 
         Ok(results)

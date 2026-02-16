@@ -11719,6 +11719,7 @@ dependencies = [
 name = "zen-registry"
 version = "0.1.0"
 dependencies = [
+ "http 1.4.0",
  "pretty_assertions",
  "reqwest 0.13.2",
  "serde",

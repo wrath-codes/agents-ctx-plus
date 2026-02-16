@@ -16,6 +16,7 @@ tracing.workspace = true
 urlencoding.workspace = true
 
 [dev-dependencies]
+http = "1"
 pretty_assertions.workspace = true
 
 [lints]

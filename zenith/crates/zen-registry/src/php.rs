@@ -1,6 +1,6 @@
 //! Packagist (PHP) registry client.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 #[derive(serde::Deserialize)]
 struct PackagistSearchResponse {
@@ -47,19 +47,7 @@ impl RegistryClient {
             "https://packagist.org/search.json?q={}&per_page={limit}",
             urlencoding::encode(query)
         );
-        let resp = self.http.get(&url).send().await?;
-
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(self.http.get(&url).send().await?).await?;
 
         let data: PackagistSearchResponse = resp.json().await?;
         let results: Vec<PackagistResult> = data.results.into_iter().take(limit).collect();
@@ -91,8 +79,11 @@ impl RegistryClient {
         }
 
         let mut version_data = vec![(String::new(), None::<String>); results.len()];
-        while let Some(Ok((idx, data))) = set.join_next().await {
-            version_data[idx] = data;
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok((idx, data)) => version_data[idx] = data,
+                Err(e) => tracing::warn!(%e, "packagist version fetch task failed"),
+            }
         }
 
         let packages = results

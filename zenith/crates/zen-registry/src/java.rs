@@ -3,7 +3,7 @@
 //! Download counts are not available via the Maven Central search API —
 //! results use `downloads: 0`.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 #[derive(serde::Deserialize)]
 struct MavenSearchResponse {
@@ -47,19 +47,7 @@ impl RegistryClient {
             "https://search.maven.org/solrsearch/select?q={}&rows={limit}&wt=json",
             urlencoding::encode(query)
         );
-        let resp = self.http.get(&url).send().await?;
-
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(self.http.get(&url).send().await?).await?;
 
         let data: MavenSearchResponse = resp.json().await?;
         Ok(data

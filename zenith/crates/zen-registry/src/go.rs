@@ -5,7 +5,7 @@
 //! paths). Keyword searches return empty results. Download counts are not
 //! available — results use `downloads: 0`.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 /// Encode a Go module path per the module proxy protocol.
 ///
@@ -68,12 +68,7 @@ impl RegistryClient {
         if resp.status() == 404 || resp.status() == 410 {
             return Ok(Vec::new());
         }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(resp).await?;
 
         let info: GoProxyInfo = resp.json().await?;
         Ok(vec![PackageInfo {

@@ -5,7 +5,7 @@
 //! then fetching metadata for the latest version. Download counts are not
 //! available — results use `downloads: 0`.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 /// Preferred versions response — lists normal and deprecated versions.
 #[derive(serde::Deserialize)]
@@ -52,17 +52,7 @@ impl RegistryClient {
         if resp.status() == 404 {
             return Ok(Vec::new());
         }
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(resp).await?;
 
         let preferred: HackagePreferred = resp.json().await.map_err(|e| {
             RegistryError::Parse(format!("hackage preferred.json parse error: {e}"))

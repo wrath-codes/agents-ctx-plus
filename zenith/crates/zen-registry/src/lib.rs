@@ -29,6 +29,7 @@ pub mod pypi;
 pub mod ruby;
 
 mod error;
+mod http;
 
 pub use error::RegistryError;
 

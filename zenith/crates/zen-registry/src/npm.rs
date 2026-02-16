@@ -1,6 +1,6 @@
 //! npm registry client.
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 #[derive(serde::Deserialize)]
 struct NpmSearchResponse {
@@ -50,19 +50,7 @@ impl RegistryClient {
             "https://registry.npmjs.org/-/v1/search?text={}&size={limit}",
             urlencoding::encode(query)
         );
-        let resp = self.http.get(&url).send().await?;
-
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(self.http.get(&url).send().await?).await?;
 
         let data: NpmSearchResponse = resp.json().await?;
         let names: Vec<&str> = data.objects.iter().map(|o| o.package.name.as_str()).collect();
@@ -113,8 +101,11 @@ impl RegistryClient {
         }
 
         let mut results = vec![0u64; names.len()];
-        while let Some(Ok((idx, downloads))) = set.join_next().await {
-            results[idx] = downloads;
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok((idx, downloads)) => results[idx] = downloads,
+                Err(e) => tracing::warn!(%e, "npm download fetch task failed"),
+            }
         }
         results
     }

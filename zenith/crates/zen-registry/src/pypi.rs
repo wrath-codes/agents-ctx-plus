@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::{PackageInfo, RegistryClient, error::RegistryError};
+use crate::{PackageInfo, RegistryClient, error::RegistryError, http::check_response};
 
 #[derive(serde::Deserialize)]
 struct PyPiResponse {
@@ -45,17 +45,7 @@ impl RegistryClient {
         if resp.status() == 404 {
             return Ok(Vec::new());
         }
-        if resp.status() == 429 {
-            return Err(RegistryError::RateLimited {
-                retry_after_secs: 60,
-            });
-        }
-        if !resp.status().is_success() {
-            return Err(RegistryError::Api {
-                status: resp.status().as_u16(),
-                message: resp.text().await.unwrap_or_default(),
-            });
-        }
+        let resp = check_response(resp).await?;
 
         let data: PyPiResponse = resp.json().await?;
         let repo = data.info.project_urls.as_ref().and_then(|urls| {
