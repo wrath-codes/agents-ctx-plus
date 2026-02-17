@@ -124,7 +124,10 @@ pub async fn handle(
                 bail!("no indexed package found for {ecosystem}/{package}");
             }
 
+            let mut removed_sources = 0usize;
             for v in &versions {
+                let (file_count, _) = source_stats_for(ctx, ecosystem, package, v)?;
+                removed_sources = removed_sources.saturating_add(usize::try_from(file_count)?);
                 ctx.lake.delete_package(ecosystem, package, v)?;
                 ctx.source_store
                     .delete_package_sources(ecosystem, package, v)?;
@@ -133,7 +136,7 @@ pub async fn handle(
             output(
                 &CacheCleanResponse {
                     removed_packages: versions.len(),
-                    removed_sources: versions.len(),
+                    removed_sources,
                     scope: format!("{ecosystem}/{package}"),
                 },
                 flags.format,

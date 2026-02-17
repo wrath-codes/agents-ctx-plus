@@ -151,20 +151,41 @@ fn detect_project_name(project_root: &Path) -> Option<String> {
         return Some(name.to_string());
     }
 
-    for file in ["Cargo.toml", "pyproject.toml"] {
-        if let Ok(raw) = fs::read_to_string(project_root.join(file)) {
-            for line in raw.lines() {
-                let trimmed = line.trim();
-                if let Some(rest) = trimmed.strip_prefix("name") {
-                    let rest = rest.trim();
-                    if let Some(rest) = rest.strip_prefix('=') {
-                        let value = rest.trim().trim_matches('"');
-                        if !value.is_empty() {
-                            return Some(value.to_string());
-                        }
-                    }
-                }
-            }
+    if let Ok(raw) = fs::read_to_string(project_root.join("Cargo.toml"))
+        && let Ok(doc) = toml::from_str::<toml::Value>(&raw)
+        && let Some(name) = doc
+            .get("package")
+            .and_then(toml::Value::as_table)
+            .and_then(|pkg| pkg.get("name"))
+            .and_then(toml::Value::as_str)
+            .filter(|v| !v.trim().is_empty())
+    {
+        return Some(name.to_string());
+    }
+
+    if let Ok(raw) = fs::read_to_string(project_root.join("pyproject.toml"))
+        && let Ok(doc) = toml::from_str::<toml::Value>(&raw)
+    {
+        if let Some(name) = doc
+            .get("project")
+            .and_then(toml::Value::as_table)
+            .and_then(|project| project.get("name"))
+            .and_then(toml::Value::as_str)
+            .filter(|v| !v.trim().is_empty())
+        {
+            return Some(name.to_string());
+        }
+
+        if let Some(name) = doc
+            .get("tool")
+            .and_then(toml::Value::as_table)
+            .and_then(|tool| tool.get("poetry"))
+            .and_then(toml::Value::as_table)
+            .and_then(|poetry| poetry.get("name"))
+            .and_then(toml::Value::as_str)
+            .filter(|v| !v.trim().is_empty())
+        {
+            return Some(name.to_string());
         }
     }
 

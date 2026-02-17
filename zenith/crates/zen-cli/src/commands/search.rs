@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::{Context, bail};
+use semver::Version;
 use serde::Serialize;
 use zen_search::{
     RecursiveBudget, RecursiveQuery, RecursiveQueryEngine, SearchEngine, SearchFilters, SearchMode,
@@ -17,7 +18,7 @@ use crate::output::output;
 struct SearchResponse {
     query: String,
     mode: String,
-    total_results: usize,
+    fetched_results: usize,
     returned: usize,
     results: Vec<SearchResult>,
 }
@@ -70,14 +71,14 @@ pub async fn handle(
     };
 
     let mut results = engine.search(&args.query, mode, filters).await?;
-    let total_results = results.len();
+    let fetched_results = results.len();
     results.truncate(usize::try_from(limit)?);
 
     output(
         &SearchResponse {
             query: args.query.clone(),
             mode: mode_name(mode).to_string(),
-            total_results,
+            fetched_results,
             returned: results.len(),
             results,
         },
@@ -93,12 +94,10 @@ async fn handle_recursive(
 ) -> anyhow::Result<()> {
     let budget = RecursiveBudget {
         max_depth: usize::try_from(args.max_depth.unwrap_or(2))?,
-        max_chunks: usize::try_from(args.max_chunks.unwrap_or(200))?,
+        max_chunks: usize::try_from(args.context_budget.or(args.max_chunks).unwrap_or(200))?,
         max_bytes_per_chunk: usize::try_from(args.max_bytes_per_chunk.unwrap_or(6_000))?,
         max_total_bytes: usize::try_from(args.max_total_bytes.unwrap_or(750_000))?,
     };
-
-    let _ = args.context_budget;
 
     let mut query = RecursiveQuery::from_text(&args.query);
     query.generate_summary = true;
@@ -186,12 +185,19 @@ fn resolve_triplet(
                 .filter(|(e, p, _)| e == eco && p == pkg)
                 .map(|(_, _, v)| v)
                 .collect::<Vec<_>>();
-            versions.sort();
+            versions.sort_by(semver_or_lexicographic_cmp);
             Ok(versions
                 .pop()
                 .map(|version| (eco.clone(), pkg.clone(), version)))
         }
         _ => Ok(None),
+    }
+}
+
+fn semver_or_lexicographic_cmp(a: &String, b: &String) -> std::cmp::Ordering {
+    match (Version::parse(a), Version::parse(b)) {
+        (Ok(av), Ok(bv)) => av.cmp(&bv),
+        _ => a.cmp(b),
     }
 }
 

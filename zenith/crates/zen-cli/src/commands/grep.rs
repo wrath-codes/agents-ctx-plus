@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use anyhow::{Context, bail};
+use semver::Version;
 use serde::Serialize;
 use zen_search::{GrepEngine, GrepOptions};
 
@@ -165,7 +166,7 @@ fn resolve_package_targets(
             .filter(|(e, p, _)| e == &ecosystem && p == package)
             .map(|(_, _, v)| v.clone())
             .collect::<Vec<_>>();
-        versions.sort();
+        versions.sort_by(semver_or_lexicographic_cmp);
         let version = versions.pop().ok_or_else(|| {
             anyhow::anyhow!(
                 "grep: indexed package not found for --package {} --ecosystem {}; run 'znt install {} --ecosystem {}' first",
@@ -179,4 +180,11 @@ fn resolve_package_targets(
     }
 
     Ok(targets)
+}
+
+fn semver_or_lexicographic_cmp(a: &String, b: &String) -> std::cmp::Ordering {
+    match (Version::parse(a), Version::parse(b)) {
+        (Ok(av), Ok(bv)) => av.cmp(&bv),
+        _ => a.cmp(b),
+    }
 }

@@ -11,6 +11,8 @@ use crate::context::AppContext;
 use crate::output::output;
 use crate::pipeline::IndexingPipeline;
 
+const REGISTRY_SEARCH_LIMIT: usize = 100;
+
 #[derive(Debug, Serialize)]
 struct InstallResponse {
     package: InstallPackage,
@@ -91,24 +93,35 @@ pub async fn handle(
     })?;
 
     if args.force {
-        let _ = ctx.lake.delete_package(&ecosystem, &args.package, &version);
-        let _ = ctx
-            .source_store
-            .delete_package_sources(&ecosystem, &args.package, &version);
+        if let Err(error) = ctx.lake.delete_package(&ecosystem, &args.package, &version) {
+            tracing::warn!(
+                ecosystem = %ecosystem,
+                package = %args.package,
+                version = %version,
+                %error,
+                "install: failed to delete existing lake package before force reinstall"
+            );
+        }
+        if let Err(error) =
+            ctx.source_store
+                .delete_package_sources(&ecosystem, &args.package, &version)
+        {
+            tracing::warn!(
+                ecosystem = %ecosystem,
+                package = %args.package,
+                version = %version,
+                %error,
+                "install: failed to delete existing source cache before force reinstall"
+            );
+        }
     }
 
     let temp = tempfile::TempDir::new().context("failed to create temp directory")?;
     let clone_path = temp.path().join("repo");
 
-    run_git_clone(&repo_url, &clone_path, args.version.is_none())?;
-    if let Some(requested_version) = &args.version {
-        run_git_checkout(&clone_path, requested_version).with_context(|| {
-            format!(
-                "failed to checkout requested revision '{}'",
-                requested_version
-            )
-        })?;
-    }
+    run_git_clone(&repo_url, &clone_path, false)?;
+    let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
+    run_git_checkout_for_version(&clone_path, &checkout_ref)?;
 
     let index = IndexingPipeline::index_directory_with(
         &ctx.lake,
@@ -157,7 +170,10 @@ async fn resolve_registry_package(
     ecosystem: &str,
     package: &str,
 ) -> anyhow::Result<zen_registry::PackageInfo> {
-    let candidates = ctx.registry.search(package, ecosystem, 20).await?;
+    let candidates = ctx
+        .registry
+        .search(package, ecosystem, REGISTRY_SEARCH_LIMIT)
+        .await?;
     let exact = candidates
         .into_iter()
         .find(|pkg| pkg.name.eq_ignore_ascii_case(package));
@@ -166,6 +182,20 @@ async fn resolve_registry_package(
             "install: no exact registry match for package '{}' in ecosystem '{}'; use exact package name",
             package,
             ecosystem
+        )
+    })
+}
+
+fn run_git_checkout_for_version(repo_path: &std::path::Path, version: &str) -> anyhow::Result<()> {
+    if run_git_checkout(repo_path, version).is_ok() {
+        return Ok(());
+    }
+
+    let prefixed = format!("v{version}");
+    run_git_checkout(repo_path, &prefixed).with_context(|| {
+        format!(
+            "failed to checkout version '{}' (also tried '{}')",
+            version, prefixed
         )
     })
 }

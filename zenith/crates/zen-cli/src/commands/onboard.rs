@@ -1,10 +1,14 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use chrono::Utc;
 use serde::Serialize;
+use tokio::process::Command as TokioCommand;
+use tokio::time::timeout;
+use toml::Value as TomlValue;
 use zen_core::entities::ProjectDependency;
 
 use crate::cli::GlobalFlags;
@@ -76,7 +80,8 @@ pub async fn handle(
                 Ok(IndexStatus::IndexedNow) => {
                     newly_indexed += 1;
                 }
-                Err(_) => {
+                Err(error) => {
+                    tracing::warn!(package = %dep.name, %error, "onboard: dependency indexing failed");
                     failed += 1;
                     failed_packages.push(dep.name.clone());
                 }
@@ -146,13 +151,18 @@ fn detect_ecosystem(manifests: &[String]) -> String {
 fn detect_dependencies(
     root: &Path,
     ecosystem: &str,
-    _workspace: bool,
+    workspace: bool,
 ) -> anyhow::Result<Vec<ProjectDependency>> {
     let deps = match ecosystem {
-        "rust" => parse_cargo_dependencies(root)?,
+        "rust" => parse_cargo_dependencies(root, workspace)?,
         "npm" => parse_npm_dependencies(root)?,
         "pypi" => parse_python_dependencies(root)?,
-        _ => Vec::new(),
+        other => {
+            bail!(
+                "onboard: dependency detection is not implemented for ecosystem '{}'",
+                other
+            );
+        }
     };
 
     Ok(deps
@@ -168,24 +178,42 @@ fn detect_dependencies(
         .collect())
 }
 
-fn parse_cargo_dependencies(root: &Path) -> anyhow::Result<Vec<(String, Option<String>, String)>> {
+fn parse_cargo_dependencies(
+    root: &Path,
+    include_workspace: bool,
+) -> anyhow::Result<Vec<(String, Option<String>, String)>> {
     let raw = fs::read_to_string(root.join("Cargo.toml"))?;
+    let document: TomlValue = toml::from_str(&raw).context("failed to parse Cargo.toml")?;
     let mut out = Vec::new();
-    let mut in_deps = false;
 
-    for line in raw.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            in_deps = trimmed == "[dependencies]";
-            continue;
-        }
-        if !in_deps || trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        if let Some((name, version)) = parse_key_value_dep(trimmed) {
-            out.push((name, version, "Cargo.toml".to_string()));
+    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(table) = document.get(section).and_then(TomlValue::as_table) {
+            for (name, value) in table {
+                out.push((
+                    name.clone(),
+                    parse_cargo_version_value(value),
+                    "Cargo.toml".to_string(),
+                ));
+            }
         }
     }
+
+    if include_workspace
+        && let Some(table) = document
+            .get("workspace")
+            .and_then(TomlValue::as_table)
+            .and_then(|ws| ws.get("dependencies"))
+            .and_then(TomlValue::as_table)
+    {
+        for (name, value) in table {
+            out.push((
+                name.clone(),
+                parse_cargo_version_value(value),
+                "Cargo.toml".to_string(),
+            ));
+        }
+    }
+
     Ok(unique_deps(out))
 }
 
@@ -220,13 +248,13 @@ fn parse_python_dependencies(root: &Path) -> anyhow::Result<Vec<(String, Option<
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            let mut parts = trimmed.split("==");
-            let name = parts.next().unwrap_or_default().trim();
+
+            let (name, version) = parse_requirement_line(trimmed);
             if name.is_empty() {
                 continue;
             }
-            let version = parts.next().map(|v| v.trim().to_string());
-            out.push((name.to_string(), version, "requirements.txt".to_string()));
+
+            out.push((name, version, "requirements.txt".to_string()));
         }
     }
 
@@ -250,34 +278,45 @@ fn parse_python_dependencies(root: &Path) -> anyhow::Result<Vec<(String, Option<
     Ok(unique_deps(out))
 }
 
-fn parse_key_value_dep(line: &str) -> Option<(String, Option<String>)> {
-    let mut parts = line.splitn(2, '=');
-    let name = parts.next()?.trim();
-    let raw_value = parts.next()?.trim();
-    if name.is_empty() {
-        return None;
+fn parse_cargo_version_value(value: &TomlValue) -> Option<String> {
+    match value {
+        TomlValue::String(version) => Some(version.clone()),
+        TomlValue::Table(table) => table
+            .get("version")
+            .and_then(TomlValue::as_str)
+            .map(str::to_string),
+        _ => None,
     }
-    if raw_value.starts_with('"') {
-        return Some((
-            name.to_string(),
-            Some(raw_value.trim_matches('"').to_string()),
-        ));
+}
+
+fn parse_requirement_line(line: &str) -> (String, Option<String>) {
+    let operators = ["==", "~=", "!=", ">=", "<=", ">", "<"];
+
+    let base = line.split('#').next().unwrap_or_default().trim();
+    let base = base.split(';').next().unwrap_or(base).trim();
+    if base.is_empty() {
+        return (String::new(), None);
     }
-    if raw_value.starts_with('{') {
-        if let Some(pos) = raw_value.find("version") {
-            let after = &raw_value[pos + "version".len()..];
-            if let Some(eq) = after.find('=') {
-                let raw = after[eq + 1..].trim();
-                let cutoff = raw.find(',').or_else(|| raw.find('}')).unwrap_or(raw.len());
-                let v = raw[..cutoff].trim().trim_matches('"');
-                if !v.is_empty() {
-                    return Some((name.to_string(), Some(v.to_string())));
-                }
-            }
+
+    let mut content = base;
+    if let Some((before_extras, _)) = base.split_once('[') {
+        content = before_extras.trim();
+    }
+
+    for op in operators {
+        if let Some((name, version)) = content.split_once(op) {
+            let parsed_name = name.trim().to_string();
+            let parsed_version = version
+                .split(',')
+                .next()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(str::to_string);
+            return (parsed_name, parsed_version);
         }
-        return Some((name.to_string(), None));
     }
-    Some((name.to_string(), None))
+
+    (content.trim().to_string(), None)
 }
 
 fn unique_deps(
@@ -324,11 +363,16 @@ async fn index_dependency(
     let temp = tempfile::TempDir::new().context("failed to create temp directory")?;
     let clone_path = temp.path().join("repo");
 
-    let clone = std::process::Command::new("git")
-        .args(["clone", "--depth", "1", &repo_url])
-        .arg(&clone_path)
-        .output()
-        .context("failed to run git clone")?;
+    let clone = timeout(
+        Duration::from_secs(120),
+        TokioCommand::new("git")
+            .args(["clone", "--depth", "1", &repo_url])
+            .arg(&clone_path)
+            .output(),
+    )
+    .await
+    .context("onboard: git clone timed out")?
+    .context("onboard: failed to run git clone")?;
     if !clone.status.success() {
         anyhow::bail!(
             "onboard: git clone failed for {}: {}",
@@ -364,21 +408,20 @@ async fn index_dependency(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_key_value_dep, unique_deps};
+    use super::{parse_requirement_line, unique_deps};
 
     #[test]
-    fn parses_simple_cargo_dep_line() {
-        let parsed = parse_key_value_dep("tokio = \"1.40\"").expect("should parse");
+    fn parses_requirements_equals() {
+        let parsed = parse_requirement_line("tokio==1.40.0");
         assert_eq!(parsed.0, "tokio");
-        assert_eq!(parsed.1.as_deref(), Some("1.40"));
+        assert_eq!(parsed.1.as_deref(), Some("1.40.0"));
     }
 
     #[test]
-    fn parses_inline_table_dep_line() {
-        let parsed = parse_key_value_dep("serde = { version = \"1.0\", features = [\"derive\"] }")
-            .expect("should parse");
-        assert_eq!(parsed.0, "serde");
-        assert_eq!(parsed.1.as_deref(), Some("1.0"));
+    fn parses_requirements_range_operator() {
+        let parsed = parse_requirement_line("requests>=2.31");
+        assert_eq!(parsed.0, "requests");
+        assert_eq!(parsed.1.as_deref(), Some("2.31"));
     }
 
     #[test]
