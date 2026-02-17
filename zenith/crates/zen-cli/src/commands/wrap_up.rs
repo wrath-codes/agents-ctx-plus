@@ -1,4 +1,9 @@
-use anyhow::bail;
+#[path = "wrap_up/handle.rs"]
+mod handle;
+#[path = "wrap_up/summary.rs"]
+mod summary;
+#[path = "wrap_up/sync.rs"]
+mod sync;
 
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::WrapUpArgs;
@@ -6,9 +11,9 @@ use crate::context::AppContext;
 
 /// Handle `znt wrap-up`.
 pub async fn handle(
-    _args: &WrapUpArgs,
-    _ctx: &mut AppContext,
-    _flags: &GlobalFlags,
+    args: &WrapUpArgs,
+    ctx: &mut AppContext,
+    flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
-    bail!("znt wrap-up is not implemented yet")
+    handle::run(args, ctx, flags).await
 }
