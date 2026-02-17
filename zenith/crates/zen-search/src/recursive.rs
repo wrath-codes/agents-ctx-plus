@@ -5,6 +5,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use zen_lake::SourceFileStore;
+use zen_parser::extract_api;
 
 use crate::error::SearchError;
 use crate::ref_graph::{RefCategory, RefEdge, ReferenceGraph, SymbolRefHit};
@@ -167,7 +168,7 @@ impl RecursiveQueryEngine {
             let path_str = ent.path().to_string_lossy().to_string();
             store.insert(path_str.clone(), source.clone());
             if let Some(file) = store.files.get_mut(&path_str) {
-                populate_spans(file);
+                populate_spans(file, &path_str);
             }
         }
 
@@ -207,7 +208,7 @@ impl RecursiveQueryEngine {
             let (file_path, content) = row.map_err(|e| SearchError::Grep(e.to_string()))?;
             store.insert(file_path.clone(), content);
             if let Some(file) = store.files.get_mut(&file_path) {
-                populate_spans(file);
+                populate_spans(file, &file_path);
             }
         }
 
@@ -320,14 +321,12 @@ impl RecursiveQueryEngine {
         }
 
         let summary_json = if query.generate_summary {
-            Some(
-                serde_json::json!({
-                    "hits": hits.len(),
-                    "edges": edges.len(),
-                    "elapsed_ms": start.elapsed().as_millis(),
-                })
-                .to_string(),
-            )
+            Some(build_summary_json(
+                &hits,
+                &edges,
+                &category_counts,
+                start.elapsed().as_millis(),
+            ))
         } else {
             None
         };
@@ -346,7 +345,39 @@ impl RecursiveQueryEngine {
     }
 }
 
-fn populate_spans(file: &mut FileContext) {
+fn populate_spans(file: &mut FileContext, file_path: &str) {
+    if let Ok(items) = extract_api(&file.source, file_path) {
+        for item in items {
+            let line_start = usize::try_from(item.start_line).unwrap_or(0);
+            let line_end = usize::try_from(item.end_line).unwrap_or(line_start);
+            let doc_comment = if item.doc_comment.trim().is_empty() {
+                None
+            } else {
+                Some(item.doc_comment.clone())
+            };
+            file.symbols.push(SymbolSpan {
+                kind: item.kind.to_string(),
+                name: item.name,
+                line_start,
+                line_end,
+                signature: item.signature,
+                doc_comment: doc_comment.clone(),
+            });
+
+            if let Some(doc) = doc_comment {
+                file.doc_spans.push(DocSpan {
+                    line_start,
+                    line_end,
+                    content: doc,
+                });
+            }
+        }
+
+        if !file.symbols.is_empty() {
+            return;
+        }
+    }
+
     let mut pending_doc = Vec::new();
     for (idx, raw_line) in file.source.lines().enumerate() {
         let line_no = idx + 1;
@@ -425,6 +456,48 @@ fn matches_symbol(symbol: &SymbolSpan, query: &RecursiveQuery) -> bool {
     kind_match && keyword_match
 }
 
+fn build_summary_json(
+    hits: &[SymbolRefHit],
+    edges: &[RefEdge],
+    category_counts: &HashMap<String, usize>,
+    elapsed_ms: u128,
+) -> String {
+    let sample_hits: Vec<_> = hits
+        .iter()
+        .take(5)
+        .map(|h| {
+            serde_json::json!({
+                "ref_id": h.ref_id,
+                "name": h.name,
+                "kind": h.kind,
+                "file_path": h.file_path,
+            })
+        })
+        .collect();
+
+    let sample_edges: Vec<_> = edges
+        .iter()
+        .take(5)
+        .map(|e| {
+            serde_json::json!({
+                "source": e.source_ref_id,
+                "target": e.target_ref_id,
+                "category": e.category.as_str(),
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "hits": hits.len(),
+        "edges": edges.len(),
+        "category_counts": category_counts,
+        "sample_hits": sample_hits,
+        "sample_edges": sample_edges,
+        "elapsed_ms": elapsed_ms,
+    })
+    .to_string()
+}
+
 fn classify_edge_category(
     source_file: &str,
     target_file: &str,
@@ -469,7 +542,7 @@ mod tests {
             budget: RecursiveBudget::default(),
         };
         let file = engine.store.files.get_mut("src/lib.rs").unwrap();
-        populate_spans(file);
+        populate_spans(file, "src/lib.rs");
 
         let plan = engine.plan();
         assert_eq!(plan.file_count, 1);
@@ -489,7 +562,7 @@ mod tests {
             budget: RecursiveBudget::default(),
         };
         let file = engine.store.files.get_mut("src/lib.rs").unwrap();
-        populate_spans(file);
+        populate_spans(file, "src/lib.rs");
 
         let result = engine
             .execute(&RecursiveQuery {
@@ -534,8 +607,8 @@ mod tests {
             store,
             budget: RecursiveBudget::default(),
         };
-        for file in engine.store.files.values_mut() {
-            populate_spans(file);
+        for (path, file) in &mut engine.store.files {
+            populate_spans(file, path);
         }
 
         let result = engine
