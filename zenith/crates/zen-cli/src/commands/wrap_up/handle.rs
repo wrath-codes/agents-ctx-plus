@@ -1,4 +1,5 @@
 use serde::Serialize;
+use zen_core::workspace::{WorkspaceChannelStatus, WorkspaceSnapshot};
 use zen_db::repos::audit::AuditFilter;
 
 use crate::cli::GlobalFlags;
@@ -21,6 +22,8 @@ struct WrapUpResponse {
     session: WrapUpSession,
     snapshot: zen_core::entities::SessionSnapshot,
     audit_count: usize,
+    workspace_snapshot_status: WorkspaceChannelStatus,
+    workspace_snapshot: Option<WorkspaceSnapshot>,
     sync: WrapUpSyncStatus,
 }
 
@@ -43,6 +46,26 @@ pub async fn run(
         })
         .await?;
 
+    let (workspace_snapshot_status, workspace_snapshot) =
+        match crate::workspace::agentfs::session_workspace_snapshot(&ctx.project_root, &session.id)
+            .await
+        {
+            Ok(snapshot) => (
+                WorkspaceChannelStatus {
+                    status: "ok".to_string(),
+                    error: None,
+                },
+                Some(snapshot),
+            ),
+            Err(error) => (
+                WorkspaceChannelStatus {
+                    status: "error".to_string(),
+                    error: Some(error.to_string()),
+                },
+                None,
+            ),
+        };
+
     output(
         &WrapUpResponse {
             session: WrapUpSession {
@@ -52,6 +75,8 @@ pub async fn run(
             },
             snapshot,
             audit_count: audit.len(),
+            workspace_snapshot_status,
+            workspace_snapshot,
             sync: build_sync_status(args.auto_commit, args.message.as_deref()),
         },
         flags.format,

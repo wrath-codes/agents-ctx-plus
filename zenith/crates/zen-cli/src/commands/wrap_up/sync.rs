@@ -15,7 +15,9 @@ pub fn build_sync_status(auto_commit_requested: bool, message: Option<&str>) -> 
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .unwrap_or("(auto)");
-        format!("auto-commit requested (message: {msg}), but commit wiring is planned for PR7")
+        format!(
+            "auto-commit requested (message: {msg}), but commit wiring is planned for a later phase"
+        )
     } else {
         "cloud sync and commit automation are planned for later phases".to_string()
     };
@@ -37,7 +39,7 @@ mod tests {
     fn reports_deferred_auto_commit_note() {
         let status = build_sync_status(true, Some("wrap-up commit"));
         assert!(!status.git_committed);
-        assert!(status.note.contains("PR7"));
+        assert!(status.note.contains("later phase"));
         assert!(status.note.contains("wrap-up commit"));
     }
 }

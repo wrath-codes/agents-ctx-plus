@@ -1,3 +1,7 @@
+#[path = "audit/files.rs"]
+mod files;
+#[path = "audit/merge.rs"]
+mod merge;
 #[path = "audit/query.rs"]
 mod query;
 #[path = "audit/search.rs"]
@@ -13,6 +17,10 @@ pub async fn handle(
     ctx: &mut AppContext,
     flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
+    if args.files {
+        return files::run(args, ctx, flags).await;
+    }
+
     if let Some(search_query) = args.search.as_deref() {
         search::run(search_query, ctx, flags).await
     } else {

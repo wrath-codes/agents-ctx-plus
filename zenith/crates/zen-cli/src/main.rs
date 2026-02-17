@@ -14,6 +14,7 @@ mod context;
 mod output;
 #[allow(clippy::all)]
 mod pipeline;
+mod workspace;
 
 #[cfg(test)]
 mod spike_agentfs;

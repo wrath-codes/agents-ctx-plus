@@ -9,6 +9,15 @@ use crate::context::AppContext;
 use crate::output::output;
 
 pub async fn run(args: &AuditArgs, ctx: &AppContext, flags: &GlobalFlags) -> anyhow::Result<()> {
+    let entries = fetch(args, ctx, flags).await?;
+    output(&entries, flags.format)
+}
+
+pub async fn fetch(
+    args: &AuditArgs,
+    ctx: &AppContext,
+    flags: &GlobalFlags,
+) -> anyhow::Result<Vec<zen_core::entities::AuditEntry>> {
     let limit = effective_limit(None, flags.limit, 50);
     let filter = AuditFilter {
         entity_type: args
@@ -26,6 +35,5 @@ pub async fn run(args: &AuditArgs, ctx: &AppContext, flags: &GlobalFlags) -> any
         limit: Some(limit),
     };
 
-    let entries = ctx.service.query_audit(&filter).await?;
-    output(&entries, flags.format)
+    ctx.service.query_audit(&filter).await.map_err(Into::into)
 }

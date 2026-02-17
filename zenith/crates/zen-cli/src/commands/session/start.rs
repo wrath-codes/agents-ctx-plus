@@ -6,5 +6,14 @@ use super::types::SessionStartResponse;
 
 pub async fn run(ctx: &AppContext, flags: &GlobalFlags) -> anyhow::Result<()> {
     let (session, orphaned) = ctx.service.start_session().await?;
-    output(&SessionStartResponse { session, orphaned }, flags.format)
+    let workspace =
+        crate::workspace::agentfs::create_session_workspace(&ctx.project_root, &session.id).await?;
+    output(
+        &SessionStartResponse {
+            session,
+            orphaned,
+            workspace,
+        },
+        flags.format,
+    )
 }

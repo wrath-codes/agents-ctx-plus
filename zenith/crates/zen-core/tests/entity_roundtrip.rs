@@ -1,4 +1,4 @@
-//! Serde roundtrip and JsonSchema validation tests for all entity types.
+//! Serde roundtrip and `JsonSchema` validation tests for all entity types.
 
 use chrono::Utc;
 use schemars::schema_for;

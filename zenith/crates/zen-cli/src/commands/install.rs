@@ -4,6 +4,7 @@ use anyhow::{Context, bail};
 use chrono::Utc;
 use serde::Serialize;
 use zen_core::entities::ProjectDependency;
+use zen_core::enums::SessionStatus;
 
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::InstallArgs;
@@ -151,6 +152,31 @@ pub async fn handle(
         indexed_at: Some(Utc::now()),
     };
     ctx.service.upsert_dependency(&dep).await?;
+
+    if let Some(session) = ctx
+        .service
+        .list_sessions(Some(SessionStatus::Active), 1)
+        .await?
+        .first()
+        .cloned()
+        && let Err(error) = crate::workspace::agentfs::record_install_event(
+            &ctx.project_root,
+            &session.id,
+            &ecosystem,
+            &args.package,
+            &version,
+            true,
+            None,
+        )
+        .await
+    {
+        tracing::warn!(
+            session = %session.id,
+            package = %args.package,
+            %error,
+            "install: failed to write workspace audit event"
+        );
+    }
 
     output(
         &InstallResponse {

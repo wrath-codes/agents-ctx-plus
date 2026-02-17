@@ -20,3 +20,4 @@ pub mod errors;
 pub mod ids;
 pub mod responses;
 pub mod trail;
+pub mod workspace;

@@ -242,6 +242,10 @@ pub struct AuditArgs {
     pub session: Option<String>,
     #[arg(long)]
     pub search: Option<String>,
+    #[arg(long)]
+    pub files: bool,
+    #[arg(long)]
+    pub merge_timeline: bool,
 }
 
 /// Arguments for `znt wrap-up`.
