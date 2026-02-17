@@ -190,11 +190,9 @@ impl<'a> SearchEngine<'a> {
                 Ok(combined.into_iter().map(SearchResult::Hybrid).collect())
             }
             SearchMode::Recursive => {
-                let engine = if let (Some(ecosystem), Some(package), Some(version)) = (
-                    filters.ecosystem.as_deref(),
-                    filters.package.as_deref(),
-                    filters.version.as_deref(),
-                ) {
+                let engine = if let Some((ecosystem, package, version)) =
+                    recursive_package_triplet(&filters)
+                {
                     RecursiveQueryEngine::from_source_store(
                         self.source_store,
                         ecosystem,
@@ -235,6 +233,13 @@ fn sort_vector_results(results: &mut [VectorSearchResult]) {
             .unwrap_or(Ordering::Equal)
             .then_with(|| a.id.cmp(&b.id))
     });
+}
+
+fn recursive_package_triplet(filters: &SearchFilters) -> Option<(&str, &str, &str)> {
+    let ecosystem = filters.ecosystem.as_deref()?;
+    let package = filters.package.as_deref()?;
+    let version = filters.version.as_deref()?;
+    Some((ecosystem, package, version))
 }
 
 #[cfg(test)]
@@ -293,5 +298,26 @@ mod tests {
         sort_vector_results(&mut rows);
         assert_eq!(rows[0].id, "a");
         assert_eq!(rows[1].id, "b");
+    }
+
+    #[test]
+    fn recursive_package_triplet_requires_all_fields() {
+        let complete = SearchFilters {
+            ecosystem: Some("rust".to_string()),
+            package: Some("tokio".to_string()),
+            version: Some("1.0.0".to_string()),
+            ..SearchFilters::default()
+        };
+        assert_eq!(
+            recursive_package_triplet(&complete),
+            Some(("rust", "tokio", "1.0.0"))
+        );
+
+        let missing_version = SearchFilters {
+            ecosystem: Some("rust".to_string()),
+            package: Some("tokio".to_string()),
+            ..SearchFilters::default()
+        };
+        assert_eq!(recursive_package_triplet(&missing_version), None);
     }
 }
