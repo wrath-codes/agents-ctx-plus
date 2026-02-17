@@ -187,7 +187,7 @@ pub fn status_hooks(project_root: &Path) -> Result<HookStatusReport, HookError> 
 
     for hook in HOOK_NAMES {
         let status = status_for_hook(&repo, hook)?;
-        if status.wired {
+        if status.status == "ok" {
             ok += 1;
         }
         match status.status.as_str() {
@@ -342,6 +342,19 @@ fn install_single_hook(
     match strategy {
         HookInstallStrategy::Refuse => Ok(None),
         HookInstallStrategy::Chain => {
+            let backup = target
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(format!("{hook_name}.user"));
+            if backup.exists() {
+                return Err(HookError::HookConflict {
+                    path: target.to_path_buf(),
+                    reason: format!(
+                        "backup hook already exists at '{}'",
+                        backup.to_string_lossy()
+                    ),
+                });
+            }
             install_chain_wrapper(target, hook_name)?;
             Ok(Some(HookInstallMode::Chain))
         }

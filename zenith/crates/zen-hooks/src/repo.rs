@@ -19,7 +19,8 @@ pub fn discover_repo_context(project_root: &Path) -> Result<RepoContext, HookErr
         .map(Path::to_path_buf)
         .unwrap_or_else(|| project_root.to_path_buf());
     let git_dir = repo.git_dir().to_path_buf();
-    let project_root = project_root.to_path_buf();
+    let zenith_root =
+        discover_zenith_root(project_root).unwrap_or_else(|| project_root.to_path_buf());
 
     let core_hooks_path = repo
         .config_snapshot()
@@ -39,10 +40,22 @@ pub fn discover_repo_context(project_root: &Path) -> Result<RepoContext, HookErr
     };
 
     Ok(RepoContext {
-        root: project_root.clone(),
+        root: zenith_root.clone(),
         git_dir,
         hooks_dir,
-        zenith_hooks_dir: project_root.join(".zenith").join("hooks"),
+        zenith_hooks_dir: zenith_root.join(".zenith").join("hooks"),
         core_hooks_path,
     })
+}
+
+fn discover_zenith_root(start: &Path) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    loop {
+        if current.join(".zenith").is_dir() {
+            return Some(current);
+        }
+        if !current.pop() {
+            return None;
+        }
+    }
 }
