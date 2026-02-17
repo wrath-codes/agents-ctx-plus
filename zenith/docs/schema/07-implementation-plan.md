@@ -277,11 +277,18 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 | 4.2 | Implement FTS search: query zen-db FTS5 tables (findings, tasks, audit, etc.) | zen-search | 4.4 |
 | 4.3 | Implement hybrid search: combine vector + FTS scores. **Note**: Lance FTS is term-exact (no stemming) vs libSQL FTS5 (porter stemming) — vector should be primary signal, FTS as boost. Validate `alpha` parameter with real queries. | zen-search | 4.4 |
 | 4.4 | Implement `SearchEngine` orchestrator with filters (package, kind, ecosystem, limit) and `DecisionGraph` analytics module (toposort, centrality, shortest path, connected components via rustworkx-core). **Note**: `SearchMode::Recursive` is dispatched directly via `RecursiveQueryEngine` (requires `ContextStore` setup), not through `SearchEngine`. | zen-search | Phase 5 |
-| 4.5 | Implement crates.io client | zen-registry | Phase 5 |
-| 4.6 | Implement npm registry client (+ api.npmjs.org for downloads) | zen-registry | Phase 5 |
-| 4.7 | Implement PyPI client | zen-registry | Phase 5 |
-| 4.8 | Implement hex.pm client | zen-registry | Phase 5 |
-| 4.9 | Implement `search_all()`: concurrent search across all registries | zen-registry | Phase 5 |
+| 4.5 | ~~Implement crates.io client~~ | zen-registry | **DONE** — `crates_io.rs`, fixture tests, `check_response()` integration |
+| 4.6 | ~~Implement npm registry client (+ api.npmjs.org for downloads)~~ | zen-registry | **DONE** — `npm.rs`, JoinSet download batch with Semaphore(10), JoinSet drain bug fixed |
+| 4.7 | ~~Implement PyPI client~~ | zen-registry | **DONE** — `pypi.rs`, single-package JSON lookup, 404 → empty Vec |
+| 4.8 | ~~Implement hex.pm client~~ | zen-registry | **DONE** — `hex.rs`, `downloads.all` field mapping |
+| 4.9 | ~~Implement `search_all()`: concurrent search across all registries~~ | zen-registry | **DONE** — `tokio::join!` all 11 registries, `unwrap_or_log` pattern, sorted by downloads |
+| 4.16 | ~~Implement Go module client~~ | zen-registry | **DONE** — `go.rs`, `encode_go_module_path()`, `lookup_go_module()`, pkg.go.dev HTML search |
+| 4.17 | ~~Implement Ruby/RubyGems client~~ | zen-registry | **DONE** — `ruby.rs`, direct JSON API mapping |
+| 4.18 | ~~Implement PHP/Packagist client~~ | zen-registry | **DONE** — `php.rs`, JoinSet p2 version/license fetch with Semaphore(5) |
+| 4.19 | ~~Implement Java/Maven Central client~~ | zen-registry | **DONE** — `java.rs`, groupId:artifactId naming |
+| 4.20 | ~~Implement C#/NuGet client~~ | zen-registry | **DONE** — `csharp.rs`, SPDX license extraction, GitHub URL splitting |
+| 4.21 | ~~Implement Haskell/Hackage client~~ | zen-registry | **DONE** — `haskell.rs`, two-step lookup (preferred.json → metadata) |
+| 4.22 | ~~Implement Lua/Neovim client~~ | zen-registry | **DONE** — `lua.rs`, GitHub dual-search + config ref boost (not LuaRocks) |
 | 4.10 | Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation | zen-search | 5.19 |
 | 4.11 | Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink` | zen-search | 5.19 |
 | 4.12 | Add `idx_symbols_file_lines` index to `api_symbols` | zen-lake | 4.10 |
@@ -294,8 +301,8 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 - Vector search: insert known vectors, verify nearest neighbor returns correct results
 - FTS: porter-stemmed queries match expected results
 - Hybrid: combined ranking produces better results than either alone
-- Registry: parse real API response fixtures (recorded JSON), handle errors (404, rate limit)
-- `search_all()` merges and sorts by downloads
+- Registry: **DONE** — 39 unit tests (inline JSON fixtures, error handling, dispatch, `http.rs` helper) + 3 ignored network tests. Covers all 11 ecosystems.
+- `search_all()`: **DONE** — merges and sorts by downloads, `unwrap_or_log` for fault isolation
 - Recursive query: Arrow monorepo scale test passes with budget controls and deterministic output
 - Reference graph: category counts and signature lookup by stable `ref_id` succeed
 - External references: cached DataFusion Arrow usage is discoverable and tagged as `external`
@@ -305,7 +312,7 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 ### Milestone 4
 
 - `znt search "async spawn"` returns ranked results from indexed packages
-- `znt research registry "http client" --ecosystem rust` returns crates.io results
+- `znt research registry "http client" --ecosystem rust` returns crates.io results — **zen-registry DONE** (14 files, 2244 LOC, 42 tests)
 - Hybrid search combines vector similarity + FTS relevance
 - Recursive search returns categorized reference results with signatures and optional JSON summary payload
 - Graph analytics over entity_links: toposort, centrality, shortest path, connected components
