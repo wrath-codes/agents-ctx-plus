@@ -58,6 +58,7 @@ pub enum SearchMode {
 pub struct SearchFilters {
     pub package: Option<String>,
     pub ecosystem: Option<String>,
+    pub version: Option<String>,
     pub kind: Option<String>,
     pub entity_types: Vec<String>,
     pub limit: Option<u32>,
@@ -87,7 +88,6 @@ pub enum SearchResult {
 pub struct SearchEngine<'a> {
     service: &'a ZenService,
     lake: &'a ZenLake,
-    #[allow(dead_code)]
     source_store: &'a SourceFileStore,
     embeddings: &'a mut EmbeddingEngine,
 }
@@ -190,10 +190,24 @@ impl<'a> SearchEngine<'a> {
                 Ok(combined.into_iter().map(SearchResult::Hybrid).collect())
             }
             SearchMode::Recursive => {
-                let engine = RecursiveQueryEngine::from_directory(
-                    Path::new("."),
-                    RecursiveBudget::default(),
-                )?;
+                let engine = if let (Some(ecosystem), Some(package), Some(version)) = (
+                    filters.ecosystem.as_deref(),
+                    filters.package.as_deref(),
+                    filters.version.as_deref(),
+                ) {
+                    RecursiveQueryEngine::from_source_store(
+                        self.source_store,
+                        ecosystem,
+                        package,
+                        version,
+                        RecursiveBudget::default(),
+                    )?
+                } else {
+                    RecursiveQueryEngine::from_directory(
+                        Path::new("."),
+                        RecursiveBudget::default(),
+                    )?
+                };
                 let rq = RecursiveQuery::from_text(query);
                 let result = engine.execute(&rq)?;
                 Ok(vec![SearchResult::Recursive(result)])
