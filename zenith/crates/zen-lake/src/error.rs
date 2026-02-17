@@ -26,6 +26,10 @@ pub enum LakeError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// libSQL/Turso operation failed.
+    #[error("libSQL error: {0}")]
+    LibSql(#[from] libsql::Error),
+
     /// Catch-all for other errors.
     #[error("{0}")]
     Other(String),

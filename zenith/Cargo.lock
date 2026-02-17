@@ -11687,6 +11687,7 @@ dependencies = [
  "dotenvy",
  "duckdb",
  "lancedb",
+ "libsql",
  "object_store",
  "pretty_assertions",
  "rstest",

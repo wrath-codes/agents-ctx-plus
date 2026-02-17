@@ -38,9 +38,23 @@ struct OnboardProject {
 struct OnboardDeps {
     detected: usize,
     already_indexed: usize,
+    already_indexed_local: usize,
+    already_indexed_cloud: usize,
+    skipped_by_catalog: usize,
     newly_indexed: usize,
+    indexed_now: usize,
     failed: usize,
     failed_packages: Vec<String>,
+    mode: String,
+    catalog_hits: Vec<CatalogHit>,
+}
+
+#[derive(Debug, Serialize)]
+struct CatalogHit {
+    ecosystem: String,
+    package: String,
+    version: String,
+    source: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -79,15 +93,59 @@ pub async fn handle(
     }
 
     let mut already_indexed = 0usize;
+    let mut already_indexed_local = 0usize;
+    let mut already_indexed_cloud = 0usize;
+    let mut skipped_by_catalog = 0usize;
     let mut newly_indexed = 0usize;
     let mut failed = 0usize;
     let mut failed_packages = Vec::new();
+    let mut catalog_hits = Vec::new();
+    let cloud_enabled = cloud_search_ready(ctx);
 
     if !args.skip_indexing {
         for dep in &dependencies {
+            let catalog_hit = if cloud_enabled {
+                if let Some(version) = dep.version.as_deref() {
+                    match ctx
+                        .service
+                        .catalog_has_package(&dep.ecosystem, &dep.name, version)
+                        .await
+                    {
+                        Ok(hit) => hit,
+                        Err(error) => {
+                            tracing::warn!(
+                                package = %dep.name,
+                                ecosystem = %dep.ecosystem,
+                                %error,
+                                "onboard: catalog lookup failed; continuing with local indexing"
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if catalog_hit {
+                already_indexed += 1;
+                already_indexed_cloud += 1;
+                skipped_by_catalog += 1;
+                catalog_hits.push(CatalogHit {
+                    ecosystem: dep.ecosystem.clone(),
+                    package: dep.name.clone(),
+                    version: dep.version.clone().unwrap_or_default(),
+                    source: "turso_catalog".to_string(),
+                });
+                continue;
+            }
+
             match index_dependency(dep, ctx).await {
                 Ok(IndexStatus::AlreadyIndexed) => {
                     already_indexed += 1;
+                    already_indexed_local += 1;
                 }
                 Ok(IndexStatus::IndexedNow) => {
                     newly_indexed += 1;
@@ -169,14 +227,50 @@ pub async fn handle(
             dependencies: OnboardDeps {
                 detected: dependencies.len(),
                 already_indexed,
+                already_indexed_local,
+                already_indexed_cloud,
+                skipped_by_catalog,
                 newly_indexed,
+                indexed_now: newly_indexed,
                 failed,
                 failed_packages,
+                mode: onboard_mode(cloud_enabled, already_indexed_local, skipped_by_catalog)
+                    .to_string(),
+                catalog_hits,
             },
             hooks,
         },
         flags.format,
     )
+}
+
+fn onboard_mode(
+    cloud_enabled: bool,
+    already_indexed_local: usize,
+    skipped_by_catalog: usize,
+) -> &'static str {
+    if !cloud_enabled {
+        return "local";
+    }
+    if skipped_by_catalog > 0 && already_indexed_local > 0 {
+        return "hybrid";
+    }
+    if skipped_by_catalog > 0 {
+        return "cloud";
+    }
+    "local"
+}
+
+fn cloud_search_ready(ctx: &AppContext) -> bool {
+    if !ctx.config.turso.is_configured() {
+        return false;
+    }
+    if ctx.config.r2.is_configured() {
+        return true;
+    }
+    std::env::var("AWS_ACCESS_KEY_ID").is_ok()
+        && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
+        && std::env::var("AWS_ENDPOINT_URL").is_ok()
 }
 
 fn prompt_yes_no(prompt: &str) -> bool {
@@ -480,19 +574,56 @@ async fn index_dependency(
         .upsert_dependency(&ProjectDependency {
             ecosystem: dep.ecosystem.clone(),
             name: dep.name.clone(),
-            version: Some(version),
+            version: Some(version.clone()),
             source: dep.source.clone(),
             indexed: true,
             indexed_at: Some(Utc::now()),
         })
         .await?;
 
+    if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
+        match ctx
+            .lake
+            .write_to_r2(&ctx.config.r2, &dep.ecosystem, &dep.name, &version)
+            .await
+        {
+            Ok(export) => {
+                if let Some(symbols_path) = export.symbols_lance_path.as_deref()
+                    && let Err(error) = ctx
+                        .service
+                        .register_catalog_data_file(
+                            &dep.ecosystem,
+                            &dep.name,
+                            &version,
+                            symbols_path,
+                        )
+                        .await
+                {
+                    tracing::warn!(
+                        package = %dep.name,
+                        version = %version,
+                        %error,
+                        "onboard: failed to register R2 symbols dataset in Turso catalog"
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    package = %dep.name,
+                    version = %version,
+                    %error,
+                    "onboard: failed to export package to R2"
+                );
+            }
+        }
+    }
+
     Ok(IndexStatus::IndexedNow)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_requirement_line, unique_deps};
+    use super::{onboard_mode, parse_requirement_line, unique_deps};
 
     #[test]
     fn parses_requirements_equals() {
@@ -530,5 +661,13 @@ mod tests {
         assert_eq!(deduped.len(), 2);
         assert!(deduped.iter().any(|(n, _, _)| n == "tokio"));
         assert!(deduped.iter().any(|(n, _, _)| n == "serde"));
+    }
+
+    #[test]
+    fn onboard_mode_matrix() {
+        assert_eq!(onboard_mode(false, 0, 0), "local");
+        assert_eq!(onboard_mode(true, 0, 0), "local");
+        assert_eq!(onboard_mode(true, 0, 3), "cloud");
+        assert_eq!(onboard_mode(true, 2, 3), "hybrid");
     }
 }

@@ -3,6 +3,7 @@
 //! Each module adds methods to `ZenService` via `impl ZenService` blocks.
 
 pub mod audit;
+pub mod catalog;
 pub mod compat;
 pub mod finding;
 pub mod hypothesis;

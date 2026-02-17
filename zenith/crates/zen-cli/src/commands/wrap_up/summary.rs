@@ -20,6 +20,7 @@ mod tests {
             summary: Some("  done for today ".to_string()),
             auto_commit: false,
             message: None,
+            require_sync: false,
         };
         assert_eq!(resolve_summary(&args), "done for today");
     }
@@ -30,6 +31,7 @@ mod tests {
             summary: None,
             auto_commit: false,
             message: None,
+            require_sync: false,
         };
         assert_eq!(resolve_summary(&args), "Session wrapped up");
     }

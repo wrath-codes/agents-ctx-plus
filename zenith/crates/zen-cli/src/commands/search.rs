@@ -5,7 +5,7 @@ use semver::Version;
 use serde::Serialize;
 use zen_search::{
     RecursiveBudget, RecursiveQuery, RecursiveQueryEngine, SearchEngine, SearchFilters, SearchMode,
-    SearchResult,
+    SearchResult, VectorSearchResult, VectorSource,
 };
 
 use crate::cli::GlobalFlags;
@@ -51,6 +51,21 @@ pub async fn handle(
 
     if matches!(mode, SearchMode::Recursive) {
         return handle_recursive(args, ctx, flags, limit).await;
+    }
+
+    if let Some(cloud_results) = try_cloud_vector_search(args, ctx, mode, limit).await? {
+        let fetched_results = cloud_results.len();
+        output(
+            &SearchResponse {
+                query: args.query.clone(),
+                mode: "vector".to_string(),
+                fetched_results,
+                returned: cloud_results.len(),
+                results: cloud_results,
+            },
+            flags.format,
+        )?;
+        return Ok(());
     }
 
     let mut engine = SearchEngine::new(
@@ -211,6 +226,73 @@ fn pretty_summary(summary_json: Option<String>) -> (Option<String>, Option<Strin
         }
         None => (None, None),
     }
+}
+
+async fn try_cloud_vector_search(
+    args: &SearchArgs,
+    ctx: &mut AppContext,
+    mode: SearchMode,
+    limit: u32,
+) -> anyhow::Result<Option<Vec<SearchResult>>> {
+    if !matches!(mode, SearchMode::Vector) || !ctx.config.turso.is_configured() {
+        return Ok(None);
+    }
+
+    let (ecosystem, package) = match (&args.ecosystem, &args.package) {
+        (Some(eco), Some(pkg)) => (eco, pkg),
+        _ => return Ok(None),
+    };
+
+    let query_embedding = ctx.embedder.embed_single(&args.query)?;
+    let cloud = match ctx
+        .lake
+        .search_cloud_vector(
+            &ctx.config.turso.url,
+            &ctx.config.turso.auth_token,
+            ecosystem,
+            package,
+            args.version.as_deref(),
+            &query_embedding,
+            limit,
+        )
+        .await
+    {
+        Ok(results) => results,
+        Err(error) => {
+            tracing::warn!(%error, "search: cloud vector search failed; falling back to local cache");
+            return Ok(None);
+        }
+    };
+
+    if cloud.is_empty() {
+        tracing::debug!(
+            "search: cloud vector search returned no results; falling back to local cache"
+        );
+        return Ok(None);
+    }
+
+    let mapped = cloud
+        .into_iter()
+        .map(|item| {
+            SearchResult::Vector(VectorSearchResult {
+                id: item.id,
+                ecosystem: ecosystem.clone(),
+                package: package.clone(),
+                version: item.version,
+                kind: item.kind,
+                name: item.name,
+                signature: item.signature,
+                doc_comment: item.doc_comment,
+                file_path: item.file_path.unwrap_or_default(),
+                line_start: None,
+                line_end: None,
+                score: -item.distance,
+                source_type: VectorSource::ApiSymbol,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Some(mapped))
 }
 
 #[cfg(test)]

@@ -18,17 +18,18 @@ thiserror.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+libsql.workspace = true
+lancedb.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+serde_arrow.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 tempfile.workspace = true
 rstest.workspace = true
 dotenvy.workspace = true
-lancedb.workspace = true
-arrow-array.workspace = true
-arrow-schema.workspace = true
 arrow-ipc.workspace = true
-serde_arrow.workspace = true
 serde.workspace = true
 chrono.workspace = true
 zen-core.workspace = true

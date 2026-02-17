@@ -15,12 +15,16 @@
 //! in Phase 8/9. The `source_files` table is permanent and never shared.
 //! See `23-phase3-parsing-indexing-plan.md` §13 for the replacement map.
 
+pub mod cloud_search;
 pub mod error;
+pub mod r2_write;
 pub mod schemas;
 pub mod source_files;
 pub mod store;
 
+pub use cloud_search::CloudVectorSearchResult;
 pub use error::LakeError;
+pub use r2_write::R2WriteResult;
 pub use schemas::{ApiSymbolRow, DocChunkRow};
 pub use source_files::{SourceFile, SourceFileStore};
 

@@ -28,6 +28,7 @@ pub struct ZenDb {
     #[allow(dead_code)]
     db: libsql::Database,
     conn: libsql::Connection,
+    is_synced_replica: bool,
 }
 
 impl ZenDb {
@@ -48,9 +49,66 @@ impl ZenDb {
             .await
             .map_err(|e| DatabaseError::Migration(format!("PRAGMA foreign_keys: {e}")))?;
 
-        let zen_db = Self { db, conn };
+        let zen_db = Self {
+            db,
+            conn,
+            is_synced_replica: false,
+        };
         zen_db.run_migrations().await?;
         Ok(zen_db)
+    }
+
+    /// Open a synced embedded replica database backed by Turso Cloud.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if the replica cannot be opened, synced, or migrated.
+    pub async fn open_synced(
+        local_replica_path: &str,
+        remote_url: &str,
+        auth_token: &str,
+    ) -> Result<Self, DatabaseError> {
+        let db = Builder::new_remote_replica(
+            local_replica_path.to_string(),
+            remote_url.to_string(),
+            auth_token.to_string(),
+        )
+        .read_your_writes(true)
+        .build()
+        .await?;
+        db.sync().await?;
+
+        let conn = db.connect()?;
+        conn.execute("PRAGMA foreign_keys = ON", ())
+            .await
+            .map_err(|e| DatabaseError::Migration(format!("PRAGMA foreign_keys: {e}")))?;
+
+        let zen_db = Self {
+            db,
+            conn,
+            is_synced_replica: true,
+        };
+        zen_db.run_migrations().await?;
+        Ok(zen_db)
+    }
+
+    /// Sync embedded replica state with Turso Cloud.
+    ///
+    /// For databases opened with [`Self::open_local`], this is a no-op and
+    /// returns `Ok(())`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if sync fails.
+    pub async fn sync(&self) -> Result<(), DatabaseError> {
+        if !self.is_synced_replica {
+            return Ok(());
+        }
+        self.db
+            .sync()
+            .await
+            .map(|_| ())
+            .map_err(DatabaseError::from)
     }
 
     /// Access the underlying libSQL connection for direct queries.
@@ -59,6 +117,12 @@ impl ZenDb {
     #[must_use]
     pub const fn conn(&self) -> &libsql::Connection {
         &self.conn
+    }
+
+    /// Returns whether this handle is backed by a synced remote replica.
+    #[must_use]
+    pub const fn is_synced_replica(&self) -> bool {
+        self.is_synced_replica
     }
 
     /// Generate a prefixed ID via libSQL. Returns e.g., `"fnd-a3f8b2c1"`.

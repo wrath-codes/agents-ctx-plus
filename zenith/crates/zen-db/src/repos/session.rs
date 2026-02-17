@@ -303,6 +303,59 @@ impl ZenService {
         Ok(())
     }
 
+    /// Re-open a wrapped-up session if strict wrap-up sync failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if update or audit/trail append fails.
+    pub async fn reopen_session_after_sync_failure(
+        &self,
+        session_id: &str,
+    ) -> Result<(), DatabaseError> {
+        let now = Utc::now();
+        self.db()
+            .conn()
+            .execute(
+                "UPDATE sessions
+                 SET ended_at = NULL, status = 'active', summary = NULL
+                 WHERE id = ?1 AND status = 'wrapped_up'",
+                [session_id],
+            )
+            .await?;
+
+        let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
+        self.append_audit(&AuditEntry {
+            id: audit_id,
+            session_id: Some(session_id.to_string()),
+            entity_type: EntityType::Session,
+            entity_id: session_id.to_string(),
+            action: AuditAction::StatusChanged,
+            detail: Some(serde_json::json!({
+                "from": "wrapped_up",
+                "to": "active",
+                "reason": "strict_sync_failed",
+            })),
+            created_at: now,
+        })
+        .await?;
+
+        self.trail().append(&TrailOperation {
+            v: 1,
+            ts: now.to_rfc3339(),
+            ses: session_id.to_string(),
+            op: TrailOp::Transition,
+            entity: EntityType::Session,
+            id: session_id.to_string(),
+            data: serde_json::json!({
+                "from": "wrapped_up",
+                "to": "active",
+                "reason": "strict_sync_failed",
+            }),
+        })?;
+
+        Ok(())
+    }
+
     /// Count rows matching a status in a table.
     pub(crate) async fn count_by_status(
         &self,

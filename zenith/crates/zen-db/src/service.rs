@@ -52,6 +52,26 @@ impl ZenService {
         Ok(Self { db, trail, schema })
     }
 
+    /// Create a service backed by a synced Turso embedded replica.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if the replica cannot be opened or trail cannot be created.
+    pub async fn new_synced(
+        local_replica_path: &str,
+        remote_url: &str,
+        auth_token: &str,
+        trail_dir: Option<PathBuf>,
+    ) -> Result<Self, DatabaseError> {
+        let db = ZenDb::open_synced(local_replica_path, remote_url, auth_token).await?;
+        let trail = match trail_dir {
+            Some(dir) => TrailWriter::new(dir)?,
+            None => TrailWriter::disabled(),
+        };
+        let schema = SchemaRegistry::new();
+        Ok(Self { db, trail, schema })
+    }
+
     /// Create from an existing `ZenDb` (for testing).
     #[must_use]
     pub fn from_db(db: ZenDb, trail: TrailWriter) -> Self {
@@ -83,5 +103,16 @@ impl ZenService {
     #[must_use]
     pub const fn schema(&self) -> &SchemaRegistry {
         &self.schema
+    }
+
+    /// Sync the underlying database with remote cloud state.
+    pub async fn sync(&self) -> Result<(), DatabaseError> {
+        self.db.sync().await
+    }
+
+    /// Returns whether this service is backed by a synced Turso replica.
+    #[must_use]
+    pub const fn is_synced_replica(&self) -> bool {
+        self.db.is_synced_replica()
     }
 }

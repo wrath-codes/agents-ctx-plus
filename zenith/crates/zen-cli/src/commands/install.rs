@@ -153,6 +153,43 @@ pub async fn handle(
     };
     ctx.service.upsert_dependency(&dep).await?;
 
+    if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
+        match ctx
+            .lake
+            .write_to_r2(&ctx.config.r2, &ecosystem, &args.package, &version)
+            .await
+        {
+            Ok(export) => {
+                if let Some(symbols_path) = export.symbols_lance_path.as_deref()
+                    && let Err(error) = ctx
+                        .service
+                        .register_catalog_data_file(
+                            &ecosystem,
+                            &args.package,
+                            &version,
+                            symbols_path,
+                        )
+                        .await
+                {
+                    tracing::warn!(
+                        package = %args.package,
+                        version = %version,
+                        %error,
+                        "install: failed to register R2 symbols dataset in Turso catalog"
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    package = %args.package,
+                    version = %version,
+                    %error,
+                    "install: failed to export package to R2"
+                );
+            }
+        }
+    }
+
     if let Some(session) = ctx
         .service
         .list_sessions(Some(SessionStatus::Active), 1)

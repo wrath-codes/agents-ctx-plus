@@ -34,8 +34,36 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     let session_id = require_active_session_id(ctx).await?;
     let summary = resolve_summary(args);
+    let require_sync = args.require_sync || ctx.config.general.wrap_up_require_sync;
+    let sync_configured = ctx.config.turso.is_configured();
+
+    if require_sync && !sync_configured {
+        anyhow::bail!(
+            "wrap-up: strict sync is enabled but Turso is not configured (set ZENITH_TURSO__URL and ZENITH_TURSO__AUTH_TOKEN)"
+        );
+    }
+
+    if require_sync && !ctx.service.is_synced_replica() {
+        anyhow::bail!(
+            "wrap-up: strict sync is enabled but synced replica is unavailable (running in local fallback mode)"
+        );
+    }
 
     let snapshot = ctx.service.create_snapshot(&session_id, &summary).await?;
+
+    if require_sync
+        && let Err(error) = ctx
+            .service
+            .sync()
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))
+    {
+        anyhow::bail!(
+            "wrap-up: strict sync required and cloud sync failed before session close: {}",
+            error
+        );
+    }
+
     let session = ctx.service.end_session(&session_id, &summary).await?;
     let audit = ctx
         .service
@@ -66,6 +94,40 @@ pub async fn run(
             ),
         };
 
+    let sync_result = if sync_configured {
+        if ctx.service.is_synced_replica() {
+            Some(
+                ctx.service
+                    .sync()
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e.to_string())),
+            )
+        } else {
+            Some(Err(anyhow::anyhow!(
+                "synced replica unavailable; running local fallback"
+            )))
+        }
+    } else {
+        None
+    };
+
+    if require_sync && let Some(Err(error)) = sync_result.as_ref() {
+        if let Err(reopen_error) = ctx
+            .service
+            .reopen_session_after_sync_failure(&session.id)
+            .await
+        {
+            tracing::error!(
+                %reopen_error,
+                "wrap-up: strict sync failed and session re-open attempt also failed"
+            );
+        }
+        anyhow::bail!(
+            "wrap-up: strict sync required and cloud sync failed: {}",
+            error
+        );
+    }
+
     output(
         &WrapUpResponse {
             session: WrapUpSession {
@@ -77,7 +139,12 @@ pub async fn run(
             audit_count: audit.len(),
             workspace_snapshot_status,
             workspace_snapshot,
-            sync: build_sync_status(args.auto_commit, args.message.as_deref()),
+            sync: build_sync_status(
+                require_sync,
+                args.auto_commit,
+                args.message.as_deref(),
+                sync_result,
+            ),
         },
         flags.format,
     )

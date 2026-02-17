@@ -257,6 +257,8 @@ pub struct WrapUpArgs {
     pub auto_commit: bool,
     #[arg(long)]
     pub message: Option<String>,
+    #[arg(long)]
+    pub require_sync: bool,
 }
 
 /// Arguments for `znt rebuild`.
