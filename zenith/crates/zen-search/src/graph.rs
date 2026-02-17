@@ -61,31 +61,31 @@ impl DecisionGraph {
                 (),
             )
             .await
-            .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
+            .map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
 
         let mut graph = DiGraph::new();
         let mut id_to_index = HashMap::new();
 
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?
-        {
-            let source_type = row
-                .get::<String>(0)
-                .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
-            let source_id = row
-                .get::<String>(1)
-                .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
-            let target_type = row
-                .get::<String>(2)
-                .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
-            let target_id = row
-                .get::<String>(3)
-                .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
-            let relation = row
-                .get::<String>(4)
-                .map_err(|e| SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string())))?;
+        while let Some(row) = rows.next().await.map_err(|e| {
+            SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+        })? {
+            let source_type = row.get::<String>(0).map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
+            let source_id = row.get::<String>(1).map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
+            let target_type = row.get::<String>(2).map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
+            let target_id = row.get::<String>(3).map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
+            let relation = row.get::<String>(4).map_err(|e| {
+                SearchError::Database(zen_db::error::DatabaseError::Query(e.to_string()))
+            })?;
 
             let src_key = node_key(&source_type, &source_id);
             let dst_key = node_key(&target_type, &target_id);

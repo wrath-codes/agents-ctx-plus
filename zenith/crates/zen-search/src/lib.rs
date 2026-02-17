@@ -13,6 +13,8 @@ pub mod fts;
 pub mod graph;
 pub mod grep;
 pub mod hybrid;
+pub mod recursive;
+pub mod ref_graph;
 pub mod vector;
 pub mod walk;
 
@@ -21,10 +23,16 @@ pub use fts::{FtsSearchFilters, FtsSearchResult};
 pub use graph::{DecisionGraph, GraphAnalysis, GraphEdge, GraphNode};
 pub use grep::{GrepEngine, GrepMatch, GrepOptions, GrepResult, GrepStats, SymbolRef};
 pub use hybrid::{HybridSearchResult, HybridSource};
+pub use recursive::{
+    BudgetUsed, ContextStore, DocSpan, FileContext, RecursiveBudget, RecursiveQuery,
+    RecursiveQueryEngine, RecursiveQueryPlan, RecursiveQueryResult, SymbolSpan,
+};
+pub use ref_graph::{RefCategory, RefEdge, ReferenceGraph, SymbolRefHit};
 pub use vector::{VectorSearchFilters, VectorSearchResult, VectorSource};
 pub use walk::{WalkMode, build_walker};
 
 use std::cmp::Ordering;
+use std::path::Path;
 
 use zen_db::service::ZenService;
 use zen_embeddings::EmbeddingEngine;
@@ -66,6 +74,8 @@ pub enum SearchResult {
     Fts(FtsSearchResult),
     #[serde(rename = "hybrid")]
     Hybrid(HybridSearchResult),
+    #[serde(rename = "recursive")]
+    Recursive(RecursiveQueryResult),
     #[serde(rename = "graph")]
     Graph(GraphAnalysis),
 }
@@ -131,7 +141,9 @@ impl<'a> SearchEngine<'a> {
                 };
 
                 let mut vector_results = vector::vector_search_symbols(self.lake, &embedding, &vf)?;
-                vector_results.extend(vector::vector_search_doc_chunks(self.lake, &embedding, &vf)?);
+                vector_results.extend(vector::vector_search_doc_chunks(
+                    self.lake, &embedding, &vf,
+                )?);
                 sort_vector_results(&mut vector_results);
 
                 #[allow(clippy::cast_possible_truncation)]
@@ -164,7 +176,9 @@ impl<'a> SearchEngine<'a> {
                     min_score: 0.0,
                 };
                 let mut vector_results = vector::vector_search_symbols(self.lake, &embedding, &vf)?;
-                vector_results.extend(vector::vector_search_doc_chunks(self.lake, &embedding, &vf)?);
+                vector_results.extend(vector::vector_search_doc_chunks(
+                    self.lake, &embedding, &vf,
+                )?);
 
                 let ff = fts::FtsSearchFilters {
                     entity_types: filters.entity_types,
@@ -175,10 +189,15 @@ impl<'a> SearchEngine<'a> {
                 let combined = hybrid::combine_results(&vector_results, &fts_results, alpha, limit);
                 Ok(combined.into_iter().map(SearchResult::Hybrid).collect())
             }
-            SearchMode::Recursive => Err(SearchError::InvalidQuery(
-                "use RecursiveQueryEngine::execute() directly — recursive mode requires ContextStore setup"
-                    .to_string(),
-            )),
+            SearchMode::Recursive => {
+                let engine = RecursiveQueryEngine::from_directory(
+                    Path::new("."),
+                    RecursiveBudget::default(),
+                )?;
+                let rq = RecursiveQuery::from_text(query);
+                let result = engine.execute(&rq)?;
+                Ok(vec![SearchResult::Recursive(result)])
+            }
             SearchMode::Graph => {
                 let graph = graph::DecisionGraph::from_service(self.service).await?;
                 let analysis = graph.analyze(1_000);
