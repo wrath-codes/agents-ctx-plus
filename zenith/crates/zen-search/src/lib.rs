@@ -10,6 +10,7 @@
 
 pub mod error;
 pub mod fts;
+pub mod graph;
 pub mod grep;
 pub mod hybrid;
 pub mod vector;
@@ -17,6 +18,7 @@ pub mod walk;
 
 pub use error::SearchError;
 pub use fts::{FtsSearchFilters, FtsSearchResult};
+pub use graph::{DecisionGraph, GraphAnalysis, GraphEdge, GraphNode};
 pub use grep::{GrepEngine, GrepMatch, GrepOptions, GrepResult, GrepStats, SymbolRef};
 pub use hybrid::{HybridSearchResult, HybridSource};
 pub use vector::{VectorSearchFilters, VectorSearchResult, VectorSource};
@@ -64,6 +66,8 @@ pub enum SearchResult {
     Fts(FtsSearchResult),
     #[serde(rename = "hybrid")]
     Hybrid(HybridSearchResult),
+    #[serde(rename = "graph")]
+    Graph(GraphAnalysis),
 }
 
 /// Orchestrator over vector, FTS, and hybrid search.
@@ -175,9 +179,11 @@ impl<'a> SearchEngine<'a> {
                 "use RecursiveQueryEngine::execute() directly — recursive mode requires ContextStore setup"
                     .to_string(),
             )),
-            SearchMode::Graph => Err(SearchError::InvalidQuery(
-                "graph mode is not available yet — implement Stream C (graph.rs) first".to_string(),
-            )),
+            SearchMode::Graph => {
+                let graph = graph::DecisionGraph::from_service(self.service).await?;
+                let analysis = graph.analyze(1_000);
+                Ok(vec![SearchResult::Graph(analysis)])
+            }
         }
     }
 }
