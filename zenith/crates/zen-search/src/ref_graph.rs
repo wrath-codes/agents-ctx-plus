@@ -64,14 +64,14 @@ CREATE TABLE symbol_refs (
     line_start INTEGER NOT NULL,
     line_end INTEGER NOT NULL,
     signature TEXT NOT NULL,
-    doc TEXT
+    doc TEXT NOT NULL
 );
 
 CREATE TABLE ref_edges (
     source_ref_id TEXT NOT NULL,
     target_ref_id TEXT NOT NULL,
     category TEXT NOT NULL,
-    evidence TEXT,
+    evidence TEXT NOT NULL,
     PRIMARY KEY(source_ref_id, target_ref_id)
 );
 

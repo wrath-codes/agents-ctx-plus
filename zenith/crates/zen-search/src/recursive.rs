@@ -257,7 +257,7 @@ impl RecursiveQueryEngine {
         let mut file_keys: Vec<&String> = self.store.files.keys().collect();
         file_keys.sort();
 
-        for file_key in file_keys {
+        'file_loop: for file_key in file_keys {
             let Some(file) = self.store.files.get(file_key) else {
                 continue;
             };
@@ -266,7 +266,7 @@ impl RecursiveQueryEngine {
                 if used_chunks >= self.budget.max_chunks
                     || used_bytes >= self.budget.max_total_bytes
                 {
-                    break;
+                    break 'file_loop;
                 }
 
                 if !matches_symbol(symbol, query) {
@@ -331,12 +331,14 @@ impl RecursiveQueryEngine {
             None
         };
 
+        let depth_reached = usize::from(!hits.is_empty());
+
         Ok(RecursiveQueryResult {
             hits,
             edges,
             category_counts,
             budget_used: BudgetUsed {
-                depth_reached: self.budget.max_depth.min(1),
+                depth_reached,
                 chunks_processed: used_chunks,
                 total_bytes_processed: used_bytes,
             },

@@ -194,8 +194,7 @@ impl<'a> SearchEngine<'a> {
                 Ok(vec![SearchResult::Recursive(result)])
             }
             SearchMode::Graph => {
-                let graph = graph::DecisionGraph::from_service(self.service).await?;
-                let analysis = graph.analyze(1_000);
+                let analysis = execute_graph_query(self.service).await?;
                 Ok(vec![SearchResult::Graph(analysis)])
             }
         }
@@ -244,6 +243,11 @@ fn execute_recursive_query(
 
     let rq = RecursiveQuery::from_text(query);
     engine.execute(&rq)
+}
+
+async fn execute_graph_query(service: &ZenService) -> Result<GraphAnalysis, SearchError> {
+    let graph = graph::DecisionGraph::from_service(service).await?;
+    Ok(graph.analyze(1_000))
 }
 
 #[cfg(test)]
@@ -398,5 +402,38 @@ mod tests {
         let result = execute_recursive_query(&store, "local", &filters).expect("recursive query");
         assert_eq!(result.hits.len(), 1);
         assert_eq!(result.hits[0].name, "local_fn");
+    }
+
+    #[tokio::test]
+    async fn execute_graph_query_returns_analysis() {
+        let service = ZenService::new_local(":memory:", None)
+            .await
+            .expect("create service");
+
+        service
+            .db()
+            .conn()
+            .execute(
+                "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                ("lnk-1", "decision", "dec-1", "finding", "fnd-1", "supports"),
+            )
+            .await
+            .expect("insert first link");
+        service
+            .db()
+            .conn()
+            .execute(
+                "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                ("lnk-2", "finding", "fnd-1", "task", "tsk-1", "informs"),
+            )
+            .await
+            .expect("insert second link");
+
+        let analysis = execute_graph_query(&service).await.expect("graph query");
+        assert_eq!(analysis.node_count, 3);
+        assert_eq!(analysis.edge_count, 2);
+        assert_eq!(analysis.components, 1);
     }
 }
