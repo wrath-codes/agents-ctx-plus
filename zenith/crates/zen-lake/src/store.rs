@@ -70,13 +70,13 @@ impl ZenLake {
 
             stmt.execute(params![
                 // For ID: first is candidate, next 6 are md5 inputs (used only if candidate is empty)
-                sym.id,        // 1: candidate id
-                sym.ecosystem, // 2: md5 input
-                sym.package,   // 3
-                sym.version,   // 4
-                sym.file_path, // 5
-                sym.kind,      // 6
-                sym.name,      // 7
+                sym.id,             // 1: candidate id
+                sym.ecosystem,      // 2: md5 input
+                sym.package,        // 3
+                sym.version,        // 4
+                sym.file_path,      // 5
+                sym.kind,           // 6
+                sym.name,           // 7
                 sym.ecosystem,      // 8
                 sym.package,        // 9
                 sym.version,        // 10

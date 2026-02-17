@@ -144,7 +144,10 @@ pub fn vector_search_symbols(
     let conn = lake.conn();
     let mut stmt = conn.prepare(&sql).map_err(duck_err)?;
 
-    let param_refs: Vec<&dyn duckdb::ToSql> = param_values.iter().map(std::convert::AsRef::as_ref).collect();
+    let param_refs: Vec<&dyn duckdb::ToSql> = param_values
+        .iter()
+        .map(std::convert::AsRef::as_ref)
+        .collect();
 
     let rows = stmt
         .query_map(param_refs.as_slice(), |row| {
@@ -221,7 +224,10 @@ pub fn vector_search_doc_chunks(
     let conn = lake.conn();
     let mut stmt = conn.prepare(&sql).map_err(duck_err)?;
 
-    let param_refs: Vec<&dyn duckdb::ToSql> = param_values.iter().map(std::convert::AsRef::as_ref).collect();
+    let param_refs: Vec<&dyn duckdb::ToSql> = param_values
+        .iter()
+        .map(std::convert::AsRef::as_ref)
+        .collect();
 
     let rows = stmt
         .query_map(param_refs.as_slice(), |row| {
@@ -336,8 +342,7 @@ mod tests {
         ])
         .unwrap();
 
-        let results =
-            vector_search_symbols(&lake, &emb, &VectorSearchFilters::default()).unwrap();
+        let results = vector_search_symbols(&lake, &emb, &VectorSearchFilters::default()).unwrap();
 
         assert!(!results.is_empty());
         assert_eq!(results[0].id, "s1", "self-match should be highest score");
@@ -433,8 +438,7 @@ mod tests {
         let lake = ZenLake::open_in_memory().unwrap();
         let emb = synthetic_embedding(1);
 
-        let results =
-            vector_search_symbols(&lake, &emb, &VectorSearchFilters::default()).unwrap();
+        let results = vector_search_symbols(&lake, &emb, &VectorSearchFilters::default()).unwrap();
         assert!(results.is_empty());
 
         let results =

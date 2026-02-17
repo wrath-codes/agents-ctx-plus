@@ -196,9 +196,7 @@ pub async fn fts_search(
                         entity_type: "audit".to_string(),
                         entity_id: a.id,
                         title: None,
-                        content: a
-                            .detail
-                            .map_or_else(|| a.entity_id, |v| v.to_string()),
+                        content: a.detail.map_or_else(|| a.entity_id, |v| v.to_string()),
                         relevance: 0.0,
                     });
                 }

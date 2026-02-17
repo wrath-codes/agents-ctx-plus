@@ -485,11 +485,7 @@ impl GrepEngine {
                     count: 0,
                 };
 
-                let search_result = searcher.search_path(
-                    &matcher,
-                    entry.path(),
-                    &mut collector,
-                );
+                let search_result = searcher.search_path(&matcher, entry.path(), &mut collector);
 
                 if let Err(e) = search_result {
                     tracing::warn!(path = %rel_path, error = %e, "grep search failed for file");
@@ -730,8 +726,22 @@ impl Runtime {
 
         // Insert symbols with known line ranges matching SAMPLE_SPAWN
         let symbols = [
-            ("sym-1", "function", "spawn", "pub fn spawn<F>(future: F) -> JoinHandle<F::Output>", 6i32, 14i32),
-            ("sym-2", "function", "spawn_blocking", "pub(crate) fn spawn_blocking<F, R>(func: F) -> JoinHandle<R>", 17, 24),
+            (
+                "sym-1",
+                "function",
+                "spawn",
+                "pub fn spawn<F>(future: F) -> JoinHandle<F::Output>",
+                6i32,
+                14i32,
+            ),
+            (
+                "sym-2",
+                "function",
+                "spawn_blocking",
+                "pub(crate) fn spawn_blocking<F, R>(func: F) -> JoinHandle<R>",
+                17,
+                24,
+            ),
         ];
 
         for (id, kind, name, sig, start, end) in &symbols {
@@ -762,7 +772,11 @@ impl Runtime {
     }
 
     fn default_packages() -> Vec<(String, String, String)> {
-        vec![("rust".to_string(), "tokio".to_string(), "1.40.0".to_string())]
+        vec![(
+            "rust".to_string(),
+            "tokio".to_string(),
+            "1.40.0".to_string(),
+        )]
     }
 
     // ── Package mode tests ────────────────────────────────────────────
@@ -777,12 +791,23 @@ impl Runtime {
             &lake,
             "spawn_blocking",
             &default_packages(),
-            &GrepOptions { no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
-        assert!(result.stats.matches_found >= 2, "should find spawn_blocking in multiple lines");
-        assert!(result.matches.iter().all(|m| m.text.contains("spawn_blocking")));
+        assert!(
+            result.stats.matches_found >= 2,
+            "should find spawn_blocking in multiple lines"
+        );
+        assert!(
+            result
+                .matches
+                .iter()
+                .all(|m| m.text.contains("spawn_blocking"))
+        );
     }
 
     #[test]
@@ -806,9 +831,10 @@ impl Runtime {
 
         assert!(!result.matches.is_empty());
         // At least one match should have context (the fn signature has lines around it)
-        let has_context = result.matches.iter().any(|m| {
-            !m.context_before.is_empty() || !m.context_after.is_empty()
-        });
+        let has_context = result
+            .matches
+            .iter()
+            .any(|m| !m.context_before.is_empty() || !m.context_after.is_empty());
         assert!(has_context, "at least one match should have context lines");
     }
 
@@ -822,20 +848,31 @@ impl Runtime {
             &lake,
             "spawn",
             &default_packages(),
-            &GrepOptions { no_symbols: false, ..Default::default() },
+            &GrepOptions {
+                no_symbols: false,
+                ..Default::default()
+            },
         )
         .unwrap();
 
         // Some matches should have symbol correlation
-        let with_sym: Vec<_> = result.matches.iter().filter(|m| m.symbol.is_some()).collect();
+        let with_sym: Vec<_> = result
+            .matches
+            .iter()
+            .filter(|m| m.symbol.is_some())
+            .collect();
         assert!(!with_sym.is_empty(), "some matches should have symbol refs");
 
         // Verify spawn_blocking symbol correlation
-        let spawn_blocking_match = result
-            .matches
-            .iter()
-            .find(|m| m.symbol.as_ref().is_some_and(|s| s.name == "spawn_blocking"));
-        assert!(spawn_blocking_match.is_some(), "should find match inside spawn_blocking");
+        let spawn_blocking_match = result.matches.iter().find(|m| {
+            m.symbol
+                .as_ref()
+                .is_some_and(|s| s.name == "spawn_blocking")
+        });
+        assert!(
+            spawn_blocking_match.is_some(),
+            "should find match inside spawn_blocking"
+        );
     }
 
     #[test]
@@ -849,14 +886,24 @@ impl Runtime {
             &lake,
             "use std::future::Future",
             &default_packages(),
-            &GrepOptions { no_symbols: false, fixed_strings: true, ..Default::default() },
+            &GrepOptions {
+                no_symbols: false,
+                fixed_strings: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
         assert!(!result.matches.is_empty());
         // The `use` line is outside any symbol range
-        let use_match = result.matches.iter().find(|m| m.text.contains("use std::future"));
-        assert!(use_match.is_some_and(|m| m.symbol.is_none()), "use statement should not have a symbol");
+        let use_match = result
+            .matches
+            .iter()
+            .find(|m| m.text.contains("use std::future"));
+        assert!(
+            use_match.is_some_and(|m| m.symbol.is_none()),
+            "use statement should not have a symbol"
+        );
     }
 
     #[test]
@@ -869,11 +916,17 @@ impl Runtime {
             &lake,
             "spawn",
             &default_packages(),
-            &GrepOptions { no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
-        assert!(result.matches.iter().all(|m| m.symbol.is_none()), "no_symbols should skip correlation");
+        assert!(
+            result.matches.iter().all(|m| m.symbol.is_none()),
+            "no_symbols should skip correlation"
+        );
         assert_eq!(result.stats.matches_with_symbol, 0);
     }
 
@@ -912,11 +965,18 @@ impl Runtime {
             &lake,
             "hello",
             &default_packages(),
-            &GrepOptions { skip_tests: true, no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                skip_tests: true,
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
-        assert_eq!(result.stats.files_searched, 1, "test file should be skipped");
+        assert_eq!(
+            result.stats.files_searched, 1,
+            "test file should be skipped"
+        );
         assert!(result.matches.iter().all(|m| !m.path.contains("_test.")));
     }
 
@@ -939,7 +999,10 @@ impl Runtime {
         )
         .unwrap();
 
-        assert!(result.stats.matches_found > 0, "case-insensitive should match 'spawn'");
+        assert!(
+            result.stats.matches_found > 0,
+            "case-insensitive should match 'spawn'"
+        );
     }
 
     #[test]
@@ -953,11 +1016,18 @@ impl Runtime {
             &lake,
             "F::Output",
             &default_packages(),
-            &GrepOptions { fixed_strings: true, no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                fixed_strings: true,
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
-        assert!(result.stats.matches_found > 0, "literal 'F::Output' should match");
+        assert!(
+            result.stats.matches_found > 0,
+            "literal 'F::Output' should match"
+        );
     }
 
     #[test]
@@ -970,17 +1040,25 @@ impl Runtime {
             &lake,
             "spawn",
             &default_packages(),
-            &GrepOptions { max_count: Some(1), no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                max_count: Some(1),
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
         // Each file should have at most 1 match
-        let mut file_counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        let mut file_counts: std::collections::HashMap<String, u32> =
+            std::collections::HashMap::new();
         for m in &result.matches {
             *file_counts.entry(m.path.clone()).or_default() += 1;
         }
         for (path, count) in &file_counts {
-            assert!(*count <= 1, "file {path} should have at most 1 match, got {count}");
+            assert!(
+                *count <= 1,
+                "file {path} should have at most 1 match, got {count}"
+            );
         }
     }
 
@@ -1048,7 +1126,10 @@ impl Runtime {
         )
         .unwrap();
 
-        assert!(!result.matches.is_empty(), "should have matches from non-excluded files");
+        assert!(
+            !result.matches.is_empty(),
+            "should have matches from non-excluded files"
+        );
         assert!(
             result.matches.iter().all(|m| !m.path.contains("runtime")),
             "runtime files should be excluded"
@@ -1086,8 +1167,16 @@ impl Runtime {
         let lake = ZenLake::open_in_memory().unwrap();
 
         let packages = vec![
-            ("rust".to_string(), "tokio".to_string(), "1.40.0".to_string()),
-            ("rust".to_string(), "serde".to_string(), "1.0.210".to_string()),
+            (
+                "rust".to_string(),
+                "tokio".to_string(),
+                "1.40.0".to_string(),
+            ),
+            (
+                "rust".to_string(),
+                "serde".to_string(),
+                "1.0.210".to_string(),
+            ),
         ];
 
         let result = GrepEngine::grep_package(
@@ -1095,11 +1184,17 @@ impl Runtime {
             &lake,
             "pub",
             &packages,
-            &GrepOptions { no_symbols: true, ..Default::default() },
+            &GrepOptions {
+                no_symbols: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
-        assert!(result.stats.matches_found >= 2, "should find matches in both packages");
+        assert!(
+            result.stats.matches_found >= 2,
+            "should find matches in both packages"
+        );
         assert!(result.stats.files_matched >= 2);
     }
 
@@ -1137,7 +1232,10 @@ impl Runtime {
         .unwrap();
 
         assert!(result.stats.files_searched >= 2, "should search both files");
-        assert!(result.stats.files_matched >= 1, "at least one file should match");
+        assert!(
+            result.stats.files_matched >= 1,
+            "at least one file should match"
+        );
         assert_eq!(result.stats.matches_found, result.matches.len() as u64);
         assert_eq!(
             result.stats.matches_with_symbol,
@@ -1151,7 +1249,11 @@ impl Runtime {
     fn local_basic_match() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("src")).unwrap();
-        std::fs::write(tmp.path().join("src/main.rs"), "pub fn hello() {}\npub fn world() {}\n").unwrap();
+        std::fs::write(
+            tmp.path().join("src/main.rs"),
+            "pub fn hello() {}\npub fn world() {}\n",
+        )
+        .unwrap();
 
         let result = GrepEngine::grep_local(
             r"pub fn \w+",
@@ -1170,7 +1272,11 @@ impl Runtime {
         std::fs::create_dir_all(tmp.path().join("src")).unwrap();
         std::fs::create_dir_all(tmp.path().join("node_modules/pkg")).unwrap();
         std::fs::write(tmp.path().join("src/main.rs"), "fn hello() {}\n").unwrap();
-        std::fs::write(tmp.path().join("node_modules/pkg/index.js"), "function hello() {}\n").unwrap();
+        std::fs::write(
+            tmp.path().join("node_modules/pkg/index.js"),
+            "function hello() {}\n",
+        )
+        .unwrap();
         std::fs::write(tmp.path().join(".gitignore"), "node_modules/\n").unwrap();
 
         // Init git repo so .gitignore is effective
@@ -1187,7 +1293,10 @@ impl Runtime {
         .unwrap();
 
         assert!(
-            result.matches.iter().all(|m| !m.path.contains("node_modules")),
+            result
+                .matches
+                .iter()
+                .all(|m| !m.path.contains("node_modules")),
             "node_modules should be excluded by .gitignore"
         );
     }
@@ -1203,7 +1312,10 @@ impl Runtime {
         let result = GrepEngine::grep_local(
             "hello",
             &[tmp.path().to_path_buf()],
-            &GrepOptions { skip_tests: true, ..Default::default() },
+            &GrepOptions {
+                skip_tests: true,
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -1271,15 +1383,16 @@ impl Runtime {
     fn local_stats_correct() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("src")).unwrap();
-        std::fs::write(tmp.path().join("src/a.rs"), "fn hello() {}\nfn world() {}\n").unwrap();
-        std::fs::write(tmp.path().join("src/b.rs"), "fn other() {}\n").unwrap();
-
-        let result = GrepEngine::grep_local(
-            "fn",
-            &[tmp.path().to_path_buf()],
-            &GrepOptions::default(),
+        std::fs::write(
+            tmp.path().join("src/a.rs"),
+            "fn hello() {}\nfn world() {}\n",
         )
         .unwrap();
+        std::fs::write(tmp.path().join("src/b.rs"), "fn other() {}\n").unwrap();
+
+        let result =
+            GrepEngine::grep_local("fn", &[tmp.path().to_path_buf()], &GrepOptions::default())
+                .unwrap();
 
         assert!(result.stats.files_searched >= 2);
         assert!(result.stats.files_matched >= 2);

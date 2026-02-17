@@ -16,12 +16,12 @@ use std::path::Path;
 use serde_json;
 use zen_embeddings::EmbeddingEngine;
 use zen_lake::{
-    source_files::{SourceFile, SourceFileStore},
     ApiSymbolRow, DocChunkRow, LakeError, ZenLake,
+    source_files::{SourceFile, SourceFileStore},
 };
 use zen_parser::doc_chunker::chunk_document;
 use zen_parser::types::{SymbolKind, SymbolMetadata, Visibility};
-use zen_parser::{detect_language_ext, extract_api, DetectedLanguage, ParsedItem};
+use zen_parser::{DetectedLanguage, ParsedItem, detect_language_ext, extract_api};
 
 /// Indexing pipeline for a single package.
 pub struct IndexingPipeline {
