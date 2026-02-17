@@ -7,7 +7,7 @@ use std::time::Instant;
 use zen_lake::SourceFileStore;
 
 use crate::error::SearchError;
-use crate::ref_graph::{RefCategory, RefEdge, SymbolRefHit};
+use crate::ref_graph::{RefCategory, RefEdge, ReferenceGraph, SymbolRefHit};
 use crate::walk::{WalkMode, build_walker};
 
 /// Budget controls for recursive context exploration.
@@ -297,14 +297,12 @@ impl RecursiveQueryEngine {
                 });
 
                 if let Some(prev) = hits.get(hits.len().saturating_sub(2)) {
+                    let category =
+                        classify_edge_category(&prev.file_path, file_key, query.include_external);
                     edges.push(RefEdge {
                         source_ref_id: prev.ref_id.clone(),
                         target_ref_id: ref_id,
-                        category: if prev.file_path == *file_key {
-                            RefCategory::SameModule
-                        } else {
-                            RefCategory::OtherModuleSameCrate
-                        },
+                        category,
                         evidence: "adjacent_hit".to_string(),
                     });
                 }
@@ -314,13 +312,9 @@ impl RecursiveQueryEngine {
             }
         }
 
-        let mut category_counts = HashMap::new();
-        for edge in &edges {
-            *category_counts
-                .entry(edge.category.as_str().to_string())
-                .or_insert(0usize) += 1;
-        }
-
+        let ref_graph = ReferenceGraph::new()?;
+        ref_graph.insert(&hits, &edges)?;
+        let mut category_counts = ref_graph.category_counts()?;
         if query.include_external {
             category_counts.entry("external".to_string()).or_insert(0);
         }
@@ -431,6 +425,30 @@ fn matches_symbol(symbol: &SymbolSpan, query: &RecursiveQuery) -> bool {
     kind_match && keyword_match
 }
 
+fn classify_edge_category(
+    source_file: &str,
+    target_file: &str,
+    include_external: bool,
+) -> RefCategory {
+    if source_file == target_file {
+        return RefCategory::SameModule;
+    }
+
+    let source_external = source_file.contains("/.cargo/registry/src/");
+    let target_external = target_file.contains("/.cargo/registry/src/");
+    if include_external && (source_external || target_external) {
+        return RefCategory::External;
+    }
+
+    let source_crate = source_file.split('/').next().unwrap_or_default();
+    let target_crate = target_file.split('/').next().unwrap_or_default();
+    if source_crate == target_crate {
+        RefCategory::OtherModuleSameCrate
+    } else {
+        RefCategory::OtherCrateWorkspace
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -501,5 +519,34 @@ mod tests {
         let plan = engine.plan();
         assert_eq!(plan.file_count, 1);
         assert!(plan.total_symbols >= 1);
+    }
+
+    #[test]
+    fn include_external_marks_external_edges() {
+        let mut store = ContextStore::new();
+        store.insert("a/src/lib.rs".to_string(), "fn alpha() {}".to_string());
+        store.insert(
+            "z/.cargo/registry/src/pkg/lib.rs".to_string(),
+            "fn ext() {}".to_string(),
+        );
+
+        let mut engine = RecursiveQueryEngine {
+            store,
+            budget: RecursiveBudget::default(),
+        };
+        for file in engine.store.files.values_mut() {
+            populate_spans(file);
+        }
+
+        let result = engine
+            .execute(&RecursiveQuery {
+                target_kinds: vec!["function".to_string()],
+                doc_keywords: Vec::new(),
+                include_external: true,
+                generate_summary: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.category_counts.get("external"), Some(&1));
     }
 }
