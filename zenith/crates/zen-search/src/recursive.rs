@@ -527,6 +527,7 @@ mod tests {
     use std::io::Write;
 
     use tempfile::TempDir;
+    use zen_lake::{SourceFile, SourceFileStore};
 
     use super::*;
 
@@ -621,5 +622,42 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.category_counts.get("external"), Some(&1));
+    }
+
+    #[test]
+    fn from_source_store_loads_package_and_executes_query() {
+        let store = SourceFileStore::open_in_memory().unwrap();
+        let files = vec![SourceFile {
+            ecosystem: "rust".to_string(),
+            package: "tokio".to_string(),
+            version: "1.0.0".to_string(),
+            file_path: "src/lib.rs".to_string(),
+            content: "/// safety invariant\npub fn spawn() {}\npub fn sleep() {}".to_string(),
+            language: Some("rust".to_string()),
+            size_bytes: 64,
+            line_count: 3,
+        }];
+        store.store_source_files(&files).unwrap();
+
+        let engine = RecursiveQueryEngine::from_source_store(
+            &store,
+            "rust",
+            "tokio",
+            "1.0.0",
+            RecursiveBudget::default(),
+        )
+        .unwrap();
+
+        let result = engine
+            .execute(&RecursiveQuery {
+                target_kinds: vec!["function".to_string()],
+                doc_keywords: vec!["safety".to_string()],
+                include_external: false,
+                generate_summary: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].name, "spawn");
     }
 }
