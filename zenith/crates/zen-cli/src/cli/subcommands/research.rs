@@ -6,21 +6,17 @@ pub enum ResearchCommands {
     /// Create a research item.
     Create {
         #[arg(long)]
-        topic: String,
+        title: String,
         #[arg(long)]
-        question: String,
-        #[arg(long)]
-        context: Option<String>,
+        description: Option<String>,
     },
     /// Update a research item.
     Update {
         id: String,
         #[arg(long)]
-        topic: Option<String>,
+        title: Option<String>,
         #[arg(long)]
-        question: Option<String>,
-        #[arg(long)]
-        context: Option<String>,
+        description: Option<String>,
         #[arg(long)]
         status: Option<String>,
     },

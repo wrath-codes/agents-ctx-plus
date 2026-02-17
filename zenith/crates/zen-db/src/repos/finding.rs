@@ -363,6 +363,23 @@ impl ZenService {
         }
         Ok(tags)
     }
+
+    pub async fn list_finding_ids_by_tag(&self, tag: &str) -> Result<Vec<String>, DatabaseError> {
+        let mut rows = self
+            .db()
+            .conn()
+            .query(
+                "SELECT finding_id FROM finding_tags WHERE tag = ?1 ORDER BY finding_id",
+                [tag],
+            )
+            .await?;
+
+        let mut ids = Vec::new();
+        while let Some(row) = rows.next().await? {
+            ids.push(row.get::<String>(0)?);
+        }
+        Ok(ids)
+    }
 }
 
 #[cfg(test)]
@@ -514,6 +531,46 @@ mod tests {
 
         let tags = svc.get_finding_tags(&finding.id).await.unwrap();
         assert_eq!(tags, vec!["verified"]);
+    }
+
+    #[tokio::test]
+    async fn list_finding_ids_by_tag_returns_matching_ids() {
+        let svc = test_service().await;
+        let sid = start_test_session(&svc).await;
+
+        let finding_a = svc
+            .create_finding(&sid, "first tagged finding", None, Confidence::Medium, None)
+            .await
+            .unwrap();
+        let finding_b = svc
+            .create_finding(
+                &sid,
+                "second tagged finding",
+                None,
+                Confidence::Medium,
+                None,
+            )
+            .await
+            .unwrap();
+        let finding_c = svc
+            .create_finding(&sid, "untagged finding", None, Confidence::Medium, None)
+            .await
+            .unwrap();
+
+        svc.tag_finding(&sid, &finding_a.id, "verified")
+            .await
+            .unwrap();
+        svc.tag_finding(&sid, &finding_b.id, "verified")
+            .await
+            .unwrap();
+        svc.tag_finding(&sid, &finding_c.id, "other").await.unwrap();
+
+        let mut ids = svc.list_finding_ids_by_tag("verified").await.unwrap();
+        ids.sort();
+
+        let mut expected = vec![finding_a.id, finding_b.id];
+        expected.sort();
+        assert_eq!(ids, expected);
     }
 
     #[tokio::test]

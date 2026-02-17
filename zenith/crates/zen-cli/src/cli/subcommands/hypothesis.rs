@@ -8,9 +8,9 @@ pub enum HypothesisCommands {
         #[arg(long)]
         content: String,
         #[arg(long)]
-        rationale: Option<String>,
-        #[arg(long)]
         research: Option<String>,
+        #[arg(long)]
+        finding: Option<String>,
     },
     /// Update a hypothesis.
     Update {
@@ -26,6 +26,8 @@ pub enum HypothesisCommands {
     List {
         #[arg(long)]
         status: Option<String>,
+        #[arg(long)]
+        research: Option<String>,
         #[arg(long)]
         search: Option<String>,
         #[arg(long)]

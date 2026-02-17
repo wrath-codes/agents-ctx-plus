@@ -8,7 +8,9 @@ pub enum InsightCommands {
         #[arg(long)]
         content: String,
         #[arg(long)]
-        category: Option<String>,
+        confidence: Option<String>,
+        #[arg(long)]
+        research: Option<String>,
     },
     /// Update an insight.
     Update {
@@ -16,14 +18,16 @@ pub enum InsightCommands {
         #[arg(long)]
         content: Option<String>,
         #[arg(long)]
-        category: Option<String>,
+        confidence: Option<String>,
     },
     /// List insights.
     List {
         #[arg(long)]
         search: Option<String>,
         #[arg(long)]
-        category: Option<String>,
+        confidence: Option<String>,
+        #[arg(long)]
+        research: Option<String>,
         #[arg(long)]
         limit: Option<u32>,
     },

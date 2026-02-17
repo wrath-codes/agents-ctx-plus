@@ -33,6 +33,8 @@ pub enum FindingCommands {
         #[arg(long)]
         research: Option<String>,
         #[arg(long)]
+        confidence: Option<String>,
+        #[arg(long)]
         tag: Option<String>,
         #[arg(long)]
         limit: Option<u32>,

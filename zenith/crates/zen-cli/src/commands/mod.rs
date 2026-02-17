@@ -22,3 +22,5 @@ pub mod study;
 pub mod task;
 pub mod whats_next;
 pub mod wrap_up;
+
+pub(crate) mod shared;

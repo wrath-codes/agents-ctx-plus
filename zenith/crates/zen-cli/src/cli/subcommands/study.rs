@@ -12,15 +12,13 @@ pub enum StudyCommands {
         #[arg(long)]
         methodology: Option<String>,
         #[arg(long)]
-        summary: Option<String>,
+        research: Option<String>,
     },
     /// Add an assumption to a study.
     Assume {
         id: String,
         #[arg(long)]
         content: String,
-        #[arg(long)]
-        evidence: Option<String>,
     },
     /// Record a test result for an assumption.
     Test {
