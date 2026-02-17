@@ -1,4 +1,4 @@
-use clap::Subcommand;
+use clap::{Subcommand, value_parser};
 
 /// Issue entity commands.
 #[derive(Clone, Debug, Subcommand)]
@@ -9,7 +9,7 @@ pub enum IssueCommands {
         title: String,
         #[arg(long = "type")]
         issue_type: Option<String>,
-        #[arg(long)]
+        #[arg(long, value_parser = value_parser!(u8).range(1..=5))]
         priority: Option<u8>,
         #[arg(long)]
         description: Option<String>,
@@ -27,7 +27,7 @@ pub enum IssueCommands {
         description: Option<String>,
         #[arg(long)]
         status: Option<String>,
-        #[arg(long)]
+        #[arg(long, value_parser = value_parser!(u8).range(1..=5))]
         priority: Option<u8>,
     },
     /// List issues.

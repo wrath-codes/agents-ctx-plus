@@ -26,7 +26,7 @@ pub async fn handle(
             check::run(
                 package_a,
                 package_b,
-                status,
+                status.as_deref(),
                 conditions.clone(),
                 finding.clone(),
                 ctx,

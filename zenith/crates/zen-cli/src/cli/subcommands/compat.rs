@@ -8,7 +8,7 @@ pub enum CompatCommands {
         package_a: String,
         package_b: String,
         #[arg(long)]
-        status: String,
+        status: Option<String>,
         #[arg(long)]
         conditions: Option<String>,
         #[arg(long)]
