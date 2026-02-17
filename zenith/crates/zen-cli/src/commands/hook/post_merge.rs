@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::cli::GlobalFlags;
@@ -12,9 +14,12 @@ struct PostMergeResponse {
     conflict_files: Vec<String>,
 }
 
-pub async fn run(squash: Option<&str>, flags: &GlobalFlags) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?;
-    let action = zen_hooks::analyze_post_merge(&project_root)?;
+pub async fn run(
+    project_root: &Path,
+    squash: Option<&str>,
+    flags: &GlobalFlags,
+) -> anyhow::Result<()> {
+    let action = zen_hooks::analyze_post_merge(project_root)?;
 
     let mut response = PostMergeResponse {
         squash: squash.map(|v| v == "1"),
@@ -28,7 +33,7 @@ pub async fn run(squash: Option<&str>, flags: &GlobalFlags) -> anyhow::Result<()
             response.action = format!("skip: {reason}");
         }
         zen_hooks::PostMergeAction::Rebuild { changed_files } => {
-            rebuild_trigger::rebuild_from_default_trail(&project_root, false).await?;
+            rebuild_trigger::rebuild_from_default_trail(project_root, false).await?;
             response.action = "rebuild".to_string();
             response.changed_files = changed_files;
         }

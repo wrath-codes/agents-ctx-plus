@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::bail;
 use serde::Serialize;
 
@@ -12,9 +14,8 @@ struct PreCommitResponse {
     errors: Vec<zen_hooks::TrailValidationError>,
 }
 
-pub fn run(flags: &GlobalFlags) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?;
-    let report = zen_hooks::validate_staged_trail_files(&project_root)?;
+pub fn run(project_root: &Path, flags: &GlobalFlags) -> anyhow::Result<()> {
+    let report = zen_hooks::validate_staged_trail_files(project_root)?;
     let valid = report.is_valid();
     let response = PreCommitResponse {
         valid,

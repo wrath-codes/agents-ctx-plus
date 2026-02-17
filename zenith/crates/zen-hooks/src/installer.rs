@@ -351,11 +351,7 @@ fn install_single_hook(
 fn install_fresh_hook(source: &Path, target: &Path) -> Result<Option<HookInstallMode>, HookError> {
     #[cfg(unix)]
     {
-        let rel_target = format!(
-            "../../.zenith/hooks/{}",
-            source.file_name().unwrap().to_string_lossy()
-        );
-        std::os::unix::fs::symlink(rel_target, target)?;
+        std::os::unix::fs::symlink(source, target)?;
         return Ok(Some(HookInstallMode::Symlink));
     }
     #[cfg(not(unix))]

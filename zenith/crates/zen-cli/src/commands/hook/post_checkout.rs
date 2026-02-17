@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::Serialize;
 
 use crate::cli::GlobalFlags;
@@ -14,16 +16,15 @@ struct PostCheckoutResponse {
 }
 
 pub async fn run(
+    project_root: &Path,
     old_head: Option<&str>,
     new_head: Option<&str>,
     is_branch_checkout: Option<&str>,
     flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
-    let project_root = std::env::current_dir()?;
-
     let old = old_head.unwrap_or("");
     let new = new_head.unwrap_or("");
-    let action = zen_hooks::analyze_post_checkout(&project_root, old, new)?;
+    let action = zen_hooks::analyze_post_checkout(project_root, old, new)?;
 
     let mut response = PostCheckoutResponse {
         previous_head: old_head.map(ToString::to_string),
@@ -38,7 +39,7 @@ pub async fn run(
             response.action = format!("skip: {reason}");
         }
         zen_hooks::PostCheckoutAction::Rebuild { changed_files } => {
-            rebuild_trigger::rebuild_from_default_trail(&project_root, false).await?;
+            rebuild_trigger::rebuild_from_default_trail(project_root, false).await?;
             response.action = "rebuild".to_string();
             response.changed_files = changed_files;
         }

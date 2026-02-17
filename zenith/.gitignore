@@ -30,3 +30,8 @@
 # ONNX model cache (fastembed downloads)
 onnx_models/
 .fastembed_cache/
+# Zenith generated files
+.zenith/zenith.db
+.zenith/lake.duckdb
+.zenith/source_files.duckdb
+.zenith/*.tmp
