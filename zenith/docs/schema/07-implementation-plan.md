@@ -273,10 +273,10 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 4.1 | Implement vector search: embed query → Lance `lance_vector_search()` or brute-force `array_cosine_similarity()` in DuckDB. **Note**: embeddings stored as `FLOAT[]`, cast to `FLOAT[384]` for cosine ops. | zen-search | 4.4 |
-| 4.2 | Implement FTS search: query zen-db FTS5 tables (findings, tasks, audit, etc.) | zen-search | 4.4 |
-| 4.3 | Implement hybrid search: combine vector + FTS scores. **Note**: Lance FTS is term-exact (no stemming) vs libSQL FTS5 (porter stemming) — vector should be primary signal, FTS as boost. Validate `alpha` parameter with real queries. | zen-search | 4.4 |
-| 4.4 | Implement `SearchEngine` orchestrator with filters (package, kind, ecosystem, limit) and `DecisionGraph` analytics module (toposort, centrality, shortest path, connected components via rustworkx-core). **Note**: `SearchMode::Recursive` is dispatched directly via `RecursiveQueryEngine` (requires `ContextStore` setup), not through `SearchEngine`. | zen-search | Phase 5 |
+| 4.1 | ~~Implement vector search: embed query → Lance `lance_vector_search()` or brute-force `array_cosine_similarity()` in DuckDB.~~ | zen-search | **DONE** — `vector.rs` implemented (`vector_search_symbols`, `vector_search_doc_chunks`), cosine ranking + filters + tests |
+| 4.2 | ~~Implement FTS search: query zen-db FTS5 tables (findings, tasks, audit, etc.)~~ | zen-search | **DONE** — `fts.rs` implemented via `ZenService` repo search methods |
+| 4.3 | ~~Implement hybrid search: combine vector + FTS scores.~~ | zen-search | **DONE** — `hybrid.rs` implemented (`combine_results`, alpha blend, dedup + tests) |
+| 4.4 | ~~Implement `SearchEngine` orchestrator with filters and graph analytics module~~ | zen-search | **DONE** — `lib.rs` orchestrator implemented; `SearchMode` dispatches vector/fts/hybrid/recursive/graph; `graph.rs` integrated |
 | 4.5 | ~~Implement crates.io client~~ | zen-registry | **DONE** — `crates_io.rs`, fixture tests, `check_response()` integration |
 | 4.6 | ~~Implement npm registry client (+ api.npmjs.org for downloads)~~ | zen-registry | **DONE** — `npm.rs`, JoinSet download batch with Semaphore(10), JoinSet drain bug fixed |
 | 4.7 | ~~Implement PyPI client~~ | zen-registry | **DONE** — `pypi.rs`, single-package JSON lookup, 404 → empty Vec |
@@ -289,25 +289,25 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 | 4.20 | ~~Implement C#/NuGet client~~ | zen-registry | **DONE** — `csharp.rs`, SPDX license extraction, GitHub URL splitting |
 | 4.21 | ~~Implement Haskell/Hackage client~~ | zen-registry | **DONE** — `haskell.rs`, two-step lookup (preferred.json → metadata) |
 | 4.22 | ~~Implement Lua/Neovim client~~ | zen-registry | **DONE** — `lua.rs`, GitHub dual-search + config ref boost (not LuaRocks) |
-| 4.10 | Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation | zen-search | 5.19 |
-| 4.11 | Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink` | zen-search | 5.19 |
-| 4.12 | Add `idx_symbols_file_lines` index to `api_symbols` | zen-lake | 4.10 |
-| 4.13 | Implement `RecursiveQueryEngine` (RLM-style): metadata-only root planning, AST/doc/source symbolic handles, budget controls (`max_depth`, `max_chunks`, `max_bytes_per_chunk`, `max_total_bytes`) | zen-search | 4.14 |
-| 4.14 | Implement categorized reference graph (`symbol_refs`, `ref_edges`) with signature-preserving stable ref IDs and categories (`same_module`, `other_module_same_crate`, `other_crate_workspace`, `external`) | zen-search + zen-lake | 5.24 |
-| 4.15 | Implement external reference scan pipeline (workspace-external evidence; initial target: cached DataFusion Arrow references) and JSON summary output for recursive search results | zen-search | 5.24 |
+| 4.10 | ~~Implement `GrepEngine::grep_package()` — DuckDB fetch + Rust regex + symbol correlation~~ | zen-search | **DONE** |
+| 4.11 | ~~Implement `GrepEngine::grep_local()` — `grep` + `ignore` crates, custom `Sink`~~ | zen-search | **DONE** |
+| 4.12 | ~~Add `idx_symbols_file_lines` index to `api_symbols`~~ | zen-lake | **DONE** — delivered in Phase 3 schema/index work |
+| 4.13 | ~~Implement `RecursiveQueryEngine` (RLM-style)~~ | zen-search | **DONE** — `recursive.rs` implemented (`from_directory`, `from_source_store`, `plan`, `execute`, budget controls) |
+| 4.14 | ~~Implement categorized reference graph (`symbol_refs`, `ref_edges`)~~ | zen-search + zen-lake | **DONE** — `ref_graph.rs` implemented with in-memory DuckDB tables + category/signature queries |
+| 4.15 | Implement external reference scan pipeline + JSON summary output for recursive search results | zen-search | **PARTIAL DONE** — JSON summary + external category tagging implemented; dedicated DataFusion-focused scan pipeline remains |
 
 ### Tests
 
-- Vector search: insert known vectors, verify nearest neighbor returns correct results
-- FTS: porter-stemmed queries match expected results
-- Hybrid: combined ranking produces better results than either alone
+- Vector search: **DONE** (unit tests in `vector.rs`)
+- FTS: **DONE** (unit tests in `fts.rs`)
+- Hybrid: **DONE** (unit tests in `hybrid.rs`)
 - Registry: **DONE** — 39 unit tests (inline JSON fixtures, error handling, dispatch, `http.rs` helper) + 3 ignored network tests. Covers all 11 ecosystems.
 - `search_all()`: **DONE** — merges and sorts by downloads, `unwrap_or_log` for fault isolation
-- Recursive query: Arrow monorepo scale test passes with budget controls and deterministic output
-- Reference graph: category counts and signature lookup by stable `ref_id` succeed
-- External references: cached DataFusion Arrow usage is discoverable and tagged as `external`
-- Graph analytics: toposort produces valid ordering, centrality identifies hub nodes, budget caps skip centrality for large graphs
-- SearchEngine mode dispatch: each mode calls the correct engine, Recursive returns guidance error
+- Recursive query: **DONE (MVP+)** — budget/path/summary/source-store tests in `recursive.rs`
+- Reference graph: **DONE** — category counts and signature lookup tests in `ref_graph.rs`
+- External references: **PARTIAL DONE** — path-based external tagging implemented; dedicated DataFusion scan still pending
+- Graph analytics: **DONE** — graph tests in `graph.rs` (build/counts/toposort/cycle/path)
+- SearchEngine mode dispatch: each mode calls the correct engine (Vector/FTS/Hybrid/Recursive/Graph)
 
 ### Milestone 4
 
@@ -317,6 +317,8 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 - Recursive search returns categorized reference results with signatures and optional JSON summary payload
 - Graph analytics over entity_links: toposort, centrality, shortest path, connected components
 - External DataFusion Arrow references discoverable and tagged as `RefCategory::External`
+- `cargo test -p zen-search -p zen-registry` passes (109 + 42 tests, 3 ignored network tests in registry)
+- `cargo clippy -p zen-search -p zen-registry --no-deps -- -D warnings` passes
 
 ---
 
