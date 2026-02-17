@@ -8,10 +8,7 @@ use super::parse_location::parse_location;
 
 pub async fn run(args: &LogArgs, ctx: &AppContext, flags: &GlobalFlags) -> anyhow::Result<()> {
     let session_id = require_active_session_id(ctx).await?;
-    let task_id = args
-        .task
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("--task is required for znt log"))?;
+    let task_id = required_task_id(args)?;
     let parsed = parse_location(&args.location)?;
 
     let log = ctx
@@ -27,4 +24,36 @@ pub async fn run(args: &LogArgs, ctx: &AppContext, flags: &GlobalFlags) -> anyho
         .await?;
 
     output(&log, flags.format)
+}
+
+fn required_task_id(args: &LogArgs) -> anyhow::Result<&str> {
+    args.task
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("--task is required for znt log"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::required_task_id;
+    use crate::cli::root_commands::LogArgs;
+
+    #[test]
+    fn rejects_missing_task() {
+        let args = LogArgs {
+            location: String::from("src/main.rs#1-2"),
+            task: None,
+            description: None,
+        };
+        assert!(required_task_id(&args).is_err());
+    }
+
+    #[test]
+    fn accepts_present_task() {
+        let args = LogArgs {
+            location: String::from("src/main.rs#1-2"),
+            task: Some(String::from("tsk-1")),
+            description: None,
+        };
+        assert_eq!(required_task_id(&args).expect("task should exist"), "tsk-1");
+    }
 }

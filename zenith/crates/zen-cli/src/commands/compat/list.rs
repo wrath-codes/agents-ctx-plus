@@ -37,3 +37,15 @@ fn compute_fetch_limit(limit: u32, status: Option<&str>, package: Option<&str>) 
         limit
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::compute_fetch_limit;
+
+    #[test]
+    fn boosts_fetch_limit_when_filters_present() {
+        assert_eq!(compute_fetch_limit(20, Some("compatible"), None), 100);
+        assert_eq!(compute_fetch_limit(20, None, Some("tokio")), 100);
+        assert_eq!(compute_fetch_limit(20, None, None), 20);
+    }
+}

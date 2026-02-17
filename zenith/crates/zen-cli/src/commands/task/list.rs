@@ -52,3 +52,16 @@ fn compute_fetch_limit(
         limit
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::compute_fetch_limit;
+
+    #[test]
+    fn boosts_fetch_limit_when_filters_present() {
+        assert_eq!(compute_fetch_limit(20, Some("done"), None, None), 100);
+        assert_eq!(compute_fetch_limit(20, None, Some("iss-1"), None), 100);
+        assert_eq!(compute_fetch_limit(20, None, None, Some("res-1")), 100);
+        assert_eq!(compute_fetch_limit(20, None, None, None), 20);
+    }
+}
