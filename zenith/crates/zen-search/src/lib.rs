@@ -190,24 +190,7 @@ impl<'a> SearchEngine<'a> {
                 Ok(combined.into_iter().map(SearchResult::Hybrid).collect())
             }
             SearchMode::Recursive => {
-                let engine = if let Some((ecosystem, package, version)) =
-                    recursive_package_triplet(&filters)
-                {
-                    RecursiveQueryEngine::from_source_store(
-                        self.source_store,
-                        ecosystem,
-                        package,
-                        version,
-                        RecursiveBudget::default(),
-                    )?
-                } else {
-                    RecursiveQueryEngine::from_directory(
-                        Path::new("."),
-                        RecursiveBudget::default(),
-                    )?
-                };
-                let rq = RecursiveQuery::from_text(query);
-                let result = engine.execute(&rq)?;
+                let result = execute_recursive_query(self.source_store, query, &filters)?;
                 Ok(vec![SearchResult::Recursive(result)])
             }
             SearchMode::Graph => {
@@ -242,6 +225,27 @@ fn recursive_package_triplet(filters: &SearchFilters) -> Option<(&str, &str, &st
     Some((ecosystem, package, version))
 }
 
+fn execute_recursive_query(
+    source_store: &SourceFileStore,
+    query: &str,
+    filters: &SearchFilters,
+) -> Result<RecursiveQueryResult, SearchError> {
+    let engine = if let Some((ecosystem, package, version)) = recursive_package_triplet(filters) {
+        RecursiveQueryEngine::from_source_store(
+            source_store,
+            ecosystem,
+            package,
+            version,
+            RecursiveBudget::default(),
+        )?
+    } else {
+        RecursiveQueryEngine::from_directory(Path::new("."), RecursiveBudget::default())?
+    };
+
+    let rq = RecursiveQuery::from_text(query);
+    engine.execute(&rq)
+}
+
 #[cfg(test)]
 mod spike_graph_algorithms;
 #[cfg(test)]
@@ -251,7 +255,32 @@ mod spike_recursive_query;
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+    use std::io::Write;
+    use std::path::Path;
+
+    use tempfile::TempDir;
+    use zen_lake::SourceFile;
+
     use super::*;
+
+    struct DirGuard {
+        previous: std::path::PathBuf,
+    }
+
+    impl DirGuard {
+        fn enter(path: &Path) -> Self {
+            let previous = env::current_dir().expect("read current dir");
+            env::set_current_dir(path).expect("set current dir");
+            Self { previous }
+        }
+    }
+
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.previous);
+        }
+    }
 
     #[test]
     fn normalize_limit_uses_default_for_none_and_zero() {
@@ -319,5 +348,55 @@ mod tests {
             ..SearchFilters::default()
         };
         assert_eq!(recursive_package_triplet(&missing_version), None);
+    }
+
+    #[test]
+    fn execute_recursive_query_uses_source_store_when_triplet_present() {
+        let store = SourceFileStore::open_in_memory().expect("open source store");
+        store
+            .store_source_files(&[SourceFile {
+                ecosystem: "rust".to_string(),
+                package: "tokio".to_string(),
+                version: "1.0.0".to_string(),
+                file_path: "src/lib.rs".to_string(),
+                content: "/// safety invariant\npub fn spawn() {}".to_string(),
+                language: Some("rust".to_string()),
+                size_bytes: 40,
+                line_count: 2,
+            }])
+            .expect("seed source files");
+
+        let filters = SearchFilters {
+            ecosystem: Some("rust".to_string()),
+            package: Some("tokio".to_string()),
+            version: Some("1.0.0".to_string()),
+            ..SearchFilters::default()
+        };
+
+        let result = execute_recursive_query(&store, "safety", &filters).expect("recursive query");
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].name, "spawn");
+    }
+
+    #[test]
+    fn execute_recursive_query_falls_back_to_local_without_triplet() {
+        let tmp = TempDir::new().expect("temp dir");
+        let _guard = DirGuard::enter(tmp.path());
+        std::fs::create_dir_all("src").expect("create src");
+        let mut file = std::fs::File::create("src/lib.rs").expect("create file");
+        writeln!(file, "/// local safety note").expect("write doc");
+        writeln!(file, "pub fn local_fn() {{}} ").expect("write fn");
+
+        let store = SourceFileStore::open_in_memory().expect("open source store");
+        let filters = SearchFilters {
+            ecosystem: Some("rust".to_string()),
+            package: Some("tokio".to_string()),
+            version: None,
+            ..SearchFilters::default()
+        };
+
+        let result = execute_recursive_query(&store, "local", &filters).expect("recursive query");
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].name, "local_fn");
     }
 }
