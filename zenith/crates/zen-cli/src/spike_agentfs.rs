@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 //! # Spike 0.7: AgentFS SDK Validation
 //!
 //! Validates that the `agentfs-sdk` crate (v0.6.0, from crates.io) works for zenith's

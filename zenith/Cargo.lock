@@ -11560,6 +11560,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "dirs",
  "dotenvy",
  "pretty_assertions",
  "serde",
@@ -11572,9 +11573,11 @@ dependencies = [
  "zen-core",
  "zen-db",
  "zen-embeddings",
+ "zen-hooks",
  "zen-lake",
  "zen-parser",
  "zen-registry",
+ "zen-schema",
  "zen-search",
 ]
 

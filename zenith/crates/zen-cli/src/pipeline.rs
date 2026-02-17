@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 //! Indexing pipeline: walk → parse → embed → store.
 //!
 //! Orchestrates the end-to-end indexing of a local directory into the local DuckDB cache.
@@ -13,14 +15,12 @@
 
 use std::path::Path;
 
-use serde_json;
 use zen_embeddings::EmbeddingEngine;
 use zen_lake::{
     ApiSymbolRow, DocChunkRow, LakeError, ZenLake,
     source_files::{SourceFile, SourceFileStore},
 };
 use zen_parser::doc_chunker::chunk_document;
-use zen_parser::types::{SymbolKind, SymbolMetadata, Visibility};
 use zen_parser::{DetectedLanguage, ParsedItem, detect_language_ext, extract_api};
 
 /// Indexing pipeline for a single package.
@@ -335,6 +335,7 @@ fn is_doc_file(path: &str) -> bool {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use zen_parser::types::{SymbolKind, SymbolMetadata, Visibility};
 
     #[test]
     fn parsed_item_to_row_mapping() {

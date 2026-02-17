@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 //! # Spike 0.9: clap Derive CLI Parsing Validation
 //!
 //! Validates that `clap` (v4.5, derive feature) compiles and parses the Zenith CLI
