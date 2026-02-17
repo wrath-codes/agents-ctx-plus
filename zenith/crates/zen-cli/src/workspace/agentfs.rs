@@ -13,7 +13,7 @@ pub async fn create_session_workspace(
     project_root: &Path,
     session_id: &str,
 ) -> anyhow::Result<WorkspaceInfo> {
-    let db_path = persistent_workspace_db_path(project_root, session_id)?;
+    let db_path = persistent_workspace_db_path(project_root, session_id).await?;
     let db_path_str = db_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("invalid workspace path"))?;
@@ -83,6 +83,7 @@ pub async fn session_workspace_snapshot(
 ) -> anyhow::Result<WorkspaceSnapshot> {
     let agent = open_session_workspace(project_root, session_id).await?;
     let recent = agent.tools.recent(Some(500)).await?;
+    let total = u64::try_from(recent.len()).unwrap_or(u64::MAX);
 
     let mut success = 0u64;
     let mut failed = 0u64;
@@ -104,7 +105,7 @@ pub async fn session_workspace_snapshot(
         workspace_id: workspace_id(session_id),
         files_total: 0,
         bytes_total: 0,
-        tool_calls_total: success + failed,
+        tool_calls_total: total,
         tool_calls_success: success,
         tool_calls_failed: failed,
         captured_at: Utc::now(),
@@ -122,7 +123,7 @@ pub async fn session_file_audit(
     let calls = agent.tools.recent(Some(i64::from(limit))).await?;
     let mut out = Vec::new();
 
-    for call in calls {
+    for (index, call) in calls.into_iter().enumerate() {
         let value = serde_json::to_value(&call)?;
         let tool = value
             .get("name")
@@ -146,13 +147,14 @@ pub async fn session_file_audit(
             .and_then(serde_json::Value::as_str)
             .map(ToString::to_string);
         let created_at = parse_timestamp_from_tool_call(&value).unwrap_or_else(Utc::now);
+        let fallback_id = format!("wsa-{}-{index}", created_at.timestamp_micros());
 
         let entry = WorkspaceAuditEntry {
             id: value
                 .get("id")
                 .and_then(serde_json::Value::as_i64)
                 .map(|v| format!("wsa-{v}"))
-                .unwrap_or_else(|| format!("wsa-{}", created_at.timestamp_micros())),
+                .unwrap_or(fallback_id),
             session_id: session_id.to_string(),
             workspace_id: workspace_id(session_id),
             source: "file".to_string(),
@@ -194,17 +196,35 @@ pub async fn active_session_file_audit(
 
 async fn open_active_workspace(project_root: &Path) -> anyhow::Result<AgentFS> {
     let dir = project_root.join(".zenith").join("workspaces");
-    let mut entries = std::fs::read_dir(&dir)
-        .with_context(|| format!("read workspace dir {}", dir.to_string_lossy()))?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().and_then(|e| e.to_str()) == Some("db"))
+    let mut entries = tokio::fs::read_dir(&dir)
+        .await
+        .with_context(|| format!("read workspace dir {}", dir.to_string_lossy()))?;
+
+    let mut candidates = Vec::<(std::time::SystemTime, PathBuf)>::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("db") {
+            continue;
+        }
+
+        let modified = tokio::fs::metadata(&path)
+            .await
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+
+        candidates.push((modified, path));
+    }
+
+    candidates.sort_by_key(|(modified, path)| (*modified, path.clone()));
+    let mut entries = candidates
+        .into_iter()
+        .map(|(_, path)| path)
         .collect::<Vec<_>>();
-    entries.sort_by_key(|entry| entry.path());
     let last = entries
-        .last()
+        .pop()
         .ok_or_else(|| anyhow::anyhow!("no workspace db files found"))?;
-    let path = last.path();
-    let path = path
+    let path = last
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("invalid workspace path"))?;
     AgentFS::open(AgentFSOptions::with_path(path))
@@ -213,7 +233,7 @@ async fn open_active_workspace(project_root: &Path) -> anyhow::Result<AgentFS> {
 }
 
 async fn open_session_workspace(project_root: &Path, session_id: &str) -> anyhow::Result<AgentFS> {
-    let db_path = persistent_workspace_db_path(project_root, session_id)?;
+    let db_path = persistent_workspace_db_path(project_root, session_id).await?;
     let path = db_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("invalid workspace path"))?;
@@ -222,11 +242,29 @@ async fn open_session_workspace(project_root: &Path, session_id: &str) -> anyhow
         .context("open session workspace")
 }
 
-fn persistent_workspace_db_path(project_root: &Path, session_id: &str) -> anyhow::Result<PathBuf> {
+async fn persistent_workspace_db_path(
+    project_root: &Path,
+    session_id: &str,
+) -> anyhow::Result<PathBuf> {
+    validate_session_id(session_id)?;
     let dir = project_root.join(".zenith").join("workspaces");
-    std::fs::create_dir_all(&dir)
+    tokio::fs::create_dir_all(&dir)
+        .await
         .with_context(|| format!("create workspace dir {}", dir.to_string_lossy()))?;
     Ok(dir.join(format!("{session_id}.db")))
+}
+
+fn validate_session_id(session_id: &str) -> anyhow::Result<()> {
+    if session_id.contains("..") || session_id.contains('/') || session_id.contains('\\') {
+        anyhow::bail!("invalid session_id: path separators are not allowed");
+    }
+    if !session_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        anyhow::bail!("invalid session_id: only [A-Za-z0-9_-] are allowed");
+    }
+    Ok(())
 }
 
 fn workspace_id(session_id: &str) -> String {

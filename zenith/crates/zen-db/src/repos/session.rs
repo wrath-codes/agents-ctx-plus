@@ -262,7 +262,7 @@ impl ZenService {
     }
 
     /// Mark a session as abandoned.
-    async fn abandon_session(&self, session_id: &str) -> Result<(), DatabaseError> {
+    pub async fn abandon_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         let now = Utc::now();
         self.db()
             .conn()
