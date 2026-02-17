@@ -12,7 +12,7 @@ pub enum TaskCommands {
         #[arg(long)]
         issue: Option<String>,
         #[arg(long)]
-        priority: Option<String>,
+        research: Option<String>,
     },
     /// Update a task.
     Update {
@@ -24,7 +24,7 @@ pub enum TaskCommands {
         #[arg(long)]
         status: Option<String>,
         #[arg(long)]
-        priority: Option<String>,
+        research: Option<String>,
         #[arg(long)]
         issue: Option<String>,
     },
@@ -34,6 +34,8 @@ pub enum TaskCommands {
         status: Option<String>,
         #[arg(long)]
         issue: Option<String>,
+        #[arg(long)]
+        research: Option<String>,
         #[arg(long)]
         search: Option<String>,
         #[arg(long)]

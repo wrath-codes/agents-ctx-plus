@@ -10,6 +10,8 @@ pub enum IssueCommands {
         #[arg(long = "type")]
         issue_type: Option<String>,
         #[arg(long)]
+        priority: Option<u8>,
+        #[arg(long)]
         description: Option<String>,
         #[arg(long)]
         parent: Option<String>,
@@ -25,6 +27,8 @@ pub enum IssueCommands {
         description: Option<String>,
         #[arg(long)]
         status: Option<String>,
+        #[arg(long)]
+        priority: Option<u8>,
     },
     /// List issues.
     List {

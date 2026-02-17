@@ -1,4 +1,7 @@
-use anyhow::bail;
+#[path = "log/create.rs"]
+mod create;
+#[path = "log/parse_location.rs"]
+mod parse_location;
 
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::LogArgs;
@@ -6,9 +9,9 @@ use crate::context::AppContext;
 
 /// Handle `znt log`.
 pub async fn handle(
-    _args: &LogArgs,
-    _ctx: &mut AppContext,
-    _flags: &GlobalFlags,
+    args: &LogArgs,
+    ctx: &mut AppContext,
+    flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
-    bail!("znt log is not implemented yet")
+    create::run(args, ctx, flags).await
 }

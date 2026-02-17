@@ -10,7 +10,9 @@ pub enum CompatCommands {
         #[arg(long)]
         status: String,
         #[arg(long)]
-        notes: Option<String>,
+        conditions: Option<String>,
+        #[arg(long)]
+        finding: Option<String>,
     },
     /// List compatibility records.
     List {
