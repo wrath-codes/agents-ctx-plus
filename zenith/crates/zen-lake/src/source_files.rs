@@ -128,6 +128,16 @@ impl SourceFileStore {
         Ok(())
     }
 
+    /// Delete all source file rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if the DELETE fails.
+    pub fn clear(&self) -> Result<(), LakeError> {
+        self.conn.execute("DELETE FROM source_files", [])?;
+        Ok(())
+    }
+
     /// Access the underlying `DuckDB` connection.
     #[must_use]
     pub const fn conn(&self) -> &Connection {

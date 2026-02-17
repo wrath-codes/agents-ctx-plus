@@ -377,6 +377,68 @@ mod tests {
     }
 
     #[test]
+    fn list_and_count_indexed_packages() {
+        let lake = ZenLake::open_in_memory().expect("open lake");
+        assert_eq!(lake.count_indexed_packages().unwrap(), 0);
+
+        lake.register_package("rust", "tokio", "1.49.0", None, None, None, None, 0, 0, 0)
+            .unwrap();
+        lake.register_package("rust", "serde", "1.0.0", None, None, None, None, 0, 0, 0)
+            .unwrap();
+
+        let packages = lake.list_indexed_packages().unwrap();
+        assert_eq!(packages.len(), 2);
+        assert_eq!(lake.count_indexed_packages().unwrap(), 2);
+        assert_eq!(
+            packages[0],
+            ("rust".to_string(), "serde".to_string(), "1.0.0".to_string())
+        );
+        assert_eq!(
+            packages[1],
+            (
+                "rust".to_string(),
+                "tokio".to_string(),
+                "1.49.0".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn clear_removes_all_lake_tables() {
+        let lake = ZenLake::open_in_memory().expect("open lake");
+        lake.store_symbols(&[sample_symbol(
+            "sym-clear",
+            "to_clear",
+            synthetic_embedding(1),
+        )])
+        .unwrap();
+        lake.store_doc_chunks(&[sample_chunk("chk-clear", 0, synthetic_embedding(2))])
+            .unwrap();
+        lake.register_package("rust", "tokio", "1.49.0", None, None, None, None, 1, 1, 1)
+            .unwrap();
+
+        lake.clear().unwrap();
+
+        let symbols: i64 = lake
+            .conn()
+            .query_row("SELECT COUNT(*) FROM api_symbols", [], |row| row.get(0))
+            .unwrap();
+        let chunks: i64 = lake
+            .conn()
+            .query_row("SELECT COUNT(*) FROM doc_chunks", [], |row| row.get(0))
+            .unwrap();
+        let packages: i64 = lake
+            .conn()
+            .query_row("SELECT COUNT(*) FROM indexed_packages", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(symbols, 0);
+        assert_eq!(chunks, 0);
+        assert_eq!(packages, 0);
+    }
+
+    #[test]
     fn file_persistence() {
         let tmpdir = tempfile::tempdir().unwrap();
         let db_path = tmpdir.path().join("test_lake.duckdb");
@@ -569,6 +631,31 @@ mod tests {
         store
             .delete_package_sources("rust", "tokio", "1.49.0")
             .unwrap();
+
+        let count: i64 = store
+            .conn()
+            .query_row("SELECT count(*) FROM source_files", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn clear_source_file_store() {
+        let store = SourceFileStore::open_in_memory().expect("open");
+        store
+            .store_source_files(&[SourceFile {
+                ecosystem: "rust".to_string(),
+                package: "tokio".to_string(),
+                version: "1.49.0".to_string(),
+                file_path: "src/lib.rs".to_string(),
+                content: "fn main() {}".to_string(),
+                language: Some("rust".to_string()),
+                size_bytes: 12,
+                line_count: 1,
+            }])
+            .unwrap();
+
+        store.clear().unwrap();
 
         let count: i64 = store
             .conn()

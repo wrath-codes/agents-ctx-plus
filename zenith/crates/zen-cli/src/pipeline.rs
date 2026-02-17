@@ -67,6 +67,33 @@ impl IndexingPipeline {
         embedder: &mut EmbeddingEngine,
         skip_tests: bool,
     ) -> Result<IndexResult, LakeError> {
+        Self::index_directory_with(
+            &self.lake,
+            &self.source_store,
+            dir,
+            ecosystem,
+            package,
+            version,
+            embedder,
+            skip_tests,
+        )
+    }
+
+    /// Index a local directory using borrowed lake resources.
+    ///
+    /// This variant lets callers reuse `AppContext`-owned `ZenLake` and
+    /// `SourceFileStore` without transferring ownership.
+    #[allow(clippy::too_many_arguments)]
+    pub fn index_directory_with(
+        lake: &ZenLake,
+        source_store: &SourceFileStore,
+        dir: &Path,
+        ecosystem: &str,
+        package: &str,
+        version: &str,
+        embedder: &mut EmbeddingEngine,
+        skip_tests: bool,
+    ) -> Result<IndexResult, LakeError> {
         let mut symbols = Vec::new();
         let mut doc_chunks = Vec::new();
         let mut source_files = Vec::new();
@@ -232,12 +259,12 @@ impl IndexingPipeline {
         let source_file_count = source_files.len() as i32;
 
         // Step 5: Store in local DuckDB cache (temporary for Phase 3)
-        self.lake.store_symbols(&symbols)?;
-        self.lake.store_doc_chunks(&doc_chunk_rows)?;
-        self.source_store.store_source_files(&source_files)?;
+        lake.store_symbols(&symbols)?;
+        lake.store_doc_chunks(&doc_chunk_rows)?;
+        source_store.store_source_files(&source_files)?;
 
         // Step 6: Register package and mark source cached
-        self.lake.register_package(
+        lake.register_package(
             ecosystem,
             package,
             version,
@@ -249,7 +276,7 @@ impl IndexingPipeline {
             symbol_count,
             doc_chunk_count,
         )?;
-        self.lake.set_source_cached(ecosystem, package, version)?;
+        lake.set_source_cached(ecosystem, package, version)?;
 
         Ok(IndexResult {
             ecosystem: ecosystem.to_string(),

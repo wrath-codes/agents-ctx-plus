@@ -270,4 +270,56 @@ impl ZenLake {
         )?;
         Ok(())
     }
+
+    /// List all indexed package triplets (`ecosystem`, `package`, `version`).
+    ///
+    /// Sorted by ecosystem, package, then version.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if query execution fails.
+    pub fn list_indexed_packages(&self) -> Result<Vec<(String, String, String)>, LakeError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ecosystem, package, version FROM indexed_packages ORDER BY ecosystem, package, version",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+
+        rows.collect::<Result<Vec<_>, _>>().map_err(LakeError::from)
+    }
+
+    /// Count indexed package rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if query execution fails.
+    pub fn count_indexed_packages(&self) -> Result<usize, LakeError> {
+        let count: i64 =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM indexed_packages", [], |row| {
+                    row.get(0)
+                })?;
+        usize::try_from(count)
+            .map_err(|_| LakeError::Other("indexed package count overflow".to_string()))
+    }
+
+    /// Clear all local lake tables.
+    ///
+    /// Deletes rows from `api_symbols`, `doc_chunks`, and `indexed_packages`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if any delete fails.
+    pub fn clear(&self) -> Result<(), LakeError> {
+        self.conn.execute("DELETE FROM api_symbols", [])?;
+        self.conn.execute("DELETE FROM doc_chunks", [])?;
+        self.conn.execute("DELETE FROM indexed_packages", [])?;
+        Ok(())
+    }
 }

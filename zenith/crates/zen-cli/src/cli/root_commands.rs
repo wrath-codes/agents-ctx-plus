@@ -128,6 +128,8 @@ pub struct InstallArgs {
     #[arg(long)]
     pub version: Option<String>,
     #[arg(long)]
+    pub include_tests: bool,
+    #[arg(long)]
     pub force: bool,
 }
 
@@ -146,11 +148,17 @@ pub struct SearchArgs {
     #[arg(long)]
     pub version: Option<String>,
     #[arg(long)]
+    pub context_budget: Option<u32>,
+    #[arg(long)]
     pub max_depth: Option<u32>,
     #[arg(long)]
     pub max_chunks: Option<u32>,
     #[arg(long)]
-    pub max_bytes: Option<u32>,
+    pub max_bytes_per_chunk: Option<u32>,
+    #[arg(long)]
+    pub max_total_bytes: Option<u32>,
+    #[arg(long)]
+    pub show_ref_graph: bool,
 }
 
 /// Arguments for `znt grep`.
@@ -159,24 +167,38 @@ pub struct SearchArgs {
 pub struct GrepArgs {
     pub pattern: String,
     pub paths: Vec<String>,
-    #[arg(long)]
-    pub package: Option<String>,
+    #[arg(short = 'P', long = "package")]
+    pub packages: Vec<String>,
     #[arg(long)]
     pub ecosystem: Option<String>,
     #[arg(long)]
     pub version: Option<String>,
     #[arg(long)]
     pub all_packages: bool,
-    #[arg(short = 'i', long)]
-    pub case_insensitive: bool,
-    #[arg(short = 'w', long)]
-    pub word: bool,
     #[arg(short = 'F', long)]
-    pub literal: bool,
+    pub fixed_strings: bool,
+    #[arg(short = 'i', long)]
+    pub ignore_case: bool,
+    #[arg(short = 'S', long, default_value_t = true)]
+    pub smart_case: bool,
+    #[arg(short = 'w', long)]
+    pub word_regexp: bool,
     #[arg(short = 'C', long)]
-    pub context_lines: Option<usize>,
+    pub context: Option<u32>,
+    #[arg(long)]
+    pub include: Option<String>,
+    #[arg(long)]
+    pub exclude: Option<String>,
+    #[arg(short = 'm', long)]
+    pub max_count: Option<u32>,
+    #[arg(short = 'c', long)]
+    pub count: bool,
+    #[arg(long)]
+    pub files_with_matches: bool,
     #[arg(long)]
     pub skip_tests: bool,
+    #[arg(long)]
+    pub no_symbols: bool,
 }
 
 /// Arguments for `znt log`.

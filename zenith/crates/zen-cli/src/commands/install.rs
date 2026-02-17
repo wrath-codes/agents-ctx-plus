@@ -1,14 +1,212 @@
-use anyhow::bail;
+use std::process::Command;
+
+use anyhow::{Context, bail};
+use chrono::Utc;
+use serde::Serialize;
+use zen_core::entities::ProjectDependency;
 
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::InstallArgs;
 use crate::context::AppContext;
+use crate::output::output;
+use crate::pipeline::IndexingPipeline;
+
+#[derive(Debug, Serialize)]
+struct InstallResponse {
+    package: InstallPackage,
+    indexing: InstallIndexing,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallPackage {
+    ecosystem: String,
+    package: String,
+    version: String,
+    repo_url: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InstallIndexing {
+    files_parsed: i32,
+    symbols_extracted: i32,
+    doc_chunks_created: i32,
+    source_files_cached: i32,
+    skipped: bool,
+}
 
 /// Handle `znt install`.
 pub async fn handle(
-    _args: &InstallArgs,
-    _ctx: &mut AppContext,
-    _flags: &GlobalFlags,
+    args: &InstallArgs,
+    ctx: &mut AppContext,
+    flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
-    bail!("znt install is not implemented yet")
+    let ecosystem = if let Some(eco) = &args.ecosystem {
+        eco.clone()
+    } else {
+        ctx.service
+            .get_meta("ecosystem")
+            .await?
+            .unwrap_or_else(|| "rust".to_string())
+    };
+
+    let resolved = resolve_registry_package(ctx, &ecosystem, &args.package).await?;
+    let version = args
+        .version
+        .clone()
+        .unwrap_or_else(|| resolved.version.clone());
+
+    if ctx
+        .lake
+        .is_package_indexed(&ecosystem, &args.package, &version)?
+        && !args.force
+    {
+        return output(
+            &InstallResponse {
+                package: InstallPackage {
+                    ecosystem,
+                    package: args.package.clone(),
+                    version,
+                    repo_url: resolved
+                        .repository
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string()),
+                },
+                indexing: InstallIndexing {
+                    files_parsed: 0,
+                    symbols_extracted: 0,
+                    doc_chunks_created: 0,
+                    source_files_cached: 0,
+                    skipped: true,
+                },
+            },
+            flags.format,
+        );
+    }
+
+    let repo_url = resolved.repository.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "install: registry package '{}' has no repository URL",
+            args.package
+        )
+    })?;
+
+    if args.force {
+        let _ = ctx.lake.delete_package(&ecosystem, &args.package, &version);
+        let _ = ctx
+            .source_store
+            .delete_package_sources(&ecosystem, &args.package, &version);
+    }
+
+    let temp = tempfile::TempDir::new().context("failed to create temp directory")?;
+    let clone_path = temp.path().join("repo");
+
+    run_git_clone(&repo_url, &clone_path, args.version.is_none())?;
+    if let Some(requested_version) = &args.version {
+        run_git_checkout(&clone_path, requested_version).with_context(|| {
+            format!(
+                "failed to checkout requested revision '{}'",
+                requested_version
+            )
+        })?;
+    }
+
+    let index = IndexingPipeline::index_directory_with(
+        &ctx.lake,
+        &ctx.source_store,
+        &clone_path,
+        &ecosystem,
+        &args.package,
+        &version,
+        &mut ctx.embedder,
+        !args.include_tests,
+    )
+    .context("indexing pipeline failed")?;
+
+    let dep = ProjectDependency {
+        ecosystem: ecosystem.clone(),
+        name: args.package.clone(),
+        version: Some(version.clone()),
+        source: "registry".to_string(),
+        indexed: true,
+        indexed_at: Some(Utc::now()),
+    };
+    ctx.service.upsert_dependency(&dep).await?;
+
+    output(
+        &InstallResponse {
+            package: InstallPackage {
+                ecosystem,
+                package: args.package.clone(),
+                version,
+                repo_url,
+            },
+            indexing: InstallIndexing {
+                files_parsed: index.file_count,
+                symbols_extracted: index.symbol_count,
+                doc_chunks_created: index.doc_chunk_count,
+                source_files_cached: index.source_file_count,
+                skipped: false,
+            },
+        },
+        flags.format,
+    )
+}
+
+async fn resolve_registry_package(
+    ctx: &AppContext,
+    ecosystem: &str,
+    package: &str,
+) -> anyhow::Result<zen_registry::PackageInfo> {
+    let candidates = ctx.registry.search(package, ecosystem, 20).await?;
+    let exact = candidates
+        .into_iter()
+        .find(|pkg| pkg.name.eq_ignore_ascii_case(package));
+    exact.ok_or_else(|| {
+        anyhow::anyhow!(
+            "install: no exact registry match for package '{}' in ecosystem '{}'; use exact package name",
+            package,
+            ecosystem
+        )
+    })
+}
+
+fn run_git_clone(
+    repo_url: &str,
+    clone_path: &std::path::Path,
+    shallow: bool,
+) -> anyhow::Result<()> {
+    let mut cmd = Command::new("git");
+    cmd.arg("clone");
+    if shallow {
+        cmd.args(["--depth", "1"]);
+    }
+    let output = cmd
+        .arg(repo_url)
+        .arg(clone_path)
+        .output()
+        .context("failed to spawn git clone")?;
+    if !output.status.success() {
+        bail!(
+            "install: git clone failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+fn run_git_checkout(repo_path: &std::path::Path, revision: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(["checkout", revision])
+        .output()
+        .context("failed to spawn git checkout")?;
+    if !output.status.success() {
+        bail!(
+            "install: git checkout {} failed: {}",
+            revision,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
 }

@@ -11562,6 +11562,7 @@ dependencies = [
  "clap",
  "dirs",
  "dotenvy",
+ "duckdb",
  "pretty_assertions",
  "serde",
  "serde_json",
