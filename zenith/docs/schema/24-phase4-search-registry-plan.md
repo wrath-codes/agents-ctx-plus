@@ -1,7 +1,7 @@
 # Phase 4: Search & Registry — Implementation Plan
 
-**Version**: 2026-02-13 (rev 1)
-**Status**: Not Started
+**Version**: 2026-02-16 (rev 2)
+**Status**: In Progress — Stream D (Registry Clients) **COMPLETE**
 **Depends on**: Phase 2 (zen-db FTS5 repos — **IMPLEMENTED**, 15 repo modules), Phase 3 (zen-lake + zen-embeddings + zen-parser + walker — **COMPLETE**, 1497+ tests), Phase 0 (spikes 0.5, 0.14, 0.21, 0.22)
 **Produces**: Milestone 4 — `cargo test -p zen-search -p zen-registry` passes, vector/FTS/hybrid/grep/recursive search works end-to-end, registry clients return real results
 
@@ -34,13 +34,14 @@
 
 **Crate status summary**:
 - `zen-search` — **walk.rs production code only**: `build_walker()` with `WalkMode::LocalProject` and `Raw`, `.zenithignore`, skip_tests, include/exclude globs. 6 tests + 1 doc-test. Three spike modules behind `#[cfg(test)]`: `spike_grep.rs` (26 tests), `spike_recursive_query.rs` (17 tests), `spike_graph_algorithms.rs` (54 tests).
-- `zen-registry` — **stub only**: `lib.rs` has module doc comment, no production code. Cargo.toml has deps: zen-core, reqwest, serde, serde_json, tokio, thiserror, tracing.
+- `zen-registry` — **COMPLETE** (14 production files, 2244 LOC, 39 unit tests + 3 ignored network tests). 11 ecosystem clients, shared `http.rs` helper, `RegistryClient` orchestrator with `search_all()` and `search()` dispatch.
 
 **Dependency changes needed**:
 - `zen-search`: Promote `rustworkx-core` from `[dev-dependencies]` to `[dependencies]` (for `graph.rs` production module)
 - `zen-search`: Add `duckdb.workspace = true` to `[dependencies]` (currently dev-only; needed for `grep.rs` package mode and `vector.rs`)
 - `zen-search`: No separate `regex` dep needed — `grep::regex::RegexMatcher` handles pattern compilation for both local and package grep modes
-- `zen-registry`: Add `urlencoding.workspace = true` to `[dependencies]` (URL-safe query encoding for registry search URLs)
+- `zen-registry`: Add `urlencoding.workspace = true` to `[dependencies]` (URL-safe query encoding for registry search URLs) — **DONE**
+- `zen-registry`: Add `http = "1"` to `[dev-dependencies]` (mock response construction in `http.rs` tests) — **DONE**
 
 **Estimated deliverables**: ~19 new production files, ~3800 LOC production code, ~1100 LOC tests
 
@@ -51,7 +52,7 @@
 | PR 1 | A: Vector + FTS + Hybrid | `vector.rs`, `fts.rs`, `hybrid.rs`, `error.rs` | Phase 2 (zen-db FTS repos), Phase 3 (zen-lake) | Not started |
 | PR 2 | B: Grep Engine | `grep.rs` (package + local modes) | Phase 3 (SourceFileStore, walk.rs) | Not started |
 | PR 3 | C: Recursive + Graph | `recursive.rs`, `ref_graph.rs`, `graph.rs` | Phase 3 (zen-lake, zen-parser) | Not started |
-| PR 4 | D: Registry Clients | `crates_io.rs`, `npm.rs`, `pypi.rs`, `hex.rs`, `go.rs`, `ruby.rs`, `php.rs`, `java.rs`, `csharp.rs`, `haskell.rs`, `lua.rs`, `lib.rs` orchestrator | None (standalone HTTP clients) | Not started |
+| PR 4 | D: Registry Clients | `crates_io.rs`, `npm.rs`, `pypi.rs`, `hex.rs`, `go.rs`, `ruby.rs`, `php.rs`, `java.rs`, `csharp.rs`, `haskell.rs`, `lua.rs`, `http.rs`, `error.rs`, `lib.rs` orchestrator | None (standalone HTTP clients) | **COMPLETE** — 14 files, 2244 LOC, 39 unit + 3 ignored tests |
 | PR 5 | E: SearchEngine | `lib.rs` orchestrator, `SearchEngine`, `SearchMode` dispatch | Streams A–D | Not started |
 
 ---
@@ -82,13 +83,15 @@
 | `spike_recursive_query.rs` | 17 | `ContextStore` (file→source+spans), `ChunkSelector`, `RecursiveQueryEngine` (metadata-only root + budgeted sub-calls), `RefCategory` enum, `SymbolRefHit`/`RefEdge` types, `symbol_refs`/`ref_edges` DuckDB tables, JSON summary output |
 | `spike_graph_algorithms.rs` | 54 | `rustworkx-core` `petgraph::DiGraph`, toposort, centrality (betweenness/closeness), shortest path (Dijkstra), connected components, cycle detection, budget caps, deterministic hash, visibility filtering |
 
-### zen-registry — Stub Only
+### zen-registry — **COMPLETE** (PR4 / Stream D)
 
 | Aspect | Status | Detail |
 |--------|--------|--------|
-| **Production code** | None | `lib.rs` has module doc comment only |
-| **Cargo.toml** | Ready | `reqwest` (with json), `serde`, `serde_json`, `tokio`, `thiserror`, `tracing` declared |
-| **Design** | Complete | `05-crate-designs.md` §9 specifies `RegistryClient`, `PackageInfo`, `search_all()`, per-ecosystem modules |
+| **Production code** | **DONE** | 14 files, 2244 LOC total. 11 ecosystem clients + shared `http.rs` helper + `error.rs` + `lib.rs` orchestrator. |
+| **Cargo.toml** | **DONE** | Production deps: zen-core, reqwest, serde, serde_json, tokio, thiserror, tracing, urlencoding. Dev-deps: http (v1), pretty_assertions. |
+| **Tests** | **DONE** | 39 passing unit tests (fixture-based parsing + error handling + dispatch). 3 ignored network integration tests (manually verified passing). |
+| **Review** | **DONE** | Oracle code review + CodeRabbit CLI review (zero findings). JoinSet drain bug fixed, `http.rs` centralization applied. |
+| **Design** | **DONE** | Matches `05-crate-designs.md` §9 with documented deviations (see §14 Mismatch Log). |
 
 ### Upstream Dependencies — Ready
 
@@ -176,6 +179,30 @@ All decisions are backed by validated spike results.
 
 **Rationale**: Per `05-crate-designs.md` §9 test spec — tests must parse real API response format. Live HTTP in CI is flaky (rate limits, network issues). Recorded fixtures give deterministic, fast tests.
 
+**Implementation note** (rev 2): Fixtures are inline `const &str` literals in each module's `#[cfg(test)]` block, not separate files. See mismatch 14.7.
+
+### 3.12 Shared HTTP Response Helper — `check_response()`
+
+**Decision**: Centralize HTTP response status checking (429 rate limiting with `Retry-After` parsing, non-success → `RegistryError::Api`) in a shared `http.rs` module rather than duplicating in each registry client.
+
+**Rationale**: Oracle code review identified ~135 lines of duplicated 429/error boilerplate across 11 registry modules. `check_response()` provides a single point of maintenance. `Retry-After` header parsing (with 60s fallback) was inconsistent across modules before centralization.
+
+**Validated in**: Post-implementation review. 7 unit tests cover `parse_retry_after` (present, missing, non-numeric) and `check_response` (rate-limited with/without header, API error, success). CodeRabbit CLI review passed clean.
+
+### 3.13 JoinSet Drain: Always Join All Tasks
+
+**Decision**: JoinSet drain loops must use `while let Some(res) = set.join_next().await` with explicit `match` on `Ok`/`Err`, logging `JoinError` via `tracing::warn!`. Never use `while let Some(Ok(...))` which silently aborts on the first error.
+
+**Rationale**: Oracle review identified a medium-severity concurrency bug — `while let Some(Ok(...))` breaks the loop early if any task panics or is cancelled, abandoning remaining results. This affected `npm.rs` (download batch), `lua.rs` (config ref counts), and `php.rs` (version/license fetch).
+
+**Validated in**: Fixed in all three modules. Pattern now consistent across the crate.
+
+### 3.14 Lua/Neovim: GitHub API over LuaRocks
+
+**Decision**: `lua.rs` searches GitHub API instead of LuaRocks for Neovim plugin discovery. Uses dual strategy: convention-based (`{query}.nvim in:name`) and broad (`{query} neovim plugin language:lua`). Stargazers count serves as download proxy, boosted by config reference counts from GitHub code search.
+
+**Rationale**: Most Neovim plugins live on GitHub and follow the `.nvim` naming convention. LuaRocks has limited adoption for Neovim plugins. GitHub API provides richer metadata (stars, license, description) and better search relevance than LuaRocks HTML scraping.
+
 ### 3.11 SearchEngine Holds References, Not Owned Values
 
 **Decision**: `SearchEngine` borrows `&ZenDb`, `&ZenLake`, `&SourceFileStore`, and `&mut EmbeddingEngine` — it does not own them. Lifetime-parameterized struct.
@@ -242,18 +269,20 @@ zen-search/src/
 └── walk.rs             # EXISTING: File walker factory (Phase 3, unchanged)
 
 zen-registry/src/
-├── lib.rs              # NEW: RegistryClient, search_all(), PackageInfo, RegistryError
-├── crates_io.rs        # NEW: crates.io API client
-├── npm.rs              # NEW: npm registry + api.npmjs.org downloads
-├── pypi.rs             # NEW: PyPI JSON API client
-├── hex.rs              # NEW: hex.pm API client
-├── go.rs               # NEW: proxy.golang.org module proxy client
-├── ruby.rs             # NEW: rubygems.org API client
-├── php.rs              # NEW: packagist.org API client
-├── java.rs             # NEW: search.maven.org (Maven Central) API client
-├── csharp.rs           # NEW: nuget.org (NuGet v3) API client
-├── haskell.rs          # NEW: hackage.haskell.org API client
-└── lua.rs              # NEW: luarocks.org API client (Neovim ecosystem)
+├── lib.rs              # DONE: RegistryClient, PackageInfo, search_all(), search() dispatch (294 LOC)
+├── error.rs            # DONE: RegistryError — Http, Api, Parse, UnsupportedEcosystem, RateLimited (35 LOC)
+├── http.rs             # DONE: Shared check_response() — 429 Retry-After parsing, error mapping (114 LOC)
+├── crates_io.rs        # DONE: crates.io API client (124 LOC)
+├── npm.rs              # DONE: npm registry + api.npmjs.org download batch fetch via JoinSet (187 LOC)
+├── pypi.rs             # DONE: PyPI JSON API single-package lookup (125 LOC)
+├── hex.rs              # DONE: hex.pm API client (142 LOC)
+├── go.rs               # DONE: proxy.golang.org module proxy + pkg.go.dev HTML search (118 LOC)
+├── ruby.rs             # DONE: rubygems.org API client (108 LOC)
+├── php.rs              # DONE: packagist.org search + p2 version/license fetch via JoinSet (194 LOC)
+├── java.rs             # DONE: search.maven.org (Maven Central) API client (150 LOC)
+├── csharp.rs           # DONE: nuget.org (NuGet v3) + SPDX license extraction + GitHub URL splitting (214 LOC)
+├── haskell.rs          # DONE: hackage.haskell.org two-step lookup (preferred.json + metadata) (192 LOC)
+└── lua.rs              # DONE: GitHub dual-search (*.nvim convention + broad) + config ref boost (247 LOC)
 ```
 
 ### Cargo.toml Changes
@@ -1652,23 +1681,24 @@ Stream C: Recursive + Graph (tasks 4.13–4.15)
   [ ] C3. Create src/graph.rs — DecisionGraph with rustworkx-core
   [ ] C4. Tests: recursive (8), ref_graph (5), graph (8)
 
-Stream D: Registry Clients (tasks 4.5–4.9, 4.16–4.22)
-  [ ] D0. Add urlencoding to workspace + zen-registry Cargo.toml
-  [ ] D1. Create zen-registry/src/error.rs — RegistryError
-  [ ] D2. Create zen-registry/src/crates_io.rs
-  [ ] D3. Create zen-registry/src/npm.rs
-  [ ] D4. Create zen-registry/src/pypi.rs
-  [ ] D5. Create zen-registry/src/hex.rs
-  [ ] D6. Create zen-registry/src/go.rs
-  [ ] D7. Create zen-registry/src/ruby.rs
-  [ ] D8. Create zen-registry/src/php.rs
-  [ ] D9. Create zen-registry/src/java.rs
-  [ ] D10. Create zen-registry/src/csharp.rs
-  [ ] D11. Create zen-registry/src/haskell.rs
-  [ ] D12. Create zen-registry/src/lua.rs
-  [ ] D13. Update zen-registry/src/lib.rs — RegistryClient + search_all (11 ecosystems)
-  [ ] D14. Create test fixtures (recorded JSON responses — 11 registries)
-  [ ] D15. Tests: fixture (11), errors (4), search_all (4), dispatch (12)
+Stream D: Registry Clients (tasks 4.5–4.9, 4.16–4.22) — **COMPLETE** ✅
+  [x] D0. Add urlencoding to workspace + zen-registry Cargo.toml
+  [x] D1. Create zen-registry/src/error.rs — RegistryError (Http, Api, Parse, UnsupportedEcosystem, RateLimited)
+  [x] D1b. Create zen-registry/src/http.rs — shared check_response() helper (NOT IN ORIGINAL PLAN — added during review)
+  [x] D2. Create zen-registry/src/crates_io.rs
+  [x] D3. Create zen-registry/src/npm.rs (+ JoinSet download batch fetch with Semaphore(10))
+  [x] D4. Create zen-registry/src/pypi.rs
+  [x] D5. Create zen-registry/src/hex.rs
+  [x] D6. Create zen-registry/src/go.rs (+ encode_go_module_path, lookup_go_module, pkg.go.dev HTML search)
+  [x] D7. Create zen-registry/src/ruby.rs
+  [x] D8. Create zen-registry/src/php.rs (+ JoinSet p2 version/license fetch with Semaphore(5))
+  [x] D9. Create zen-registry/src/java.rs
+  [x] D10. Create zen-registry/src/csharp.rs (+ extract_license SPDX, split_project_url GitHub detection)
+  [x] D11. Create zen-registry/src/haskell.rs (two-step: preferred.json → metadata)
+  [x] D12. Create zen-registry/src/lua.rs (GitHub dual-search + config ref boost via code search)
+  [x] D13. Update zen-registry/src/lib.rs — RegistryClient + search_all (11 ecosystems) + search() dispatch
+  [x] D14. Inline JSON fixtures in test modules (not separate files — deviation from plan)
+  [x] D15. Tests: 39 unit (fixture parsing + error handling + dispatch + http helper) + 3 ignored network
 
 Stream E: SearchEngine Orchestrator (task 4.4)
   [ ] E1. Update src/lib.rs — SearchEngine, SearchMode, SearchResult
@@ -1862,56 +1892,69 @@ cargo clippy -p zen-search -p zen-registry -- -D warnings
 - [ ] JSON summary includes pair samples, external samples, signatures
 - [ ] External DataFusion Arrow references discoverable and tagged as `RefCategory::External`
 
-**Registry — crates.io** (task 4.5):
-- [ ] `search_crates_io()` parses real API response (fixture)
-- [ ] Returns correct `PackageInfo` fields
-- [ ] Handles 429 rate limit
+**Registry — crates.io** (task 4.5): ✅
+- [x] `search_crates_io()` parses real API response (fixture)
+- [x] Returns correct `PackageInfo` fields
+- [x] Handles 429 rate limit (via shared `check_response()`)
 
-**Registry — npm** (task 4.6):
-- [ ] `search_npm()` parses real API response (fixture)
-- [ ] Download count enrichment from api.npmjs.org
+**Registry — npm** (task 4.6): ✅
+- [x] `search_npm()` parses real API response (fixture)
+- [x] Download count enrichment from api.npmjs.org (JoinSet batch with Semaphore(10))
 
-**Registry — PyPI** (task 4.7):
-- [ ] `search_pypi()` handles single-package JSON lookup
-- [ ] Returns correct fields
+**Registry — PyPI** (task 4.7): ✅
+- [x] `search_pypi()` handles single-package JSON lookup
+- [x] Returns correct fields (404 → empty Vec, not error)
 
-**Registry — hex.pm** (task 4.8):
-- [ ] `search_hex()` parses real API response (fixture)
-- [ ] Downloads from `downloads.all` field
+**Registry — hex.pm** (task 4.8): ✅
+- [x] `search_hex()` parses real API response (fixture)
+- [x] Downloads from `downloads.all` field
 
-**Registry — Go/proxy.golang.org** (task 4.16):
-- [ ] `search_go()` parses real API response (fixture)
-- [ ] Module path URL-encoding handled correctly
+**Registry — Go/proxy.golang.org** (task 4.16): ✅
+- [x] `search_go()` parses pkg.go.dev HTML search results
+- [x] Module path URL-encoding handled correctly (`encode_go_module_path()`)
+- [x] `lookup_go_module()` resolves single module via proxy.golang.org
 
-**Registry — Ruby/rubygems.org** (task 4.17):
-- [ ] `search_rubygems()` parses real API response (fixture)
-- [ ] Downloads field mapped correctly
+**Registry — Ruby/rubygems.org** (task 4.17): ✅
+- [x] `search_rubygems()` parses real API response (fixture)
+- [x] Downloads field mapped correctly
 
-**Registry — PHP/packagist.org** (task 4.18):
-- [ ] `search_packagist()` parses real API response (fixture)
-- [ ] Version resolved from follow-up package call
+**Registry — PHP/packagist.org** (task 4.18): ✅
+- [x] `search_packagist()` parses real API response (fixture)
+- [x] Version resolved from follow-up p2 package call (JoinSet with Semaphore(5))
 
-**Registry — Java/Maven Central** (task 4.19):
-- [ ] `search_maven()` parses real API response (fixture)
-- [ ] groupId:artifactId mapped to name field
+**Registry — Java/Maven Central** (task 4.19): ✅
+- [x] `search_maven()` parses real API response (fixture)
+- [x] groupId:artifactId mapped to name field
 
-**Registry — C#/NuGet** (task 4.20):
-- [ ] `search_nuget()` parses real NuGet v3 response (fixture)
-- [ ] totalDownloads mapped correctly
+**Registry — C#/NuGet** (task 4.20): ✅
+- [x] `search_nuget()` parses real NuGet v3 response (fixture)
+- [x] totalDownloads mapped correctly
+- [x] SPDX license extraction from licenseUrl (`extract_license()`)
+- [x] GitHub/GitLab URL detection for repository field (`split_project_url()`)
 
-**Registry — Haskell/Hackage** (task 4.21):
-- [ ] `search_hackage()` parses real package JSON (fixture)
-- [ ] Returns correct fields
+**Registry — Haskell/Hackage** (task 4.21): ✅
+- [x] `search_hackage()` uses two-step lookup (preferred.json → metadata)
+- [x] Returns correct fields
+- [x] GitHub/GitLab homepage → repository field promotion
 
-**Registry — Lua/LuaRocks** (task 4.22):
-- [ ] `search_luarocks()` parses real response (fixture)
-- [ ] Ecosystem tagged as "lua" (Neovim scope)
+**Registry — Lua/LuaRocks** (task 4.22): ✅
+- [x] `search_luarocks()` uses GitHub dual-search (convention + broad)
+- [x] Ecosystem tagged as "lua" (Neovim scope)
+- [x] Config reference boost via GitHub code search (Semaphore(2))
 
-**Registry — search_all** (task 4.9):
-- [ ] `search_all()` merges results from all 11 registries concurrently
-- [ ] Sorted by downloads (descending)
-- [ ] One registry failure doesn't fail the whole search
-- [ ] Registries with no download counts (Go, Java, Haskell, Lua) sort last
+**Registry — search_all** (task 4.9): ✅
+- [x] `search_all()` merges results from all 11 registries concurrently (`tokio::join!`)
+- [x] Sorted by downloads (descending)
+- [x] One registry failure doesn't fail the whole search (`unwrap_or_log` pattern)
+- [x] Registries with no download counts (Go, Java, Haskell, Lua) sort last
+
+**Registry — shared infrastructure** (not in original plan): ✅
+- [x] `http.rs` — `check_response()` centralizes 429 rate-limit handling + `Retry-After` parsing
+- [x] JoinSet drain loops handle `JoinError` (log + continue, don't abort)
+- [x] `error.rs` — `RegistryError` with `RateLimited { retry_after_secs }` variant
+- [x] `PackageInfo` derives `PartialEq, Eq` for test assertions
+- [x] `RegistryClient` implements `Default` trait
+- [x] `search()` dispatch supports all ecosystem aliases (26 aliases → 11 registries)
 
 **Overall**:
 - [ ] `cargo test -p zen-search -p zen-registry` all pass
@@ -1980,9 +2023,111 @@ Phase 4 completion unblocks:
 
 ## 14. Mismatch Log — Plan vs. Implementation
 
-_No entries yet — this section will be updated as implementation proceeds._
+### 14.1 Shared `http.rs` Helper Module — Not in Original Plan
 
-### Template for Entries
+**Original plan**: Each registry module handles 429 rate limiting and non-success status codes inline, with duplicated `if resp.status() == 429 { ... }` blocks in every `search_*()` method.
+
+**Actual implementation**: Created `src/http.rs` with `check_response()` that centralizes: (a) 429 rate-limit detection with `Retry-After` header parsing (falls back to 60s), (b) non-success status → `RegistryError::Api` with body. All 11 registry modules call `check_response(self.http.get(&url).send().await?).await?` instead of inline checks. Removed ~135 lines of duplicated boilerplate.
+
+**Impact**: Positive — single point of maintenance for HTTP error handling. No behavioral change. Added 7 unit tests for the helper (parse_retry_after, check_response variants). Required `http = "1"` dev-dependency for mock `reqwest::Response` construction in tests.
+
+### 14.2 JoinSet Drain Bug — Silent Abort on JoinError
+
+**Original plan**: Plan did not specify JoinSet drain behavior in detail.
+
+**Actual implementation**: Initial implementation used `while let Some(Ok((idx, val))) = set.join_next().await` which silently breaks the loop on the first `JoinError` (task panic or cancellation), abandoning remaining tasks. Fixed to `while let Some(res) = set.join_next().await { match res { Ok(...) => ..., Err(e) => tracing::warn!(...) } }` in `npm.rs`, `lua.rs`, and `php.rs`.
+
+**Impact**: Bug fix — prevents data loss when concurrent download/version fetches fail. All remaining tasks are now always joined.
+
+### 14.3 `search_all()` Uses `unwrap_or_log` Instead of `unwrap_or_default`
+
+**Original plan**: `results.extend(crates.unwrap_or_default())` — silent error swallowing.
+
+**Actual implementation**: `unwrap_or_log` closure logs registry name and error via `tracing::warn!` before returning empty vec. Provides observability for production debugging.
+
+**Impact**: Better diagnostics. Registry failures are now visible in logs.
+
+### 14.4 `search()` Dispatch — Additional Ecosystem Alias `"cargo"`
+
+**Original plan**: `"rust"` maps to `search_crates_io()`.
+
+**Actual implementation**: Both `"rust"` and `"cargo"` map to `search_crates_io()`. Total: 26 aliases → 11 registries.
+
+**Impact**: Minor usability improvement. No breaking change.
+
+### 14.5 `PackageInfo` Derives `PartialEq, Eq`
+
+**Original plan**: `PackageInfo` derives `Debug, Clone, Serialize, Deserialize`.
+
+**Actual implementation**: Also derives `PartialEq, Eq` for test assertions.
+
+**Impact**: None for production. Enables `assert_eq!` in tests.
+
+### 14.6 `RegistryClient` Implements `Default`
+
+**Original plan**: Only `new()` constructor.
+
+**Actual implementation**: `impl Default for RegistryClient` delegates to `new()`. Required by clippy pedantic lint `new_without_default`.
+
+**Impact**: API completeness. Follows Rust API guidelines.
+
+### 14.7 Test Fixtures Are Inline, Not Separate Files
+
+**Original plan**: "recorded JSON responses — 11 registries" suggesting separate fixture files.
+
+**Actual implementation**: JSON fixtures are `const &str` literals inside each module's `#[cfg(test)] mod tests` block (e.g., `CRATES_IO_FIXTURE`, `GITHUB_FIXTURE`). This keeps tests self-contained and avoids file I/O.
+
+**Impact**: Simpler test setup. No file paths to manage. Tests are fully self-contained.
+
+### 14.8 Lua/Neovim Uses GitHub API Instead of LuaRocks
+
+**Original plan**: `lua.rs` searches LuaRocks API at `https://luarocks.org/search?q=` with HTML parsing.
+
+**Actual implementation**: `lua.rs` searches GitHub API with dual strategy: (a) `{query}.nvim in:name` convention-based, (b) `{query} neovim plugin language:lua` broad search. Results merged, deduplicated. Config reference boost via GitHub code search on `init.lua`, `lazy.lua`, `plugins.lua`. Uses stargazers_count as download proxy.
+
+**Impact**: Better results for Neovim ecosystem (most plugins are on GitHub, not LuaRocks). Function still named `search_luarocks()` for API compatibility. Ecosystem field is `"lua"`.
+
+### 14.9 Haskell Uses Two-Step Lookup Instead of Single JSON Endpoint
+
+**Original plan**: "package info at `https://hackage.haskell.org/package/{name}.json`".
+
+**Actual implementation**: Two-step lookup: (1) `GET /package/{name}/preferred.json` → latest stable version from `normal-version` array, (2) `GET /package/{name}-{version}` with `Accept: application/json` → metadata (synopsis, description, license, homepage). GitHub/GitLab homepage URLs are promoted to `repository` field.
+
+**Impact**: More accurate version resolution (uses preferred/stable version, not just latest). Richer metadata from step 2.
+
+### 14.10 NuGet Has SPDX License Extraction and GitHub URL Detection
+
+**Original plan**: `csharp.rs` maps `licenseUrl` directly to `license` field and `projectUrl` to `homepage`.
+
+**Actual implementation**: `extract_license()` parses SPDX identifiers from `licenses.nuget.org/{spdx-id}` URLs (e.g., `https://licenses.nuget.org/MIT` → `"MIT"`). `split_project_url()` detects GitHub/GitLab URLs to populate `repository` field separately from `homepage`.
+
+**Impact**: Cleaner license data (SPDX ID instead of URL). Better repository/homepage separation.
+
+### 14.11 PHP Packagist Uses JoinSet for Version/License Resolution
+
+**Original plan**: "Version requires follow-up call to `https://repo.packagist.org/p2/{vendor}/{package}.json`".
+
+**Actual implementation**: Follow-up calls are batched via `tokio::task::JoinSet` with `Semaphore(5)` concurrency limit. Each task fetches the p2 endpoint to resolve latest version and license. Results are joined back and merged into the search results.
+
+**Impact**: Concurrent version resolution — faster for multi-result searches.
+
+### 14.12 Go Module `search_go` Parses HTML from pkg.go.dev
+
+**Original plan**: Mentioned HTML parsing as an option.
+
+**Actual implementation**: `search_go()` fetches `https://pkg.go.dev/search?q={query}&limit={limit}` and parses `<a href="/{module-path}">` links from the HTML response. `lookup_go_module()` is a separate method for single-module resolution via proxy.golang.org. `encode_go_module_path()` implements the module proxy protocol (uppercase → `!lowercase`).
+
+**Impact**: Search returns multiple results (not just single-module lookup). Download counts remain 0 (no API available).
+
+### 14.13 `lua.rs` Silent Error Swallowing in `search_github_repos` — Post-Review Fix
+
+**Original plan**: Not specified.
+
+**Actual implementation**: Initial implementation silently returned empty `Vec` on HTTP errors in `search_github_repos()` with no logging. Post-review fix added `tracing::warn!` to all three failure paths (request failure, non-success status with status code, JSON parse failure).
+
+**Impact**: GitHub rate limits and errors are now observable in logs.
+
+### Template for Future Entries
 
 ```
 ### 14.X <Title>
