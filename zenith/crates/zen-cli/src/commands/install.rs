@@ -121,7 +121,14 @@ pub async fn handle(
 
     run_git_clone(&repo_url, &clone_path, false)?;
     let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
-    run_git_checkout_for_version(&clone_path, &checkout_ref)?;
+    let checked_out = try_git_checkout_for_version(&clone_path, &checkout_ref)?;
+    if !checked_out {
+        tracing::warn!(
+            package = %args.package,
+            version = %checkout_ref,
+            "install: unable to checkout resolved version ref; proceeding with repository default branch"
+        );
+    }
 
     let index = IndexingPipeline::index_directory_with(
         &ctx.lake,
@@ -186,18 +193,20 @@ async fn resolve_registry_package(
     })
 }
 
-fn run_git_checkout_for_version(repo_path: &std::path::Path, version: &str) -> anyhow::Result<()> {
+fn try_git_checkout_for_version(
+    repo_path: &std::path::Path,
+    version: &str,
+) -> anyhow::Result<bool> {
     if run_git_checkout(repo_path, version).is_ok() {
-        return Ok(());
+        return Ok(true);
     }
 
     let prefixed = format!("v{version}");
-    run_git_checkout(repo_path, &prefixed).with_context(|| {
-        format!(
-            "failed to checkout version '{}' (also tried '{}')",
-            version, prefixed
-        )
-    })
+    if run_git_checkout(repo_path, &prefixed).is_ok() {
+        return Ok(true);
+    }
+
+    Ok(false)
 }
 
 fn run_git_clone(

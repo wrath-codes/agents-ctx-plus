@@ -17,6 +17,8 @@ use crate::context::AppContext;
 use crate::output::output;
 use crate::pipeline::IndexingPipeline;
 
+const REGISTRY_SEARCH_LIMIT: usize = 100;
+
 #[derive(Debug, Serialize)]
 struct OnboardResponse {
     project: OnboardProject,
@@ -341,7 +343,10 @@ async fn index_dependency(
     dep: &ProjectDependency,
     ctx: &mut AppContext,
 ) -> anyhow::Result<IndexStatus> {
-    let candidates = ctx.registry.search(&dep.name, &dep.ecosystem, 20).await?;
+    let candidates = ctx
+        .registry
+        .search(&dep.name, &dep.ecosystem, REGISTRY_SEARCH_LIMIT)
+        .await?;
     let exact = candidates
         .into_iter()
         .find(|pkg| pkg.name.eq_ignore_ascii_case(&dep.name))
