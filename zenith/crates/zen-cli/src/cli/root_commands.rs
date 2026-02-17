@@ -117,6 +117,8 @@ pub struct OnboardArgs {
     pub skip_indexing: bool,
     #[arg(long)]
     pub ecosystem: Option<String>,
+    #[arg(long)]
+    pub install_hooks: bool,
 }
 
 /// Arguments for `znt install`.
@@ -256,6 +258,8 @@ pub struct WrapUpArgs {
 /// Arguments for `znt rebuild`.
 #[derive(Clone, Debug, Args)]
 pub struct RebuildArgs {
+    #[arg(long)]
+    pub trail_dir: Option<String>,
     #[arg(long)]
     pub strict: bool,
     #[arg(long)]

@@ -1,3 +1,4 @@
+#![allow(warnings)]
 //! # Spike 0.13: Git Hooks & Session-Git Integration
 //!
 //! Validates git hooks integration for Zenith using the `gix` pure-Rust git library.

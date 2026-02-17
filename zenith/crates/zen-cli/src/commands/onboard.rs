@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::fs;
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -23,6 +24,7 @@ const REGISTRY_SEARCH_LIMIT: usize = 100;
 struct OnboardResponse {
     project: OnboardProject,
     dependencies: OnboardDeps,
+    hooks: OnboardHooks,
 }
 
 #[derive(Debug, Serialize)]
@@ -39,6 +41,14 @@ struct OnboardDeps {
     newly_indexed: usize,
     failed: usize,
     failed_packages: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct OnboardHooks {
+    installed: bool,
+    prompted: bool,
+    note: String,
+    next_step: Option<String>,
 }
 
 /// Handle `znt onboard`.
@@ -91,6 +101,64 @@ pub async fn handle(
         }
     }
 
+    let hooks = if args.install_hooks {
+        let report = zen_hooks::install_hooks(&root, zen_hooks::HookInstallStrategy::Chain)?;
+        OnboardHooks {
+            installed: report.installed,
+            prompted: false,
+            note: "hooks installed via --install-hooks".to_string(),
+            next_step: if report.installed {
+                None
+            } else {
+                Some("run: znt hook status".to_string())
+            },
+        }
+    } else {
+        match zen_hooks::status_hooks(&root) {
+            Ok(status) if status.installation.health == "ok" => OnboardHooks {
+                installed: true,
+                prompted: false,
+                note: "hooks already installed".to_string(),
+                next_step: None,
+            },
+            Ok(_status) => {
+                let mut installed = false;
+                let mut prompted = false;
+                if io::stdin().is_terminal() && io::stdout().is_terminal() {
+                    prompted = true;
+                    if prompt_yes_no("Zenith hooks are not fully installed. Install now? [y/N] ") {
+                        let report =
+                            zen_hooks::install_hooks(&root, zen_hooks::HookInstallStrategy::Chain)?;
+                        installed = report.installed;
+                    }
+                }
+
+                OnboardHooks {
+                    installed,
+                    prompted,
+                    note: if installed {
+                        "hooks installed during onboarding".to_string()
+                    } else {
+                        "hooks not installed".to_string()
+                    },
+                    next_step: if installed {
+                        None
+                    } else {
+                        Some("run: znt hook install --strategy chain".to_string())
+                    },
+                }
+            }
+            Err(_) => OnboardHooks {
+                installed: false,
+                prompted: false,
+                note: "no git repository detected for hook installation".to_string(),
+                next_step: Some(
+                    "initialize git, then run: znt hook install --strategy chain".to_string(),
+                ),
+            },
+        }
+    };
+
     output(
         &OnboardResponse {
             project: OnboardProject {
@@ -105,9 +173,20 @@ pub async fn handle(
                 failed,
                 failed_packages,
             },
+            hooks,
         },
         flags.format,
     )
+}
+
+fn prompt_yes_no(prompt: &str) -> bool {
+    print!("{prompt}");
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_err() {
+        return false;
+    }
+    matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes")
 }
 
 fn detect_manifests(root: &Path) -> Vec<String> {

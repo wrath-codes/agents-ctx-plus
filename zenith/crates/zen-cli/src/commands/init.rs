@@ -42,6 +42,7 @@ struct InitSession {
 struct InitHooks {
     installed: bool,
     note: String,
+    warnings: Vec<String>,
 }
 
 /// Handle `znt init`.
@@ -87,6 +88,34 @@ pub async fn handle(args: &InitArgs, flags: &GlobalFlags) -> anyhow::Result<()> 
 
     let (session, _) = service.start_session().await?;
 
+    let hooks = if args.skip_hooks {
+        InitHooks {
+            installed: false,
+            note: "hook installation skipped".to_string(),
+            warnings: Vec::new(),
+        }
+    } else {
+        match zen_hooks::install_hooks(&project_root, zen_hooks::HookInstallStrategy::Chain) {
+            Ok(report) => InitHooks {
+                installed: report.installed,
+                note: if report.installed {
+                    "hooks installed".to_string()
+                } else {
+                    "hooks partially installed".to_string()
+                },
+                warnings: report.warnings,
+            },
+            Err(error) => InitHooks {
+                installed: false,
+                note: format!("hook installation skipped: {error}"),
+                warnings: vec![
+                    "run `znt hook install --strategy chain` after resolving git hook conflicts"
+                        .to_string(),
+                ],
+            },
+        }
+    };
+
     output(
         &InitResponse {
             project: InitProject {
@@ -103,14 +132,7 @@ pub async fn handle(args: &InitArgs, flags: &GlobalFlags) -> anyhow::Result<()> 
                 id: session.id,
                 status: "active".to_string(),
             },
-            hooks: InitHooks {
-                installed: false,
-                note: if args.skip_hooks {
-                    "hook installation skipped".to_string()
-                } else {
-                    "hook installation is deferred to PR5 Stream E".to_string()
-                },
-            },
+            hooks,
         },
         flags.format,
     )

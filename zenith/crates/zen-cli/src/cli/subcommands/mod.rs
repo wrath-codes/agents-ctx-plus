@@ -13,7 +13,7 @@ pub mod task;
 pub use cache::CacheCommands;
 pub use compat::CompatCommands;
 pub use finding::FindingCommands;
-pub use hook::HookCommands;
+pub use hook::{HookCommands, HookInstallStrategyArg};
 pub use hypothesis::HypothesisCommands;
 pub use insight::InsightCommands;
 pub use issue::IssueCommands;
