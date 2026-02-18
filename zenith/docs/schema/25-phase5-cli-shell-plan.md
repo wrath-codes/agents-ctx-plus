@@ -1,7 +1,7 @@
 # Phase 5: CLI Shell — Implementation Plan
 
 **Version**: 2026-02-17
-**Status**: Ready to Execute
+**Status**: Implemented (PR1-PR6 complete)
 **Depends on**: Phase 2 (zen-db — 15 repo modules, JSONL trail writer/replayer, `ZenService` — **DONE**), Phase 3 (zen-parser, zen-embeddings, zen-lake, indexing pipeline — **DONE**), Phase 4 (zen-search, zen-registry — **DONE**)
 **Produces**: Milestone 5 — **The MVP.** `znt` binary is functional: initialize projects, track knowledge, search documentation, query registries, manage sessions, view audit trail, rebuild from JSONL.
 
@@ -12,7 +12,7 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Current State](#2-current-state-as-of-2026-02-17)
+2. [Implementation Outcome](#2-implementation-outcome-as-of-2026-02-17)
 3. [Key Decisions](#3-key-decisions)
 4. [Architecture](#4-architecture)
 5. [PR 1 — Stream A: Core Infrastructure](#5-pr-1--stream-a-core-infrastructure)
@@ -60,28 +60,47 @@
 
 ---
 
-## 2. Current State (as of 2026-02-17)
+## 2. Implementation Outcome (as of 2026-02-17)
 
-### zen-cli — Stub Only
-
-| Aspect | Status | Detail |
-|--------|--------|--------|
-| **`main.rs`** | Stub | `fn main() { println!("zen: not yet implemented") }` + spike module declarations |
-| **`pipeline.rs`** | **DONE** (Phase 3) | Full indexing pipeline: walk → parse → embed → store. 487 LOC. `IndexingPipeline::index_directory()` works end-to-end. |
-| **`cli.rs`** | Not started | No clap structs |
-| **`commands/`** | Not started | No command handlers |
-| **`output.rs`** | Not started | No formatting |
-| **Cargo.toml** | Partial | Binary name is `zen` (needs rename to `znt`). Missing `zen-hooks`, `zen-schema`, `dirs`, `tempfile` (production) deps. Has `agentfs-sdk` (for Phase 7). |
-| **Spikes** | 2 modules | `spike_agentfs.rs` (spike 0.7), `spike_clap.rs` (spike 0.9) |
-
-### zen-hooks — Stub Only
+### zen-cli — Implemented
 
 | Aspect | Status | Detail |
 |--------|--------|--------|
-| **`lib.rs`** | Stub | Only `#[cfg(test)] mod spike_git_hooks;` |
-| **Production code** | None | No production modules |
-| **Spike** | Validated | `spike_git_hooks.rs` — 22/22 tests pass (spike 0.13). Hook impl, installation, gix ops, session tags all validated. |
-| **Cargo.toml** | Ready | `gix`, `serde`, `serde_json`, `jsonschema`, `thiserror`, `anyhow`, `tracing` |
+| **`main.rs`** | **DONE** | Bootstrap implemented: config load, tracing, project root detection, context init, dispatch. |
+| **`pipeline.rs`** | **DONE** | Full indexing pipeline (Phase 3) wired into CLI install/onboard paths. |
+| **`cli/`** | **DONE** | Clap command tree + global flags + command arg structs implemented. |
+| **`commands/`** | **DONE** | Full command surface implemented (`init/session/research/finding/hypothesis/insight/issue/task/log/compat/study/link/unlink/audit/whats-next/search/grep/cache/install/onboard/wrap-up/rebuild/schema/hook`). |
+| **`output.rs`** | **DONE** | JSON/table/raw output implemented and covered by tests. |
+| **Cargo.toml** | **DONE** | Binary name finalized as `znt`; required runtime deps added. |
+| **Spikes** | Consumed | Spike patterns promoted into production command + hook implementation. |
+
+### zen-hooks — Implemented
+
+| Aspect | Status | Detail |
+|--------|--------|--------|
+| **`lib.rs`** | **DONE** | Production exports for installer, scripts, validator, checkout/merge handlers. |
+| **Production code** | **DONE** | Hook script generation, install flow, schema validation, git-change detection, rebuild integration. |
+| **Hook lifecycle** | **DONE** | `pre-commit`, `post-checkout`, `post-merge`, plus `znt hook` command routing. |
+| **Cargo.toml** | **DONE** | Runtime deps aligned with production module usage. |
+
+### Stream Completion Summary
+
+| PR | Stream | Status | Delivered |
+|----|--------|--------|-----------|
+| PR 1 | A: Core Infrastructure | **DONE** | CLI root, dispatch, output, app context, startup path |
+| PR 2 | B: Knowledge Commands | **DONE** | Session + knowledge entity command handlers |
+| PR 3 | C: Work & Cross-Cutting | **DONE** | Issue/task/log/compat/link/audit command handlers |
+| PR 4 | D: Search, Registry & Indexing | **DONE** | Search/grep/cache/install/onboard/init wiring |
+| PR 5 | E: Git Hooks & Rebuild | **DONE** | `zen-hooks` prod modules + `znt rebuild` + hook integration |
+| PR 6 | F: Workflow & Polish | **DONE** | `whats-next`, `wrap-up`, `schema`, config warnings, polish/tests |
+
+### Post-Phase-5 Hardening (Continuity)
+
+After Phase 5 shipped, follow-on hardening landed in subsequent streams:
+
+- **PR7 (AgentFS integration hardening)**: workspace model in `zen-core`, AgentFS adapter wiring in CLI, session-start workspace creation, `audit --files` dual-channel behavior (`entity_audit` + `file_audit`), optional merged timeline, and partial-success semantics.
+- **PR8 (Cloud/catalog hardening)**: synced DB open/sync wiring with local fallback, strict wrap-up sync mode (`--require-sync` and config default), Turso catalog migration/repo (`dl_*` tables), cloud-aware onboard/install behavior, R2 Lance export plumbing, and cloud vector search via catalog-discovered Lance paths.
+- **Review-driven reliability fixes**: deterministic catalog ordering, idempotent catalog registration, migration dedupe before unique index creation, degraded sync reporting in fallback mode, and stricter cloud/local fallback semantics for wrap-up/search/onboard.
 
 ### Upstream Dependencies — All Ready
 

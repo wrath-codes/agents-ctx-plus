@@ -328,17 +328,19 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 
 **Depends on**: Phase 2 (all repos), Phase 4 (search + registry)
 
+**Status (2026-02-17)**: **DONE** — Streams A-F completed across PR1-PR6. MVP CLI is fully functional.
+
 ### Tasks
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 5.1 | Implement clap `Cli` struct with all subcommands and global flags | zen-cli | 5.2 |
-| 5.2 | Implement `main.rs`: load config, init tracing, open database, dispatch commands | zen-cli | 5.3 |
-| 5.3 | Implement `znt init`: detect project, parse manifest, create `.zenith/`, init DB | zen-cli | 5.4 |
-| 5.4 | Implement `znt session start/end/list` | zen-cli | 5.5 |
-| 5.5 | Implement knowledge commands: `znt research`, `znt finding`, `znt hypothesis`, `znt insight` (all CRUD) | zen-cli | 5.7 |
-| 5.6 | Implement work commands: `znt issue`, `znt task`, `znt log`, `znt compat` | zen-cli | 5.7 |
-| 5.7 | Implement linking: `znt link`, `znt unlink` | zen-cli | 5.8 |
+| 5.1 | Implement clap `Cli` struct with all subcommands and global flags | zen-cli | **DONE** |
+| 5.2 | Implement `main.rs`: load config, init tracing, open database, dispatch commands | zen-cli | **DONE** |
+| 5.3 | Implement `znt init`: detect project, parse manifest, create `.zenith/`, init DB | zen-cli | **DONE** |
+| 5.4 | Implement `znt session start/end/list` | zen-cli | **DONE** |
+| 5.5 | Implement knowledge commands: `znt research`, `znt finding`, `znt hypothesis`, `znt insight` (all CRUD) | zen-cli | **DONE** |
+| 5.6 | Implement work commands: `znt issue`, `znt task`, `znt log`, `znt compat` | zen-cli | **DONE** |
+| 5.7 | Implement linking: `znt link`, `znt unlink` | zen-cli | **DONE** |
 | 5.16 | Implement study commands: `znt study create/assume/test/get/conclude/list` | zen-cli | Done |
 | 5.17 | Implement `znt rebuild`: delete DB, replay all JSONL trail files, rebuild FTS5 | zen-cli | Done |
 | 5.18a | Implement `znt init` `.gitignore` template (ignore DB files, track trail/ and hooks/) | zen-cli | 5.18b |
@@ -346,20 +348,20 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 | 5.18c | Implement post-checkout hook: detect JSONL trail changes between old and new HEAD via `gix` tree diff, trigger `znt rebuild` or warn based on performance threshold from spike 0.13 | zen-hooks + zen-cli | 5.18e |
 | 5.18d | Implement post-merge hook: detect conflict markers in JSONL files, trigger rebuild if clean merge changed trail files | zen-hooks + zen-cli | 5.18e |
 | 5.18e | Implement hook installation in `znt init`: detect git repo via `gix`, detect existing hooks / `core.hooksPath`, install using strategy chosen by spike 0.13 (hookspath / symlink / chain), support `--skip-hooks` flag | zen-hooks + zen-cli | Done |
-| 5.8 | Implement `znt audit` with all filters | zen-cli | 5.9 |
-| 5.9 | Implement `znt whats-next` (both JSON and raw formats) | zen-cli | 5.11 |
-| 5.10 | Implement `znt search` wired to SearchEngine | zen-cli | 5.11 |
-| 5.11 | Implement `znt install`: clone repo, run indexing pipeline, update project_dependencies | zen-cli | 5.12 |
-| 5.12 | Implement `znt onboard`: detect project, parse manifest, batch index all deps | zen-cli | 5.13 |
-| 5.13 | Implement `znt wrap-up`: session summary, snapshot, audit export | zen-cli | 5.14 |
-| 5.14 | Implement `znt research registry` wired to RegistryClient | zen-cli | 5.15 |
+| 5.8 | Implement `znt audit` with all filters | zen-cli | **DONE** |
+| 5.9 | Implement `znt whats-next` (both JSON and raw formats) | zen-cli | **DONE** |
+| 5.10 | Implement `znt search` wired to SearchEngine | zen-cli | **DONE** |
+| 5.11 | Implement `znt install`: clone repo, run indexing pipeline, update project_dependencies | zen-cli | **DONE** |
+| 5.12 | Implement `znt onboard`: detect project, parse manifest, batch index all deps | zen-cli | **DONE** |
+| 5.13 | Implement `znt wrap-up`: session summary, snapshot, audit export | zen-cli | **DONE** |
+| 5.14 | Implement `znt research registry` wired to RegistryClient | zen-cli | **DONE** |
 | 5.15 | Implement JSON/table/raw output formatting for all commands | zen-cli | Done |
 | 5.19 | Implement `znt grep` CLI command (package mode + local mode, all flags) | zen-cli | Done |
 | 5.20 | Implement `znt cache` CLI command (list, clean, stats) | zen-cli | Done |
 | 5.21 | Implement `warn_unconfigured()` at CLI startup: detect figment config sections with all-default values, warn user about possible typo'd env var keys (confirmed gotcha from zen-config spike) | zen-cli | Done |
 | 5.22 | Implement `znt schema <type>` CLI command: dump JSON Schema for any registered type from SchemaRegistry. Uses `SchemaRegistry.get()` + pretty print. | zen-cli | Done |
 | 5.23 | Update pre-commit hook (task 5.18b) to use schemars-generated schemas from zen-schema instead of hand-written schema from spike 0.13 | zen-hooks + zen-schema | Done |
-| 5.24 | Implement recursive search CLI mode and output flags: `znt search --mode recursive` + budget flags + reference-category output (`summary_json`, `summary_json_pretty`) | zen-cli + zen-search | Phase 6 |
+| 5.24 | Implement recursive search CLI mode and output flags: `znt search --mode recursive` + budget flags + reference-category output (`summary_json`, `summary_json_pretty`) | zen-cli + zen-search | **DONE** |
 
 ### Tests
 
@@ -378,6 +380,8 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 - Query registries, manage issues/tasks
 - View audit trail, get project state with `whats-next`
 - Wrap up sessions
+
+**Delivered streams summary**: PR1 (core infra), PR2 (knowledge commands), PR3 (work/cross-cutting), PR4 (search/registry/indexing commands), PR5 (git hooks + rebuild), PR6 (workflow/polish commands).
 
 ---
 
@@ -424,12 +428,12 @@ Milestone 3 is blocked on integration streams B, C, D. The parser stream (A) is 
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 7.1 | Create `Workspace` trait in zen-core | zen-core | 7.2 |
-| 7.2 | Implement `AgentFsWorkspace` wrapping the AgentFS Rust SDK | zen-cli or zen-lake | 7.3 |
-| 7.3 | Wire session start to create AgentFS workspace per session | zen-cli | 7.4 |
-| 7.4 | Wire `znt install` to use AgentFS workspace for cloning | zen-lake | 7.5 |
-| 7.5 | Wire `znt wrap-up` to snapshot AgentFS workspace | zen-cli | 7.6 |
-| 7.6 | Wire `znt audit --files` to query AgentFS audit log | zen-cli | Done |
+| 7.1 | Create `Workspace` trait in zen-core | zen-core | **DONE** |
+| 7.2 | Implement `AgentFsWorkspace` wrapping the AgentFS Rust SDK | zen-cli or zen-lake | **DONE** |
+| 7.3 | Wire session start to create AgentFS workspace per session | zen-cli | **DONE** |
+| 7.4 | Wire `znt install` to use AgentFS workspace for cloning | zen-lake | **DONE** |
+| 7.5 | Wire `znt wrap-up` to snapshot AgentFS workspace | zen-cli | **DONE** |
+| 7.6 | Wire `znt audit --files` to query AgentFS audit log | zen-cli | **DONE** |
 
 ### If AgentFS Doesn't Work (0.7 failed, 0.10 executed)
 
@@ -464,14 +468,16 @@ Note: without AgentFS, we skip session workspaces and file-level audit. These be
 
 | ID | Task | Crate | Blocks |
 |----|------|-------|--------|
-| 8.1 | Implement `ZenDb::open_synced()` with Turso Cloud (Clerk JWT via JWKS) | zen-db | 8.2 |
-| 8.2 | Wire `znt wrap-up` to call `ZenDb::sync()` | zen-cli | 8.5 |
-| 8.3 | Implement DuckLake-inspired catalog tables in Turso (`dl_metadata`, `dl_snapshot`, `dl_data_file`) | zen-db | 8.5 |
-| 8.4 | Implement `ZenLake::write_to_r2()` using lancedb Rust crate + serde_arrow (production path from spike 0.19 M1) | zen-lake | 8.5 |
-| 8.5 | Implement `ZenLake::search()` — query Turso catalog for lance paths → DuckDB lance extension search | zen-lake | 8.6 |
-| 8.6 | Implement `znt onboard` cloud mode: check Turso catalog for already-indexed packages, skip if exists | zen-cli | 8.7 |
-| 8.7 | Implement config validation: check R2/Turso/Clerk credentials at startup | zen-config | Done |
+| 8.1 | Implement `ZenDb::open_synced()` with Turso Cloud (Clerk JWT via JWKS) | zen-db | **DONE** |
+| 8.2 | Wire `znt wrap-up` to call `ZenDb::sync()` | zen-cli | **DONE** (strict/default semantics + degraded fallback) |
+| 8.3 | Implement DuckLake-inspired catalog tables in Turso (`dl_metadata`, `dl_snapshot`, `dl_data_file`) | zen-db | **DONE** |
+| 8.4 | Implement `ZenLake::write_to_r2()` using lancedb Rust crate + serde_arrow (production path from spike 0.19 M1) | zen-lake | **DONE** (symbols export path in production) |
+| 8.5 | Implement `ZenLake::search()` — query Turso catalog for lance paths → DuckDB lance extension search | zen-lake | **DONE** |
+| 8.6 | Implement `znt onboard` cloud mode: check Turso catalog for already-indexed packages, skip if exists | zen-cli | **DONE** |
+| 8.7 | Implement config validation: check R2/Turso/Clerk credentials at startup | zen-config | **DONE** |
 | 8.8 | ~~Implement `ZenLake::open_cloud()` with MotherDuck + R2~~ | **REMOVED** — MotherDuck dropped from architecture. Turso catalog + Lance on R2 replaces DuckLake. See [02-data-architecture.md](./02-data-architecture.md) | N/A |
+
+**Status (2026-02-17)**: **DONE** for core cloud/catalog scope (PR8). Includes synced-open fallback handling, strict `wrap-up --require-sync`, catalog upsert + deterministic ordering + idempotency constraints, cloud vector lookup via catalog, and cloud-aware install/onboard behavior.
 
 ### Tests
 
@@ -731,7 +737,7 @@ At each milestone, verify:
 | **5 (MVP)** | **`znt init` → `znt install tokio` → `znt search "spawn"` returns results. Git hooks install correctly, pre-commit validates JSONL, post-checkout detects trail changes.** | **Build binary, run e2e** |
 | 6 | Full PRD lifecycle works across sessions | E2E test with sequential commands |
 | 7 | Package indexing uses isolated workspaces | `cargo test -p zen-cli` (workspace tests) |
-| 8 | Cloud sync works, indexed packages accessible from another machine | Manual test with Turso Cloud + MotherDuck |
+| 8 | Cloud sync works, indexed packages accessible from another machine | Manual test with Turso Cloud + R2 Lance catalog |
 | **9 (Team)** | **`znt auth login` → browser → JWT stored. `znt session start` creates org-scoped session. `znt export` writes Lance to R2. Team member queries shared index via `lance_vector_search()`.** | **E2E with two Clerk users** |
 
 ### MVP Acceptance Test (Milestone 5)
