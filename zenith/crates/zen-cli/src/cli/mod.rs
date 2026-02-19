@@ -111,4 +111,43 @@ mod tests {
         let flags: GlobalFlags = cli.global_flags();
         assert_eq!(flags.project.as_deref(), Some("/tmp/demo"));
     }
+
+    #[test]
+    fn prd_create_subcommand_parses() {
+        let cli = Cli::try_parse_from([
+            "znt",
+            "prd",
+            "create",
+            "--title",
+            "User profile editing",
+            "--description",
+            "Initial PRD",
+        ])
+        .expect("cli should parse");
+
+        match cli.command {
+            Commands::Prd { .. } => {}
+            _ => panic!("expected prd command"),
+        }
+    }
+
+    #[test]
+    fn prd_subtasks_subcommand_parses() {
+        let cli = Cli::try_parse_from([
+            "znt",
+            "prd",
+            "subtasks",
+            "tsk-parent",
+            "--epic",
+            "iss-epic",
+            "--tasks",
+            "[\"Sub 1\",\"Sub 2\"]",
+        ])
+        .expect("cli should parse");
+
+        match cli.command {
+            Commands::Prd { .. } => {}
+            _ => panic!("expected prd command"),
+        }
+    }
 }

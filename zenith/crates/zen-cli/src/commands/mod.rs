@@ -13,6 +13,7 @@ pub mod issue;
 pub mod link;
 pub mod log;
 pub mod onboard;
+pub mod prd;
 pub mod rebuild;
 pub mod research;
 pub mod schema;

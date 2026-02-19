@@ -16,6 +16,7 @@ pub async fn dispatch(
         Commands::Hypothesis { action } => commands::hypothesis::handle(&action, ctx, flags).await,
         Commands::Insight { action } => commands::insight::handle(&action, ctx, flags).await,
         Commands::Issue { action } => commands::issue::handle(&action, ctx, flags).await,
+        Commands::Prd { action } => commands::prd::handle(&action, ctx, flags).await,
         Commands::Task { action } => commands::task::handle(&action, ctx, flags).await,
         Commands::Log(args) => commands::log::handle(&args, ctx, flags).await,
         Commands::Compat { action } => commands::compat::handle(&action, ctx, flags).await,

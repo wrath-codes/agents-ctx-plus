@@ -2,7 +2,8 @@ use clap::{Args, Subcommand};
 
 use crate::cli::subcommands::{
     CacheCommands, CompatCommands, FindingCommands, HookCommands, HypothesisCommands,
-    InsightCommands, IssueCommands, ResearchCommands, SessionCommands, StudyCommands, TaskCommands,
+    InsightCommands, IssueCommands, PrdCommands, ResearchCommands, SessionCommands, StudyCommands,
+    TaskCommands,
 };
 
 /// Top-level command tree.
@@ -52,6 +53,11 @@ pub enum Commands {
     Issue {
         #[command(subcommand)]
         action: IssueCommands,
+    },
+    /// PRD workflow.
+    Prd {
+        #[command(subcommand)]
+        action: PrdCommands,
     },
     /// Tasks.
     Task {
