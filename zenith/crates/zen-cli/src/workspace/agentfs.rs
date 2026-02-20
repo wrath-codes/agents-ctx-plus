@@ -120,6 +120,15 @@ pub async fn session_file_audit(
     search: Option<&str>,
 ) -> anyhow::Result<Vec<WorkspaceAuditEntry>> {
     let agent = open_session_workspace(project_root, session_id).await?;
+    file_audit_from_agent(&agent, session_id, limit, search).await
+}
+
+async fn file_audit_from_agent(
+    agent: &AgentFS,
+    session_id: &str,
+    limit: u32,
+    search: Option<&str>,
+) -> anyhow::Result<Vec<WorkspaceAuditEntry>> {
     let calls = agent.tools.recent(Some(i64::from(limit))).await?;
     let mut out = Vec::new();
 
@@ -191,7 +200,7 @@ pub async fn active_session_file_audit(
     let agent = open_active_workspace(project_root).await?;
     let session_id: Option<String> = agent.kv.get("session_id").await?;
     let session_id = session_id.ok_or_else(|| anyhow::anyhow!("workspace missing session_id"))?;
-    session_file_audit(project_root, &session_id, limit, search).await
+    file_audit_from_agent(&agent, &session_id, limit, search).await
 }
 
 async fn open_active_workspace(project_root: &Path) -> anyhow::Result<AgentFS> {
@@ -255,6 +264,9 @@ async fn persistent_workspace_db_path(
 }
 
 fn validate_session_id(session_id: &str) -> anyhow::Result<()> {
+    if session_id.is_empty() {
+        anyhow::bail!("invalid session_id: cannot be empty");
+    }
     if session_id.contains("..") || session_id.contains('/') || session_id.contains('\\') {
         anyhow::bail!("invalid session_id: path separators are not allowed");
     }
