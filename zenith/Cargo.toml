@@ -66,6 +66,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # Env
 dotenvy = "0.15"
 dirs = "6.0"
+getrandom = "0.3"
 
 # Testing
 pretty_assertions = "1.4"
@@ -113,6 +114,7 @@ arrow-ipc = "57"
 serde_arrow = { version = "0.13", features = ["arrow-57"] }
 
 # Internal crates
+zen-auth = { path = "crates/zen-auth" }
 zen-core = { path = "crates/zen-core" }
 zen-config = { path = "crates/zen-config" }
 zen-db = { path = "crates/zen-db" }

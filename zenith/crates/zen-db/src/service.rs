@@ -115,4 +115,26 @@ impl ZenService {
     pub const fn is_synced_replica(&self) -> bool {
         self.db.is_synced_replica()
     }
+
+    /// Rebuild the underlying synced connection with a fresh auth token.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError::InvalidState` if the service is not backed by a
+    /// synced replica, or `DatabaseError` if the rebuild fails.
+    pub async fn rebuild_with_token(
+        &mut self,
+        local_replica_path: &str,
+        remote_url: &str,
+        new_auth_token: &str,
+    ) -> Result<(), DatabaseError> {
+        if !self.db.is_synced_replica() {
+            return Err(DatabaseError::InvalidState(
+                "cannot rebuild: not a synced replica".into(),
+            ));
+        }
+        self.db
+            .rebuild_synced(local_replica_path, remote_url, new_auth_token)
+            .await
+    }
 }

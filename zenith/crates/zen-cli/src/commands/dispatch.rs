@@ -32,8 +32,8 @@ pub async fn dispatch(
         Commands::Install(args) => commands::install::handle(&args, ctx, flags).await,
         Commands::Onboard(args) => commands::onboard::handle(&args, ctx, flags).await,
         Commands::Rebuild(args) => commands::rebuild::handle(&args, ctx, flags).await,
-        Commands::Init(_) | Commands::Hook { .. } | Commands::Schema(_) => {
-            unreachable!("init/hook/schema are pre-dispatched in main")
+        Commands::Init(_) | Commands::Hook { .. } | Commands::Schema(_) | Commands::Auth { .. } => {
+            unreachable!("init/hook/schema/auth are pre-dispatched in main")
         }
     }
 }

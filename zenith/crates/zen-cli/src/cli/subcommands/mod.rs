@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod cache;
 pub mod compat;
 pub mod finding;
@@ -11,6 +12,7 @@ pub mod session;
 pub mod study;
 pub mod task;
 
+pub use auth::AuthCommands;
 pub use cache::CacheCommands;
 pub use compat::CompatCommands;
 pub use finding::FindingCommands;

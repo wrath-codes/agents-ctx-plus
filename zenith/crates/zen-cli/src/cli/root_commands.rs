@@ -1,9 +1,9 @@
 use clap::{Args, Subcommand};
 
 use crate::cli::subcommands::{
-    CacheCommands, CompatCommands, FindingCommands, HookCommands, HypothesisCommands,
-    InsightCommands, IssueCommands, PrdCommands, ResearchCommands, SessionCommands, StudyCommands,
-    TaskCommands,
+    AuthCommands, CacheCommands, CompatCommands, FindingCommands, HookCommands,
+    HypothesisCommands, InsightCommands, IssueCommands, PrdCommands, ResearchCommands,
+    SessionCommands, StudyCommands, TaskCommands,
 };
 
 /// Top-level command tree.
@@ -96,6 +96,11 @@ pub enum Commands {
     Hook {
         #[command(subcommand)]
         action: HookCommands,
+    },
+    /// Authentication.
+    Auth {
+        #[command(subcommand)]
+        action: AuthCommands,
     },
 }
 

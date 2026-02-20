@@ -125,6 +125,45 @@ impl ZenDb {
         self.is_synced_replica
     }
 
+    /// Rebuild the synced connection with a fresh auth token.
+    ///
+    /// Drops the current `Database` and `Connection` and creates a new embedded
+    /// replica with the provided token. Required because libsql does not support
+    /// hot-swapping auth tokens on an existing connection.
+    ///
+    /// The trail writer is unaffected (filesystem-based). Migrations are NOT
+    /// re-run — the local replica already has the schema from the initial open.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if the new replica cannot be opened or synced.
+    pub async fn rebuild_synced(
+        &mut self,
+        local_replica_path: &str,
+        remote_url: &str,
+        new_auth_token: &str,
+    ) -> Result<(), DatabaseError> {
+        let db = Builder::new_remote_replica(
+            local_replica_path.to_string(),
+            remote_url.to_string(),
+            new_auth_token.to_string(),
+        )
+        .read_your_writes(true)
+        .build()
+        .await?;
+        db.sync().await?;
+
+        let conn = db.connect()?;
+        conn.execute("PRAGMA foreign_keys = ON", ())
+            .await
+            .map_err(|e| DatabaseError::Migration(format!("PRAGMA foreign_keys: {e}")))?;
+
+        self.db = db;
+        self.conn = conn;
+        self.is_synced_replica = true;
+        Ok(())
+    }
+
     /// Generate a prefixed ID via libSQL. Returns e.g., `"fnd-a3f8b2c1"`.
     ///
     /// Uses `randomblob(4)` in SQL to produce 8-char hex, then prepends the prefix.

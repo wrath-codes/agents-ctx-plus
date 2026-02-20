@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use zen_config::ZenConfig;
+use zen_core::identity::AuthIdentity;
 use zen_db::service::ZenService;
 use zen_embeddings::EmbeddingEngine;
 use zen_lake::{SourceFileStore, ZenLake};
@@ -16,6 +17,7 @@ pub struct AppContext {
     pub embedder: EmbeddingEngine,
     pub registry: RegistryClient,
     pub project_root: PathBuf,
+    pub identity: Option<AuthIdentity>,
 }
 
 impl AppContext {
@@ -33,6 +35,9 @@ impl AppContext {
         let lake_path_str = lake_path.to_string_lossy();
         let source_path_str = source_path.to_string_lossy();
 
+        // Resolve auth token (tiers 1-3 via zen-auth, tier 4 via config fallback)
+        let (auth_token, identity) = resolve_auth(&config).await;
+
         let service = if config.turso.is_configured() {
             let replica_path: &str = if config.turso.has_local_replica() {
                 &config.turso.local_replica_path
@@ -40,22 +45,34 @@ impl AppContext {
                 &synced_path_str
             };
 
-            match ZenService::new_synced(
-                replica_path,
-                &config.turso.url,
-                &config.turso.auth_token,
-                Some(trail_dir.clone()),
-            )
-            .await
-            {
-                Ok(service) => service,
-                Err(_error) => {
-                    tracing::warn!(
-                        "failed to initialize synced zen-db service; falling back to local"
-                    );
-                    ZenService::new_local(&db_path_str, Some(trail_dir))
-                        .await
-                        .context("failed to initialize zen-db service")?
+            // Use auth-resolved token, fall back to config.turso.auth_token (tier 4)
+            let token = auth_token
+                .as_deref()
+                .unwrap_or(&config.turso.auth_token);
+
+            if token.is_empty() {
+                ZenService::new_local(&db_path_str, Some(trail_dir))
+                    .await
+                    .context("failed to initialize zen-db service")?
+            } else {
+                match ZenService::new_synced(
+                    replica_path,
+                    &config.turso.url,
+                    token,
+                    Some(trail_dir.clone()),
+                )
+                .await
+                {
+                    Ok(service) => service,
+                    Err(error) => {
+                        tracing::warn!(
+                            %error,
+                            "failed to initialize synced zen-db service; falling back to local"
+                        );
+                        ZenService::new_local(&db_path_str, Some(trail_dir))
+                            .await
+                            .context("failed to initialize zen-db service")?
+                    }
                 }
             }
         } else {
@@ -63,6 +80,7 @@ impl AppContext {
                 .await
                 .context("failed to initialize zen-db service")?
         };
+
         let lake = ZenLake::open_local(&lake_path_str).context("failed to open local zen lake")?;
         let source_store =
             SourceFileStore::open(&source_path_str).context("failed to open source file store")?;
@@ -77,6 +95,61 @@ impl AppContext {
             embedder,
             registry,
             project_root,
+            identity,
         })
+    }
+}
+
+/// Resolve auth token with optional JWKS validation.
+///
+/// Returns `(Option<raw_token>, Option<identity>)`.
+/// - If `secret_key` is configured: validates via JWKS, extracts identity.
+/// - If `secret_key` is empty: best-effort expiry check, no identity.
+async fn resolve_auth(config: &ZenConfig) -> (Option<String>, Option<AuthIdentity>) {
+    let secret_key = &config.clerk.secret_key;
+
+    if secret_key.is_empty() {
+        // No Clerk secret key — try raw token from zen-auth tiers or config fallback.
+        // Cannot validate via JWKS, so identity is always None.
+        let raw = zen_auth::resolve_token().or_else(|| {
+            let t = &config.turso.auth_token;
+            if t.is_empty() { None } else { Some(t.clone()) }
+        });
+
+        // Best-effort expiry check on unverified token
+        if let Some(ref token) = raw {
+            match zen_auth::refresh::decode_expiry(token) {
+                Ok(expires_at) if expires_at <= chrono::Utc::now() => {
+                    tracing::warn!("auth token appears expired — running in local mode");
+                    return (None, None);
+                }
+                Ok(_) => {
+                    // Only warn for JWT-shaped tokens (3 dot-separated segments).
+                    // Platform API tokens are not JWTs and don't need this warning.
+                    tracing::debug!(
+                        "token found but ZENITH_CLERK__SECRET_KEY not configured — \
+                         identity unavailable, expiry checks are best-effort"
+                    );
+                }
+                Err(_) => {} // Not a JWT format — pass through as-is (e.g., Platform API token)
+            }
+        }
+
+        return (raw, None);
+    }
+
+    match zen_auth::resolve_and_validate(secret_key).await {
+        Ok(Some(claims)) => {
+            let identity = claims.to_identity();
+            (Some(claims.raw_jwt), Some(identity))
+        }
+        Ok(None) => {
+            tracing::debug!("no Clerk auth token found via keyring/env/file; running in local mode");
+            (None, None)
+        }
+        Err(error) => {
+            tracing::warn!(%error, "auth token validation failed; running in local mode");
+            (None, None)
+        }
     }
 }

@@ -11553,6 +11553,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "zen-auth"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "clerk-rs",
+ "dirs",
+ "dotenvy",
+ "figment",
+ "getrandom 0.3.4",
+ "keyring",
+ "open",
+ "pretty_assertions",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tiny_http",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "zen-core",
+]
+
+[[package]]
 name = "zen-cli"
 version = "0.1.0"
 dependencies = [
@@ -11572,6 +11598,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "zen-auth",
  "zen-config",
  "zen-core",
  "zen-db",

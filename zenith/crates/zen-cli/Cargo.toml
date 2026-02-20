@@ -10,6 +10,7 @@ name = "znt"
 path = "src/main.rs"
 
 [dependencies]
+zen-auth.workspace = true
 zen-core.workspace = true
 zen-config.workspace = true
 zen-db.workspace = true

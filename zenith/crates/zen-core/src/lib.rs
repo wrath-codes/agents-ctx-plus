@@ -17,6 +17,7 @@ pub mod audit_detail;
 pub mod entities;
 pub mod enums;
 pub mod errors;
+pub mod identity;
 pub mod ids;
 pub mod responses;
 pub mod trail;

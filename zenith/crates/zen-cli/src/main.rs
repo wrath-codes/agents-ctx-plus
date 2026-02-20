@@ -41,6 +41,7 @@ async fn run() -> anyhow::Result<()> {
         cli::Commands::Init(args) => return commands::init::handle(args, &flags).await,
         cli::Commands::Hook { action } => return commands::hook::handle(action, &flags).await,
         cli::Commands::Schema(args) => return commands::schema::handle(args, &flags),
+        cli::Commands::Auth { action } => return commands::auth::handle(action, &flags).await,
         _ => {}
     }
 
