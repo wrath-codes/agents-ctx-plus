@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 use crate::cli::subcommands::{
     AuthCommands, CacheCommands, CompatCommands, FindingCommands, HookCommands,
     HypothesisCommands, InsightCommands, IssueCommands, PrdCommands, ResearchCommands,
-    SessionCommands, StudyCommands, TaskCommands,
+    SessionCommands, StudyCommands, TaskCommands, TeamCommands,
 };
 
 /// Top-level command tree.
@@ -102,6 +102,24 @@ pub enum Commands {
         #[command(subcommand)]
         action: AuthCommands,
     },
+    /// Team management.
+    Team {
+        #[command(subcommand)]
+        action: TeamCommands,
+    },
+    /// Index the current project for private cloud search.
+    Index(IndexArgs),
+}
+
+/// Arguments for `znt index`.
+#[derive(Clone, Debug, Args)]
+pub struct IndexArgs {
+    /// Path to index (defaults to current project root).
+    #[arg(default_value = ".")]
+    pub path: String,
+    /// Force re-index even if already indexed.
+    #[arg(long)]
+    pub force: bool,
 }
 
 /// Arguments for `znt init`.

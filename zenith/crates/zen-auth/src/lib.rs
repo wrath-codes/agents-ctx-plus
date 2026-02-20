@@ -11,6 +11,7 @@ pub mod browser_flow;
 pub mod claims;
 pub mod error;
 pub mod jwks;
+pub mod org;
 pub mod refresh;
 pub mod token_store;
 

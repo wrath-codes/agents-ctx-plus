@@ -11,6 +11,7 @@ pub mod research;
 pub mod session;
 pub mod study;
 pub mod task;
+pub mod team;
 
 pub use auth::AuthCommands;
 pub use cache::CacheCommands;
@@ -25,3 +26,4 @@ pub use research::ResearchCommands;
 pub use session::SessionCommands;
 pub use study::StudyCommands;
 pub use task::TaskCommands;
+pub use team::TeamCommands;

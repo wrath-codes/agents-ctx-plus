@@ -54,16 +54,6 @@ fn clerk_secret_key() -> Option<String> {
     Some(key)
 }
 
-/// Get a test Clerk JWT from env, or None if not configured.
-fn clerk_test_token() -> Option<String> {
-    load_env();
-    let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
-    if token.is_empty() {
-        return None;
-    }
-    Some(token)
-}
-
 /// Get Turso URL from env.
 fn turso_url() -> Option<String> {
     load_env();
@@ -72,6 +62,81 @@ fn turso_url() -> Option<String> {
         return None;
     }
     Some(url)
+}
+
+/// Resolve a test user_id from env or by fetching the first user from Clerk.
+async fn resolve_test_user_id(secret_key: &str) -> Option<String> {
+    load_env();
+    if let Ok(uid) = std::env::var("ZENITH_AUTH__TEST_USER_ID") {
+        if !uid.is_empty() && uid.starts_with("user_") {
+            return Some(uid);
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.clerk.com/v1/users?limit=1&order_by=-created_at")
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let users: serde_json::Value = resp.json().await.ok()?;
+    users.as_array()?.first()?["id"].as_str().map(String::from)
+}
+
+/// Mint a fresh Clerk JWT for testing via Backend API.
+async fn mint_fresh_jwt(secret_key: &str, user_id: &str) -> Option<String> {
+    let client = reqwest::Client::new();
+
+    let session = client
+        .post("https://api.clerk.com/v1/sessions")
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .json(&serde_json::json!({"user_id": user_id}))
+        .send()
+        .await
+        .ok()?
+        .json::<serde_json::Value>()
+        .await
+        .ok()?;
+
+    let session_id = session["id"].as_str()?;
+
+    let token_resp = client
+        .post(format!(
+            "https://api.clerk.com/v1/sessions/{session_id}/tokens/zenith_cli"
+        ))
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .send()
+        .await
+        .ok()?
+        .json::<serde_json::Value>()
+        .await
+        .ok()?;
+
+    token_resp["jwt"].as_str().map(String::from)
+}
+
+/// Get a fresh Clerk JWT: mint via Backend API if secret key is available,
+/// fall back to static `ZENITH_AUTH__TEST_TOKEN` env var.
+async fn fresh_clerk_token() -> Option<String> {
+    load_env();
+    let secret_key = std::env::var("ZENITH_CLERK__SECRET_KEY").ok()?;
+    if secret_key.is_empty() || !secret_key.starts_with("sk_") {
+        let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
+        return if token.is_empty() { None } else { Some(token) };
+    }
+
+    let user_id = resolve_test_user_id(&secret_key).await?;
+    let jwt = mint_fresh_jwt(&secret_key, &user_id).await;
+    if jwt.is_some() {
+        return jwt;
+    }
+
+    let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
+    if token.is_empty() { None } else { Some(token) }
 }
 
 /// Decode JWT payload without verification (for claim inspection).
@@ -129,8 +194,12 @@ mod part_a_clerk_validation {
             eprintln!("SKIP: ZENITH_CLERK__SECRET_KEY not set");
             return;
         };
-        let Some(token) = clerk_test_token() else {
-            eprintln!("SKIP: ZENITH_AUTH__TEST_TOKEN not set");
+        let Some(user_id) = resolve_test_user_id(&secret_key).await else {
+            eprintln!("SKIP: could not resolve test user_id");
+            return;
+        };
+        let Some(token) = mint_fresh_jwt(&secret_key, &user_id).await else {
+            eprintln!("SKIP: failed to mint test JWT");
             return;
         };
 
@@ -417,8 +486,8 @@ mod part_c_token_storage {
     }
 
     /// C3: Verify JWT expiry detection via payload decoding.
-    #[test]
-    fn spike_token_expiry_detection() {
+    #[tokio::test]
+    async fn spike_token_expiry_detection() {
         // Create a mock JWT with known exp claim
         // Header: {"alg":"none","typ":"JWT"}
         // Payload: {"sub":"user_test","exp":<timestamp>,"iat":1000000000}
@@ -486,7 +555,7 @@ mod part_c_token_storage {
         eprintln!("  Malformed JWT correctly rejected");
 
         // Test 5: Real test token (if available)
-        if let Some(real_token) = clerk_test_token() {
+        if let Some(real_token) = fresh_clerk_token().await {
             if let Some(payload) = decode_jwt_payload_unverified(&real_token) {
                 let exp = payload["exp"].as_i64().unwrap_or(0);
                 let sub = payload["sub"].as_str().unwrap_or("unknown");
@@ -512,17 +581,17 @@ mod part_d_turso_jwks {
     use tempfile::TempDir;
 
     /// Get credentials for JWKS-based Turso connection.
-    /// Returns (url, clerk_jwt) or None if not configured.
-    fn turso_jwks_credentials() -> Option<(String, String)> {
+    /// Mints a fresh JWT via Backend API so tokens are never stale.
+    async fn turso_jwks_credentials() -> Option<(String, String)> {
         let url = turso_url()?;
-        let token = clerk_test_token()?;
+        let token = fresh_clerk_token().await?;
         Some((url, token))
     }
 
     /// D1: Connect to Turso via `Builder::new_remote` using a Clerk JWT as auth token.
     #[tokio::test(flavor = "multi_thread")]
     async fn spike_turso_jwks_remote_connection() {
-        let Some((url, clerk_jwt)) = turso_jwks_credentials() else {
+        let Some((url, clerk_jwt)) = turso_jwks_credentials().await else {
             eprintln!("SKIP: Turso URL or Clerk test token not configured");
             return;
         };
@@ -564,7 +633,7 @@ mod part_d_turso_jwks {
     /// D2: Connect via embedded replica using Clerk JWT.
     #[tokio::test(flavor = "multi_thread")]
     async fn spike_turso_jwks_embedded_replica() {
-        let Some((url, clerk_jwt)) = turso_jwks_credentials() else {
+        let Some((url, clerk_jwt)) = turso_jwks_credentials().await else {
             eprintln!("SKIP: Turso URL or Clerk test token not configured");
             return;
         };
@@ -636,7 +705,7 @@ mod part_d_turso_jwks {
     /// D3: Write-forwarding through embedded replica with Clerk JWT.
     #[tokio::test(flavor = "multi_thread")]
     async fn spike_turso_jwks_write_forward() {
-        let Some((url, clerk_jwt)) = turso_jwks_credentials() else {
+        let Some((url, clerk_jwt)) = turso_jwks_credentials().await else {
             eprintln!("SKIP: Turso URL or Clerk test token not configured");
             return;
         };
@@ -719,7 +788,7 @@ mod part_d_turso_jwks {
     /// This is observational — we document the error type and verify local reads survive.
     #[tokio::test(flavor = "multi_thread")]
     async fn spike_turso_jwks_expired_token_behavior() {
-        let Some((url, _)) = turso_jwks_credentials() else {
+        let Some((url, _)) = turso_jwks_credentials().await else {
             eprintln!("SKIP: Turso URL or Clerk test token not configured");
             return;
         };

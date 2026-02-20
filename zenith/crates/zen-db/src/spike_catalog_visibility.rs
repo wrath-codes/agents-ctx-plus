@@ -49,15 +49,6 @@ fn load_env() {
     }
 }
 
-fn clerk_test_token() -> Option<String> {
-    load_env();
-    let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
-    if token.is_empty() {
-        return None;
-    }
-    Some(token)
-}
-
 fn turso_url() -> Option<String> {
     load_env();
     let url = std::env::var("ZENITH_TURSO__URL").ok()?;
@@ -65,6 +56,84 @@ fn turso_url() -> Option<String> {
         return None;
     }
     Some(url)
+}
+
+/// Resolve a test user_id from env or by fetching the first user from Clerk.
+async fn resolve_test_user_id(secret_key: &str) -> Option<String> {
+    load_env();
+    if let Ok(uid) = std::env::var("ZENITH_AUTH__TEST_USER_ID") {
+        if !uid.is_empty() && uid.starts_with("user_") {
+            return Some(uid);
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.clerk.com/v1/users?limit=1&order_by=-created_at")
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let users: serde_json::Value = resp.json().await.ok()?;
+    users.as_array()?.first()?["id"].as_str().map(String::from)
+}
+
+/// Mint a fresh Clerk JWT for testing via Backend API.
+/// Creates a session and generates a JWT from the zenith_cli template.
+async fn mint_fresh_jwt(secret_key: &str, user_id: &str) -> Option<String> {
+    let client = reqwest::Client::new();
+
+    let session = client
+        .post("https://api.clerk.com/v1/sessions")
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .json(&serde_json::json!({"user_id": user_id}))
+        .send()
+        .await
+        .ok()?
+        .json::<serde_json::Value>()
+        .await
+        .ok()?;
+
+    let session_id = session["id"].as_str()?;
+
+    let token_resp = client
+        .post(format!(
+            "https://api.clerk.com/v1/sessions/{session_id}/tokens/zenith_cli"
+        ))
+        .header("Authorization", format!("Bearer {secret_key}"))
+        .send()
+        .await
+        .ok()?
+        .json::<serde_json::Value>()
+        .await
+        .ok()?;
+
+    token_resp["jwt"].as_str().map(String::from)
+}
+
+/// Get a fresh Clerk JWT: mint via Backend API if secret key is available,
+/// fall back to static `ZENITH_AUTH__TEST_TOKEN` env var.
+async fn fresh_clerk_token() -> Option<String> {
+    load_env();
+    let secret_key = std::env::var("ZENITH_CLERK__SECRET_KEY").ok()?;
+    if secret_key.is_empty() || !secret_key.starts_with("sk_") {
+        // No secret key — fall back to static token
+        let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
+        return if token.is_empty() { None } else { Some(token) };
+    }
+
+    let user_id = resolve_test_user_id(&secret_key).await?;
+    let jwt = mint_fresh_jwt(&secret_key, &user_id).await;
+    if jwt.is_some() {
+        return jwt;
+    }
+
+    // Minting failed — fall back to static token
+    let token = std::env::var("ZENITH_AUTH__TEST_TOKEN").ok()?;
+    if token.is_empty() { None } else { Some(token) }
 }
 
 /// Validate Clerk JWT and extract typed claims (aether pattern).
@@ -103,10 +172,11 @@ struct ClerkClaims {
     org_role: Option<String>,
 }
 
-/// Turso credentials using Clerk JWT (JWKS path, like spike 0.17).
-fn turso_jwks_credentials() -> Option<(String, String)> {
+/// Turso credentials using a freshly minted Clerk JWT (JWKS path).
+/// Mints a new JWT via Backend API so tokens are never stale.
+async fn turso_jwks_credentials() -> Option<(String, String)> {
     let url = turso_url()?;
-    let token = clerk_test_token()?;
+    let token = fresh_clerk_token().await?;
     Some((url, token))
 }
 
@@ -387,7 +457,7 @@ async fn spike_programmatic_org_jwt() {
 /// J1: Create indexed_packages in Turso with visibility columns. INSERT + SELECT.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_turso_indexed_packages_schema() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -491,7 +561,7 @@ async fn spike_turso_indexed_packages_schema() {
 /// J2: Embedded replica syncs the catalog correctly.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_turso_catalog_embedded_replica() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -550,16 +620,19 @@ async fn spike_turso_catalog_embedded_replica() {
     replica_db.sync().await.unwrap();
 
     let conn = replica_db.connect().unwrap();
-    let mut rows = conn
-        .query(
-            &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
-            (),
-        )
-        .await
-        .unwrap();
-    let row = rows.next().await.unwrap().expect("Should find serde row");
-    let pkg: String = row.get(0).unwrap();
-    let count: i64 = row.get(1).unwrap();
+    let (pkg, count) = {
+        let mut rows = conn
+            .query(
+                &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
+                (),
+            )
+            .await
+            .unwrap();
+        let row = rows.next().await.unwrap().expect("Should find serde row");
+        let pkg: String = row.get(0).unwrap();
+        let count: i64 = row.get(1).unwrap();
+        (pkg, count)
+    };
     assert_eq!(pkg, "serde");
     assert_eq!(count, 800);
 
@@ -594,7 +667,7 @@ async fn spike_turso_catalog_embedded_replica() {
 /// - `znt auth login` requesting org-scoped sessions
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_clerk_jwt_visibility_scoping() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -714,7 +787,7 @@ async fn spike_clerk_jwt_visibility_scoping() {
 /// J4: Full E2E: Turso catalog → Lance path → DuckDB search.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_catalog_to_lance_search_e2e() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -868,7 +941,7 @@ async fn spike_catalog_to_lance_search_e2e() {
 /// K1: Three-tier search returns correctly scoped results.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_three_tier_search() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -1031,7 +1104,7 @@ async fn spike_three_tier_search() {
 /// K2: Private code indexing — only owner can discover.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_private_code_indexing() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -1132,7 +1205,7 @@ async fn spike_private_code_indexing() {
 /// than Turso's node-level locking.
 #[tokio::test(flavor = "multi_thread")]
 async fn spike_concurrent_index_turso_lock() {
-    let Some((url, token)) = turso_jwks_credentials() else {
+    let Some((url, token)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };
@@ -1303,7 +1376,7 @@ async fn spike_two_turso_replicas_same_process() {
         return;
     }
 
-    let Some((url_a, token_a)) = turso_jwks_credentials() else {
+    let Some((url_a, token_a)) = turso_jwks_credentials().await else {
         eprintln!("SKIP: Turso/Clerk credentials not configured");
         return;
     };

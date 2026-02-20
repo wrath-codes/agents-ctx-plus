@@ -7,6 +7,7 @@ pub mod finding;
 pub mod grep;
 pub mod hook;
 pub mod hypothesis;
+pub mod index;
 pub mod init;
 pub mod insight;
 pub mod install;
@@ -22,6 +23,7 @@ pub mod search;
 pub mod session;
 pub mod study;
 pub mod task;
+pub mod team;
 pub mod whats_next;
 pub mod wrap_up;
 

@@ -244,16 +244,21 @@ async fn try_cloud_vector_search(
     };
 
     let query_embedding = ctx.embedder.embed_single(&args.query)?;
+    let auth_token = ctx
+        .auth_token
+        .as_deref()
+        .unwrap_or(&ctx.config.turso.auth_token);
     let cloud = match ctx
         .lake
-        .search_cloud_vector(
+        .search_cloud_vector_scoped(
             &ctx.config.turso.url,
-            &ctx.config.turso.auth_token,
+            auth_token,
             ecosystem,
             package,
             args.version.as_deref(),
             &query_embedding,
             limit,
+            ctx.identity.as_ref(),
         )
         .await
     {
