@@ -9,6 +9,7 @@ use anyhow::Context;
 use clap::Parser;
 
 mod cli;
+mod bootstrap;
 mod commands;
 mod context;
 mod output;
@@ -30,8 +31,6 @@ async fn main() {
 }
 
 async fn run() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
-
     let cli = cli::Cli::parse();
     init_tracing(cli.quiet, cli.verbose)?;
 
@@ -41,12 +40,16 @@ async fn run() -> anyhow::Result<()> {
         cli::Commands::Init(args) => return commands::init::handle(args, &flags).await,
         cli::Commands::Hook { action } => return commands::hook::handle(action, &flags).await,
         cli::Commands::Schema(args) => return commands::schema::handle(args, &flags),
-        cli::Commands::Auth { action } => return commands::auth::handle(action, &flags).await,
         _ => {}
     }
 
+    let config = bootstrap::load_config(&flags).await?;
+
+    if let cli::Commands::Auth { action } = &cli.command {
+        return commands::auth::handle(action, &flags, &config).await;
+    }
+
     let project_root = resolve_project_root(flags.project.as_deref())?;
-    let config = zen_config::ZenConfig::load().map_err(anyhow::Error::from)?;
     context::warn_unconfigured(&config);
 
     let mut ctx = context::AppContext::init(project_root, config)
@@ -82,6 +85,6 @@ fn resolve_project_root(project_override: Option<&str>) -> anyhow::Result<PathBu
         None => std::env::current_dir().context("failed to read current directory")?,
     };
 
-    context::find_project_root(&start)
+    context::find_project_root_or_child(&start)
         .context("not a zenith project (no .zenith directory found). Run 'znt init' first.")
 }

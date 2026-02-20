@@ -13,8 +13,11 @@ struct AuthLoginResponse {
     expires_at: String,
 }
 
-pub async fn handle(args: &AuthLoginArgs, flags: &GlobalFlags) -> anyhow::Result<()> {
-    let config = zen_config::ZenConfig::load().map_err(anyhow::Error::from)?;
+pub async fn handle(
+    args: &AuthLoginArgs,
+    flags: &GlobalFlags,
+    config: &zen_config::ZenConfig,
+) -> anyhow::Result<()> {
     let secret_key = &config.clerk.secret_key;
 
     if secret_key.is_empty() {
@@ -55,7 +58,7 @@ pub async fn handle(args: &AuthLoginArgs, flags: &GlobalFlags) -> anyhow::Result
 /// Priority: `config.clerk.frontend_url` → extract from JWKS URL hostname.
 pub(crate) fn resolve_frontend_api(config: &zen_config::ZenConfig) -> anyhow::Result<String> {
     if !config.clerk.frontend_url.is_empty() {
-        return Ok(config.clerk.frontend_url.clone());
+        return normalize_frontend_host(&config.clerk.frontend_url);
     }
 
     let jwks_url = &config.clerk.jwks_url;
@@ -74,4 +77,50 @@ pub(crate) fn resolve_frontend_api(config: &zen_config::ZenConfig) -> anyhow::Re
         .ok_or_else(|| anyhow::anyhow!("invalid JWKS URL format — set ZENITH_CLERK__FRONTEND_URL"))?;
 
     Ok(host.to_string())
+}
+
+fn normalize_frontend_host(value: &str) -> anyhow::Result<String> {
+    let host = value
+        .strip_prefix("https://")
+        .or_else(|| value.strip_prefix("http://"))
+        .unwrap_or(value)
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .trim();
+
+    if host.is_empty() {
+        anyhow::bail!("invalid Clerk frontend URL format");
+    }
+
+    if let Some(stripped) = host.strip_suffix(".clerk.accounts.dev") {
+        return Ok(format!("{stripped}.accounts.dev"));
+    }
+
+    Ok(host.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_frontend_host;
+
+    #[test]
+    fn normalize_frontend_host_accepts_bare_hostname() {
+        let host = normalize_frontend_host("ruling-doe-21.accounts.dev").expect("should parse");
+        assert_eq!(host, "ruling-doe-21.accounts.dev");
+    }
+
+    #[test]
+    fn normalize_frontend_host_strips_scheme_and_path() {
+        let host = normalize_frontend_host("https://ruling-doe-21.accounts.dev/user")
+            .expect("should parse");
+        assert_eq!(host, "ruling-doe-21.accounts.dev");
+    }
+
+    #[test]
+    fn normalize_frontend_host_maps_clerk_dev_domain() {
+        let host = normalize_frontend_host("https://ruling-doe-21.clerk.accounts.dev")
+            .expect("should parse");
+        assert_eq!(host, "ruling-doe-21.accounts.dev");
+    }
 }

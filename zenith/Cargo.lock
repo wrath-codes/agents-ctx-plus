@@ -5307,6 +5307,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "infisical"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdf5b1e1089d886395e20cbe4f6ef6a8023c10313055581fce3bcc28598ec001"
+dependencies = [
+ "base64 0.22.1",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "inlinable_string"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11609,6 +11624,7 @@ dependencies = [
  "zen-registry",
  "zen-schema",
  "zen-search",
+ "zen-secrets",
 ]
 
 [[package]]
@@ -11807,6 +11823,15 @@ dependencies = [
  "zen-embeddings",
  "zen-lake",
  "zen-parser",
+]
+
+[[package]]
+name = "zen-secrets"
+version = "0.1.0"
+dependencies = [
+ "figment",
+ "infisical",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

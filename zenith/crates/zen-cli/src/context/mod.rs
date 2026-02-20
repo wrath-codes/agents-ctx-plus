@@ -4,4 +4,4 @@ mod project_root;
 
 pub use app_context::AppContext;
 pub use config_warnings::warn_unconfigured;
-pub use project_root::find_project_root;
+pub use project_root::{find_project_root_or_child, find_single_child_project_root};

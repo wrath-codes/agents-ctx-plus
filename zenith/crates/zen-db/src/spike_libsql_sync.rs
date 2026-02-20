@@ -38,8 +38,11 @@
 //! This spike validates that manual `db.sync().await` is sufficient for that pattern.
 
 use libsql::Builder;
+use std::future::Future;
 use std::time::Duration;
 use tempfile::TempDir;
+
+use crate::retry::{self, RetryConfig};
 
 // All sync tests require `flavor = "multi_thread"` because libsql's replication
 // internals spawn blocking tasks that require a multi-threaded tokio runtime.
@@ -156,6 +159,40 @@ fn unique_table_name(prefix: &str) -> String {
     format!("{prefix}_{ts}")
 }
 
+async fn retry_turso<T, F, Fut>(mut op: F) -> Result<T, libsql::Error>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, libsql::Error>>,
+{
+    let mut cfg = RetryConfig::default();
+    cfg.max_attempts = 6;
+    let mut delay = cfg.base_delay;
+
+    for attempt in 1..=cfg.max_attempts {
+        match op().await {
+            Ok(value) => return Ok(value),
+            Err(error)
+                if is_spike_transient_turso_error(&error) && attempt < cfg.max_attempts =>
+            {
+                tokio::time::sleep(delay).await;
+                delay = std::cmp::min(delay * 2, cfg.max_delay);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    unreachable!("retry loop should return on success or final failure")
+}
+
+fn is_spike_transient_turso_error(error: &libsql::Error) -> bool {
+    if retry::is_transient_turso_error(error) {
+        return true;
+    }
+
+    let msg = error.to_string().to_ascii_lowercase();
+    msg.contains("database table is locked") || msg.contains("file is not a database")
+}
+
 // ---------------------------------------------------------------------------
 // Spike tests — all require ZENITH_TURSO__PLATFORM_API_KEY + ZENITH_TURSO__ORG_SLUG + ZENITH_TURSO__URL
 // ---------------------------------------------------------------------------
@@ -252,10 +289,13 @@ async fn spike_sync_write_and_read() {
     assert_eq!(row.get::<String>(1).unwrap(), "embedded replica write test");
 
     // Clean up: drop the test table
-    conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+    drop(rows);
+    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
         .await
-        .unwrap();
-    db.sync().await.expect("cleanup sync failed");
+        .expect("cleanup table drop failed");
+    retry_turso(|| async { db.sync().await })
+        .await
+        .expect("cleanup sync failed");
 }
 
 /// Verify that two separate replicas of the same cloud DB can see each other's writes
@@ -369,11 +409,17 @@ async fn spike_sync_two_replicas() {
     drop(db_b);
 
     // Clean up
-    conn_a
-        .execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+    retry_turso(|| async {
+        conn_a
+            .execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup table drop failed");
+    retry_turso(|| async { db_a.sync().await })
         .await
-        .unwrap();
-    db_a.sync().await.expect("cleanup sync failed");
+        .expect("cleanup sync failed");
 }
 
 /// Verify that the zenith migration pattern works through an embedded replica:
@@ -501,22 +547,45 @@ async fn spike_sync_schema_and_fts() {
     );
 
     // Clean up: drop tables (FTS virtual table first, then content table)
-    conn.execute(&format!("DROP TABLE IF EXISTS {fts_table}"), ())
+    drop(rows);
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TABLE IF EXISTS {fts_table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup fts table drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_ai"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup trigger ai drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_ad"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup trigger ad drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_au"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup trigger au drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup content table drop failed");
+    retry_turso(|| async { db.sync().await })
         .await
-        .unwrap();
-    conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_ai"), ())
-        .await
-        .unwrap();
-    conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_ad"), ())
-        .await
-        .unwrap();
-    conn.execute(&format!("DROP TRIGGER IF EXISTS {table}_au"), ())
-        .await
-        .unwrap();
-    conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
-        .await
-        .unwrap();
-    db.sync().await.expect("cleanup sync failed");
+        .expect("cleanup sync failed");
 }
 
 /// Verify that sync works after a delay — simulating a work session where
@@ -591,10 +660,13 @@ async fn spike_sync_deferred_batch() {
     assert!(rows.next().await.unwrap().is_none());
 
     // Clean up
-    conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+    drop(rows);
+    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
         .await
-        .unwrap();
-    db.sync().await.expect("cleanup sync failed");
+        .expect("cleanup table drop failed");
+    retry_turso(|| async { db.sync().await })
+        .await
+        .expect("cleanup sync failed");
 }
 
 /// Verify that transactions work through the embedded replica.
@@ -668,8 +740,11 @@ async fn spike_sync_transactions() {
     );
 
     // Clean up
-    conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+    drop(rows);
+    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
         .await
-        .unwrap();
-    db.sync().await.expect("cleanup sync failed");
+        .expect("cleanup table drop failed");
+    retry_turso(|| async { db.sync().await })
+        .await
+        .expect("cleanup sync failed");
 }

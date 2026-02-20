@@ -14,8 +14,11 @@ struct AuthSwitchOrgResponse {
     org_role: Option<String>,
 }
 
-pub async fn handle(args: &AuthSwitchOrgArgs, flags: &GlobalFlags) -> anyhow::Result<()> {
-    let config = zen_config::ZenConfig::load().map_err(anyhow::Error::from)?;
+pub async fn handle(
+    args: &AuthSwitchOrgArgs,
+    flags: &GlobalFlags,
+    config: &zen_config::ZenConfig,
+) -> anyhow::Result<()> {
     let secret_key = &config.clerk.secret_key;
 
     if secret_key.is_empty() {

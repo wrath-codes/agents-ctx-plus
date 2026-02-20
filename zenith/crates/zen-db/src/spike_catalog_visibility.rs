@@ -38,6 +38,15 @@ use tempfile::TempDir;
 use crate::retry::{self, RetryConfig};
 use crate::test_support::spike_clerk_helpers::{load_env, turso_jwks_credentials};
 
+fn is_spike_transient_turso_error(e: &libsql::Error) -> bool {
+    if retry::is_transient_turso_error(e) {
+        return true;
+    }
+
+    let msg = e.to_string().to_ascii_lowercase();
+    msg.contains("file is not a database") || msg.contains("database table is locked")
+}
+
 // ============================================================================
 // Helpers (spike 0.20-specific)
 // ============================================================================
@@ -53,7 +62,7 @@ macro_rules! turso_op {
         for __attempt in 1..=__cfg.max_attempts {
             match __result {
                 Ok(ref _v) => break,
-                Err(ref e) if retry::is_transient_turso_error(e) && __attempt < __cfg.max_attempts => {
+                Err(ref e) if is_spike_transient_turso_error(e) && __attempt < __cfg.max_attempts => {
                     eprintln!(
                         "  Turso transient (attempt {__attempt}/{}), retrying in {__delay:?}: {e}",
                         __cfg.max_attempts
@@ -62,7 +71,7 @@ macro_rules! turso_op {
                     __delay = std::cmp::min(__delay * 2, __cfg.max_delay);
                     __result = $expr;
                 }
-                Err(ref e) if retry::is_transient_turso_error(e) => {
+                Err(ref e) if is_spike_transient_turso_error(e) => {
                     eprintln!("SKIP: Turso transient infra error after {} attempts: {e}", __cfg.max_attempts);
                     return;
                 }
@@ -95,7 +104,6 @@ async fn validate_clerk_token(token: &str) -> Option<ClerkClaims> {
     Some(ClerkClaims {
         sub: jwt.sub,
         org_id: jwt.org.as_ref().map(|o| o.id.clone()),
-        org_slug: jwt.org.as_ref().map(|o| o.slug.clone()),
         org_role: jwt.org.as_ref().map(|o| o.role.clone()),
     })
 }
@@ -105,7 +113,6 @@ async fn validate_clerk_token(token: &str) -> Option<ClerkClaims> {
 struct ClerkClaims {
     sub: String,
     org_id: Option<String>,
-    org_slug: Option<String>,
     org_role: Option<String>,
 }
 
@@ -133,17 +140,6 @@ async fn turso_platform_token(db_name: &str) -> Option<String> {
     }
     let body: serde_json::Value = resp.json().await.ok()?;
     body["jwt"].as_str().map(|s| s.to_string())
-}
-
-/// Extract DB name from Turso URL: libsql://{db_name}-{org_slug}.{rest}
-fn extract_db_name(url: &str) -> Option<String> {
-    load_env();
-    let org = std::env::var("ZENITH_TURSO__ORG_SLUG").ok()?;
-    let hostname = url.strip_prefix("libsql://")?;
-    let org_suffix = format!("-{org}.");
-    hostname
-        .split_once(&org_suffix)
-        .map(|(name, _)| name.to_string())
 }
 
 /// Create a temporary Turso DB via Platform API. Returns (url, db_name).
@@ -1342,87 +1338,97 @@ async fn spike_two_turso_replicas_same_process() {
     };
 
     // Sync both
-    replica_a.sync().await.unwrap();
-    replica_b.sync().await.unwrap();
+    turso_op!(replica_a.sync().await);
+    turso_op!(replica_b.sync().await);
 
     // Write to A
     let conn_a = replica_a.connect().unwrap();
-    conn_a
+    turso_op!(conn_a
         .execute(
             "CREATE TABLE IF NOT EXISTS test_a (id INTEGER PRIMARY KEY, val TEXT)",
             (),
         )
         .await
-        .unwrap();
-    conn_a
+        .map(|_| ()));
+    turso_op!(conn_a
         .execute("INSERT OR REPLACE INTO test_a VALUES (1, 'from_a')", ())
         .await
-        .unwrap();
+        .map(|_| ()));
 
     // Write to B
     let conn_b = replica_b.connect().unwrap();
-    conn_b
+    turso_op!(conn_b
         .execute(
             "CREATE TABLE IF NOT EXISTS test_b (id INTEGER PRIMARY KEY, val TEXT)",
             (),
         )
         .await
-        .unwrap();
-    conn_b
+        .map(|_| ()));
+    turso_op!(conn_b
         .execute("INSERT OR REPLACE INTO test_b VALUES (1, 'from_b')", ())
         .await
-        .unwrap();
+        .map(|_| ()));
 
     // Sync both
-    replica_a.sync().await.unwrap();
-    replica_b.sync().await.unwrap();
+    turso_op!(replica_a.sync().await);
+    turso_op!(replica_b.sync().await);
 
     // Query A — should NOT see test_b
-    let mut rows = conn_a
-        .query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'",
-            (),
-        )
-        .await
-        .unwrap();
-    let has_test_b = rows.next().await.unwrap().is_some();
+    let has_test_b = turso_op!(async {
+        let mut rows = conn_a
+            .query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'",
+                (),
+            )
+            .await?;
+        rows.next().await.map(|row| row.is_some())
+    }
+    .await);
     assert!(!has_test_b, "DB A should NOT have test_b table");
 
     // Query B — should NOT see test_a
-    let mut rows = conn_b
-        .query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'",
-            (),
-        )
-        .await
-        .unwrap();
-    let has_test_a = rows.next().await.unwrap().is_some();
+    let has_test_a = turso_op!(async {
+        let mut rows = conn_b
+            .query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'",
+                (),
+            )
+            .await?;
+        rows.next().await.map(|row| row.is_some())
+    }
+    .await);
     assert!(!has_test_a, "DB B should NOT have test_a table");
 
     // Query A — should see its own data
-    let mut rows = conn_a
-        .query("SELECT val FROM test_a WHERE id = 1", ())
-        .await
-        .unwrap();
-    let val_a: String = rows.next().await.unwrap().unwrap().get(0).unwrap();
+    let val_a: String = turso_op!(async {
+        let mut rows = conn_a.query("SELECT val FROM test_a WHERE id = 1", ()).await?;
+        let Some(row) = rows.next().await? else {
+            return Err(libsql::Error::SqliteFailure(1, "missing row for test_a".to_string()));
+        };
+        row.get(0)
+    }
+    .await);
     assert_eq!(val_a, "from_a");
 
     // Query B — should see its own data
-    let mut rows = conn_b
-        .query("SELECT val FROM test_b WHERE id = 1", ())
-        .await
-        .unwrap();
-    let val_b: String = rows.next().await.unwrap().unwrap().get(0).unwrap();
+    let val_b: String = turso_op!(async {
+        let mut rows = conn_b.query("SELECT val FROM test_b WHERE id = 1", ()).await?;
+        let Some(row) = rows.next().await? else {
+            return Err(libsql::Error::SqliteFailure(1, "missing row for test_b".to_string()));
+        };
+        row.get(0)
+    }
+    .await);
     assert_eq!(val_b, "from_b");
 
     eprintln!("  Both replicas coexist — isolated data, no interference");
 
+    drop(conn_b);
+    drop(replica_b);
+
     // Cleanup
-    conn_a
-        .execute("DROP TABLE IF EXISTS test_a", ())
-        .await
-        .unwrap();
-    replica_a.sync().await.unwrap();
+    turso_op!(conn_a.execute("DROP TABLE IF EXISTS test_a", ()).await.map(|_| ()));
+    turso_op!(replica_a.sync().await);
     delete_turso_db(&db_b_name).await;
 
     eprintln!("  PASS: two Turso replicas in same process — no interference");

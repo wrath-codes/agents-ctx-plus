@@ -173,6 +173,4 @@ pub(crate) mod spike_clerk_helpers {
         Some((url, token))
     }
 
-    // Re-export from the production retry module for spike test convenience.
-    pub use crate::retry::is_transient_turso_error;
 }

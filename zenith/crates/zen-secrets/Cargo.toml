@@ -1,0 +1,16 @@
+[package]
+name = "zen-secrets"
+description = "External secret providers for Zenith configuration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+infisical.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+figment.workspace = true
+
+[lints]
+workspace = true

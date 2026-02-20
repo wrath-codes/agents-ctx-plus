@@ -99,6 +99,7 @@ globset = "0.4"
 
 # Auth (spike 0.17 — Clerk CLI auth + Turso JWKS)
 clerk-rs = "0.4.2"
+infisical = "0.0.3"
 open = "5"
 tiny_http = "0.12"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
@@ -117,6 +118,7 @@ serde_arrow = { version = "0.13", features = ["arrow-57"] }
 zen-auth = { path = "crates/zen-auth" }
 zen-core = { path = "crates/zen-core" }
 zen-config = { path = "crates/zen-config" }
+zen-secrets = { path = "crates/zen-secrets" }
 zen-db = { path = "crates/zen-db" }
 zen-lake = { path = "crates/zen-lake" }
 zen-parser = { path = "crates/zen-parser" }

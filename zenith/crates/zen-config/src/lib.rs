@@ -84,7 +84,26 @@ impl ZenConfig {
     /// Returns [`ConfigError`] if figment extraction fails (e.g. malformed
     /// TOML or environment variables that cannot be deserialized).
     pub fn load() -> Result<Self, Box<ConfigError>> {
-        Self::figment()
+        Self::figment_with_env_overrides(&[])
+            .extract()
+            .map_err(|e| Box::new(ConfigError::from(e)))
+    }
+
+    /// Load configuration with external env-style overrides.
+    ///
+    /// `env_overrides` should use the same naming convention as process env
+    /// variables (for example `ZENITH_CLERK__SECRET_KEY`).
+    ///
+    /// Precedence (highest to lowest):
+    /// 1. Process env (`ZENITH_*`)
+    /// 2. `env_overrides`
+    /// 3. `.zenith/config.toml`
+    /// 4. `~/.config/zenith/config.toml`
+    /// 5. defaults
+    pub fn load_with_env_overrides(
+        env_overrides: &[(String, String)],
+    ) -> Result<Self, Box<ConfigError>> {
+        Self::figment_with_env_overrides(env_overrides)
             .extract()
             .map_err(|e| Box::new(ConfigError::from(e)))
     }
@@ -109,6 +128,12 @@ impl ZenConfig {
     /// additional providers on top.
     #[must_use]
     pub fn figment() -> Figment {
+        Self::figment_with_env_overrides(&[])
+    }
+
+    /// Build the figment provider chain with external env-like overrides.
+    #[must_use]
+    pub fn figment_with_env_overrides(env_overrides: &[(String, String)]) -> Figment {
         let mut figment = Figment::from(Serialized::defaults(Self::default()));
 
         // Layer 1: User-global config
@@ -124,7 +149,12 @@ impl ZenConfig {
             figment = figment.merge(Toml::file(local_path));
         }
 
-        // Layer 3: Environment variables (highest priority)
+        // Layer 3: External env-style values (e.g., secret manager output)
+        if let Some(doc) = env_overrides_to_toml(env_overrides) {
+            figment = figment.merge(Toml::string(&doc));
+        }
+
+        // Layer 4: Environment variables (highest priority)
         figment = figment.merge(Env::prefixed("ZENITH_").split("__"));
 
         figment
@@ -162,6 +192,45 @@ impl ZenConfig {
     }
 }
 
+fn env_overrides_to_toml(env_overrides: &[(String, String)]) -> Option<String> {
+    let mut doc = String::new();
+
+    for (key, value) in env_overrides {
+        let Some(path) = env_key_to_toml_path(key) else {
+            continue;
+        };
+
+        let escaped = value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t");
+
+        doc.push_str(&path);
+        doc.push_str(" = \"");
+        doc.push_str(&escaped);
+        doc.push_str("\"\n");
+    }
+
+    if doc.is_empty() { None } else { Some(doc) }
+}
+
+fn env_key_to_toml_path(key: &str) -> Option<String> {
+    let suffix = key.strip_prefix("ZENITH_")?;
+    let parts: Vec<String> = suffix
+        .split("__")
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| segment.to_ascii_lowercase())
+        .collect();
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("."))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +252,24 @@ mod tests {
         assert!(!config.motherduck.is_configured());
         assert!(!config.r2.is_configured());
         assert_eq!(config.general.default_limit, 20);
+    }
+
+    #[test]
+    fn env_override_path_mapping_works() {
+        assert_eq!(
+            env_key_to_toml_path("ZENITH_CLERK__SECRET_KEY"),
+            Some("clerk.secret_key".to_string())
+        );
+    }
+
+    #[test]
+    fn env_override_toml_doc_is_generated() {
+        let doc = env_overrides_to_toml(&[(
+            "ZENITH_CLERK__SECRET_KEY".to_string(),
+            "sk_test".to_string(),
+        )])
+        .expect("doc should be generated");
+
+        assert!(doc.contains("clerk.secret_key = \"sk_test\""));
     }
 }

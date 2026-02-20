@@ -6,6 +6,8 @@ use crate::output::output;
 #[derive(Serialize)]
 struct AuthStatusResponse {
     authenticated: bool,
+    user: Option<String>,
+    organization: Option<String>,
     user_id: Option<String>,
     org_id: Option<String>,
     org_slug: Option<String>,
@@ -14,13 +16,14 @@ struct AuthStatusResponse {
     note: Option<String>,
 }
 
-pub async fn handle(flags: &GlobalFlags) -> anyhow::Result<()> {
-    let config = zen_config::ZenConfig::load().map_err(anyhow::Error::from)?;
+pub async fn handle(flags: &GlobalFlags, config: &zen_config::ZenConfig) -> anyhow::Result<()> {
     let secret_key = &config.clerk.secret_key;
 
     let status = if secret_key.is_empty() {
         AuthStatusResponse {
             authenticated: false,
+            user: None,
+            organization: None,
             user_id: None,
             org_id: None,
             org_slug: None,
@@ -32,6 +35,8 @@ pub async fn handle(flags: &GlobalFlags) -> anyhow::Result<()> {
         match zen_auth::resolve_and_validate(secret_key).await {
             Ok(Some(claims)) => AuthStatusResponse {
                 authenticated: true,
+                user: Some(claims.user_id.clone()),
+                organization: claims.org_slug.clone().or_else(|| claims.org_id.clone()),
                 user_id: Some(claims.user_id),
                 org_id: claims.org_id,
                 org_slug: claims.org_slug,
@@ -41,6 +46,8 @@ pub async fn handle(flags: &GlobalFlags) -> anyhow::Result<()> {
             },
             Ok(None) => AuthStatusResponse {
                 authenticated: false,
+                user: None,
+                organization: None,
                 user_id: None,
                 org_id: None,
                 org_slug: None,
@@ -50,6 +57,8 @@ pub async fn handle(flags: &GlobalFlags) -> anyhow::Result<()> {
             },
             Err(error) => AuthStatusResponse {
                 authenticated: false,
+                user: None,
+                organization: None,
                 user_id: None,
                 org_id: None,
                 org_slug: None,
