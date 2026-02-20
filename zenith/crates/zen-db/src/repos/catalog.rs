@@ -73,22 +73,20 @@ impl ZenService {
         let file_id = self.db().generate_id("dlf").await?;
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT OR IGNORE INTO dl_snapshot (id, created_at, note) VALUES (?1, ?2, ?3)",
-                libsql::params![snapshot_id.as_str(), now.as_str(), "auto"],
+                || libsql::params![snapshot_id.as_str(), now.as_str(), "auto"],
             )
             .await?;
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO dl_data_file
                  (id, snapshot_id, ecosystem, package, version, lance_path, visibility, org_id, owner_sub, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(ecosystem, package, version, lance_path)
                  DO NOTHING",
-                libsql::params![
+                || libsql::params![
                     file_id.as_str(),
                     snapshot_id.as_str(),
                     ecosystem,
@@ -121,14 +119,13 @@ impl ZenService {
     ) -> Result<bool, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT 1 FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
                    AND lance_path LIKE '%symbols.lance%'
                    AND visibility = 'public'
                  LIMIT 1",
-                libsql::params![ecosystem, package, version],
+                || libsql::params![ecosystem, package, version],
             )
             .await?;
         Ok(rows.next().await?.is_some())
@@ -150,14 +147,13 @@ impl ZenService {
     ) -> Result<Option<Vec<String>>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
                    AND visibility = 'public'
                    AND lance_path LIKE '%symbols.lance%'
                  ORDER BY created_at DESC",
-                libsql::params![ecosystem, package, version],
+                || libsql::params![ecosystem, package, version],
             )
             .await?;
 
@@ -190,24 +186,22 @@ impl ZenService {
 
         let mut rows = if let Some(version) = version {
             self.db()
-                .conn()
-                .query(
+                .query_with(
                     "SELECT lance_path FROM dl_data_file
                      WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
                        AND visibility = 'public'
                      ORDER BY created_at DESC, id DESC",
-                    libsql::params![ecosystem, package, version],
+                    || libsql::params![ecosystem, package, version],
                 )
                 .await?
         } else {
             self.db()
-                .conn()
-                .query(
+                .query_with(
                     "SELECT lance_path FROM dl_data_file
                      WHERE ecosystem = ?1 AND package = ?2
                        AND visibility = 'public'
                      ORDER BY created_at DESC, id DESC",
-                    libsql::params![ecosystem, package],
+                    || libsql::params![ecosystem, package],
                 )
                 .await?
         };
@@ -254,8 +248,7 @@ impl ZenService {
 
         let mut rows = self
             .db()
-            .conn()
-            .query(&sql, libsql::params_from_iter(all_params))
+            .query_with(&sql, || libsql::params_from_iter(all_params.clone()))
             .await?;
 
         while let Some(row) = rows.next().await? {
@@ -328,10 +321,9 @@ mod tests {
 
         let mut rows = svc
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT COUNT(*) FROM dl_data_file WHERE ecosystem = ?1 AND package = ?2 AND version = ?3",
-                libsql::params!["rust", "serde", "1.0.0"],
+                || libsql::params!["rust", "serde", "1.0.0"],
             )
             .await
             .unwrap();
@@ -340,7 +332,6 @@ mod tests {
 
         let mut snap_rows = svc
             .db()
-            .conn()
             .query("SELECT COUNT(*) FROM dl_snapshot", ())
             .await
             .unwrap();
@@ -494,10 +485,9 @@ mod tests {
 
         let mut rows = svc
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT visibility, org_id, owner_sub FROM dl_data_file WHERE package = ?1",
-                libsql::params!["team_pkg"],
+                || libsql::params!["team_pkg"],
             )
             .await
             .unwrap();

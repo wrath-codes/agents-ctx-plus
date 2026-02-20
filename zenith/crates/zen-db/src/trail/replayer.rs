@@ -145,8 +145,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Research) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO research_items (id, session_id, title, description, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -162,8 +161,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Finding) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO findings (id, research_id, session_id, content, source, confidence, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -180,8 +178,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Hypothesis) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO hypotheses (id, research_id, finding_id, session_id, content, status, reason, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -199,8 +196,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Insight) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO insights (id, research_id, session_id, content, confidence, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -228,8 +224,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                 .and_then(|v| v.as_i64())
                 .unwrap_or(3);
 
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO issues (id, type, parent_id, title, description, status, priority, session_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -248,8 +243,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Task) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO tasks (id, research_id, issue_id, session_id, title, description, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -267,8 +261,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::ImplLog) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO implementation_log (id, task_id, session_id, file_path, start_line, end_line, description, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -285,8 +278,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Compat) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO compatibility_checks (id, package_a, package_b, status, conditions, finding_id, session_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -304,8 +296,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Create, EntityType::Study) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO studies (id, session_id, research_id, topic, library, methodology, status, summary, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -341,8 +332,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                         .and_then(|v| v.as_str())
                         .unwrap_or(&op.ts);
                     let summary = json_to_value(&op.data, "summary");
-                    db.conn()
-                        .execute(
+                    db.execute(
                             &format!("UPDATE {table} SET status = ?1, ended_at = ?2, summary = ?3 WHERE id = ?4"),
                             vec![
                                 libsql::Value::Text(new_status.to_string()),
@@ -355,8 +345,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                 }
                 EntityType::Hypothesis => {
                     let reason = json_to_value(&op.data, "reason");
-                    db.conn()
-                        .execute(
+                    db.execute(
                             &format!("UPDATE {table} SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4"),
                             vec![
                                 libsql::Value::Text(new_status.to_string()),
@@ -368,12 +357,11 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                         .await?;
                 }
                 _ => {
-                    db.conn()
-                        .execute(
+                    db.execute_with(
                             &format!(
                                 "UPDATE {table} SET status = ?1, updated_at = ?2 WHERE id = ?3"
                             ),
-                            libsql::params![new_status, op.ts.as_str(), op.id.as_str()],
+                            || libsql::params![new_status, op.ts.as_str(), op.id.as_str()],
                         )
                         .await?;
                 }
@@ -382,8 +370,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
 
         (TrailOp::Delete, entity) => {
             let table = entity_type_to_table(entity);
-            db.conn()
-                .execute(
+            db.execute(
                     &format!("DELETE FROM {table} WHERE id = ?1"),
                     [op.id.as_str()],
                 )
@@ -392,27 +379,24 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
 
         (TrailOp::Tag, EntityType::Finding) => {
             let tag = op.data["tag"].as_str().unwrap_or("");
-            db.conn()
-                .execute(
+            db.execute_with(
                     "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
-                    libsql::params![op.id.as_str(), tag],
+                    || libsql::params![op.id.as_str(), tag],
                 )
                 .await?;
         }
 
         (TrailOp::Untag, EntityType::Finding) => {
             let tag = op.data["tag"].as_str().unwrap_or("");
-            db.conn()
-                .execute(
+            db.execute_with(
                     "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
-                    libsql::params![op.id.as_str(), tag],
+                    || libsql::params![op.id.as_str(), tag],
                 )
                 .await?;
         }
 
         (TrailOp::Link, EntityType::EntityLink) => {
-            db.conn()
-                .execute(
+            db.execute(
                     "INSERT OR IGNORE INTO entity_links (id, source_type, source_id, target_type, target_id, relation, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     vec![
                         libsql::Value::Text(op.id.clone()),
@@ -428,8 +412,7 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         }
 
         (TrailOp::Unlink, EntityType::EntityLink) => {
-            db.conn()
-                .execute("DELETE FROM entity_links WHERE id = ?1", [op.id.as_str()])
+            db.execute("DELETE FROM entity_links WHERE id = ?1", [op.id.as_str()])
                 .await?;
         }
 
@@ -497,7 +480,7 @@ async fn replay_update(
     params.push(libsql::Value::Text(id.to_string()));
     let sql = format!("UPDATE {table} SET {set_clause} WHERE id = ?{idx}");
 
-    db.conn().execute(&sql, params).await?;
+    db.execute(&sql, params).await?;
 
     Ok(())
 }

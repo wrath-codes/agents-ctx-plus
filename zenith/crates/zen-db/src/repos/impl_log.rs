@@ -41,11 +41,10 @@ impl ZenService {
         let id = self.db().generate_id(PREFIX_IMPL_LOG).await?;
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO implementation_log (id, task_id, session_id, file_path, start_line, end_line, description, created_at, org_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                libsql::params![
+                || libsql::params![
                     id.as_str(),
                     task_id,
                     session_id,
@@ -98,7 +97,6 @@ impl ZenService {
     pub async fn get_impl_log(&self, id: &str) -> Result<ImplLog, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 &format!("SELECT {SELECT_COLS} FROM implementation_log WHERE id = ?1"),
                 [id],
@@ -120,8 +118,7 @@ impl ZenService {
         let mut del_params: Vec<libsql::Value> = vec![impl_log_id.into()];
         del_params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(del_params))
+            .execute_with(&sql, || libsql::params_from_iter(del_params.clone()))
             .await?;
 
         self.trail().append(&TrailOperation {
@@ -142,7 +139,7 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM implementation_log WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -158,7 +155,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![task_id.into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -174,7 +171,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![file_path.into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {

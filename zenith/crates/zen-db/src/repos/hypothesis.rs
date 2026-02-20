@@ -46,10 +46,10 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_HYPOTHESIS).await?;
 
-        self.db().conn().execute(
+        self.db().execute_with(
             "INSERT INTO hypotheses (id, research_id, finding_id, session_id, content, status, created_at, updated_at, org_id)
              VALUES (?1, ?2, ?3, ?4, ?5, 'unverified', ?6, ?6, ?7)",
-            libsql::params![
+            || libsql::params![
                 id.as_str(),
                 research_id,
                 finding_id,
@@ -104,7 +104,7 @@ impl ZenService {
     /// Returns `DatabaseError::NoResult` if the hypothesis does not exist.
     pub async fn get_hypothesis(&self, id: &str) -> Result<Hypothesis, DatabaseError> {
         let sql = format!("SELECT {SELECT_COLS} FROM hypotheses WHERE id = ?1");
-        let mut rows = self.db().conn().query(&sql, [id]).await?;
+        let mut rows = self.db().query(&sql, [id]).await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         row_to_hypothesis(&row)
     }
@@ -159,8 +159,7 @@ impl ZenService {
         );
 
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let updated = self.get_hypothesis(hyp_id).await?;
@@ -207,8 +206,7 @@ impl ZenService {
         let mut del_params: Vec<libsql::Value> = vec![hyp_id.into()];
         del_params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(del_params))
+            .execute_with(&sql, || libsql::params_from_iter(del_params.clone()))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
@@ -246,7 +244,7 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM hypotheses WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -278,8 +276,7 @@ impl ZenService {
         params.extend(org_params);
         let mut rows = self
             .db()
-            .conn()
-            .query(&sql, libsql::params_from_iter(params))
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let mut items = Vec::new();
@@ -321,8 +318,7 @@ impl ZenService {
             let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), reason.into(), now.to_rfc3339().into(), hyp_id.into()];
             params.extend(org_params);
             self.db()
-                .conn()
-                .execute(&sql, libsql::params_from_iter(params))
+                .execute_with(&sql, || libsql::params_from_iter(params.clone()))
                 .await?;
         } else {
             let (org_filter, org_params) = self.org_id_filter(4);
@@ -330,8 +326,7 @@ impl ZenService {
             let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), hyp_id.into()];
             params.extend(org_params);
             self.db()
-                .conn()
-                .execute(&sql, libsql::params_from_iter(params))
+                .execute_with(&sql, || libsql::params_from_iter(params.clone()))
                 .await?;
         }
 

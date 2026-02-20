@@ -38,10 +38,10 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_FINDING).await?;
 
-        self.db().conn().execute(
+        self.db().execute_with(
             "INSERT INTO findings (id, research_id, session_id, content, source, confidence, created_at, updated_at, org_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            libsql::params![
+            || libsql::params![
                 id.as_str(),
                 research_id,
                 session_id,
@@ -91,7 +91,7 @@ impl ZenService {
     }
 
     pub async fn get_finding(&self, id: &str) -> Result<Finding, DatabaseError> {
-        let mut rows = self.db().conn().query(
+        let mut rows = self.db().query(
             "SELECT id, research_id, session_id, content, source, confidence, created_at, updated_at
              FROM findings WHERE id = ?1",
             [id],
@@ -143,8 +143,7 @@ impl ZenService {
         let sql = format!("UPDATE findings SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
 
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let finding = self.get_finding(finding_id).await?;
@@ -184,7 +183,6 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
             .execute(
                 "DELETE FROM finding_tags WHERE finding_id = ?1",
                 [finding_id],
@@ -196,8 +194,7 @@ impl ZenService {
         let mut del_params: Vec<libsql::Value> = vec![finding_id.into()];
         del_params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(del_params))
+            .execute_with(&sql, || libsql::params_from_iter(del_params.clone()))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
@@ -231,7 +228,7 @@ impl ZenService {
             "SELECT id, research_id, session_id, content, source, confidence, created_at, updated_at
              FROM findings WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
 
         let mut findings = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -255,7 +252,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut findings = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -273,10 +270,9 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
-                libsql::params![finding_id, tag],
+                || libsql::params![finding_id, tag],
             )
             .await?;
 
@@ -320,10 +316,9 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
-                libsql::params![finding_id, tag],
+                || libsql::params![finding_id, tag],
             )
             .await?;
 
@@ -361,7 +356,6 @@ impl ZenService {
     pub async fn get_finding_tags(&self, finding_id: &str) -> Result<Vec<String>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT tag FROM finding_tags WHERE finding_id = ?1 ORDER BY tag",
                 [finding_id],
@@ -378,7 +372,6 @@ impl ZenService {
     pub async fn list_finding_ids_by_tag(&self, tag: &str) -> Result<Vec<String>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT finding_id FROM finding_tags WHERE tag = ?1 ORDER BY finding_id",
                 [tag],

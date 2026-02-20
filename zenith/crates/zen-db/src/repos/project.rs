@@ -29,11 +29,10 @@ fn row_to_dependency(row: &libsql::Row) -> Result<ProjectDependency, DatabaseErr
 impl ZenService {
     pub async fn set_meta(&self, key: &str, value: &str) -> Result<(), DatabaseError> {
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO project_meta (key, value, updated_at) VALUES (?1, ?2, datetime('now'))
                  ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = datetime('now')",
-                libsql::params![key, value],
+                || libsql::params![key, value],
             )
             .await?;
         Ok(())
@@ -54,7 +53,6 @@ impl ZenService {
     pub async fn get_all_meta(&self) -> Result<Vec<ProjectMeta>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT key, value, updated_at FROM project_meta ORDER BY key",
                 (),
@@ -69,7 +67,6 @@ impl ZenService {
 
     pub async fn delete_meta(&self, key: &str) -> Result<(), DatabaseError> {
         self.db()
-            .conn()
             .execute("DELETE FROM project_meta WHERE key = ?1", [key])
             .await?;
         Ok(())
@@ -77,13 +74,12 @@ impl ZenService {
 
     pub async fn upsert_dependency(&self, dep: &ProjectDependency) -> Result<(), DatabaseError> {
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO project_dependencies (ecosystem, name, version, source, indexed, indexed_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(ecosystem, name) DO UPDATE SET
                    version = ?3, source = ?4, indexed = ?5, indexed_at = ?6",
-                libsql::params![
+                || libsql::params![
                     dep.ecosystem.as_str(),
                     dep.name.as_str(),
                     dep.version.as_deref(),
@@ -103,11 +99,10 @@ impl ZenService {
     ) -> Result<Option<ProjectDependency>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT ecosystem, name, version, source, indexed, indexed_at
                  FROM project_dependencies WHERE ecosystem = ?1 AND name = ?2",
-                libsql::params![ecosystem, name],
+                || libsql::params![ecosystem, name],
             )
             .await?;
         match rows.next().await? {
@@ -119,7 +114,6 @@ impl ZenService {
     pub async fn list_dependencies(&self) -> Result<Vec<ProjectDependency>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT ecosystem, name, version, source, indexed, indexed_at
                  FROM project_dependencies ORDER BY ecosystem, name",
@@ -138,7 +132,6 @@ impl ZenService {
     ) -> Result<Vec<ProjectDependency>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT ecosystem, name, version, source, indexed, indexed_at
                  FROM project_dependencies WHERE indexed = FALSE ORDER BY ecosystem, name",
@@ -154,11 +147,10 @@ impl ZenService {
 
     pub async fn mark_indexed(&self, ecosystem: &str, name: &str) -> Result<(), DatabaseError> {
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "UPDATE project_dependencies SET indexed = TRUE, indexed_at = datetime('now')
                  WHERE ecosystem = ?1 AND name = ?2",
-                libsql::params![ecosystem, name],
+                || libsql::params![ecosystem, name],
             )
             .await?;
         Ok(())

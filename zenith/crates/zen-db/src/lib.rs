@@ -316,7 +316,6 @@ mod tests {
         ];
         for table in &tables {
             let mut rows = db
-                .conn()
                 .query(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?1",
                     [*table],
@@ -344,7 +343,6 @@ mod tests {
         ];
         for table in &fts_tables {
             let mut rows = db
-                .conn()
                 .query(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?1",
                     [*table],
@@ -406,16 +404,14 @@ mod tests {
         let db = test_db().await;
         let id = db.generate_id("ses").await.unwrap();
 
-        db.conn()
-            .execute(
-                "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
-                [id.as_str()],
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
+            [id.as_str()],
+        )
+        .await
+        .unwrap();
 
         let mut rows = db
-            .conn()
             .query(
                 "SELECT id, status FROM sessions WHERE id = ?1",
                 [id.as_str()],
@@ -433,24 +429,21 @@ mod tests {
         let ses_id = db.generate_id("ses").await.unwrap();
         let fnd_id = db.generate_id("fnd").await.unwrap();
 
-        db.conn()
-            .execute(
-                "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
-                [ses_id.as_str()],
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
+            [ses_id.as_str()],
+        )
+        .await
+        .unwrap();
 
-        db.conn()
-            .execute(
-                "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
-                libsql::params![fnd_id.as_str(), ses_id.as_str(), "test finding content", "high"],
-            )
-            .await
-            .unwrap();
+        db.execute_with(
+            "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
+            || libsql::params![fnd_id.as_str(), ses_id.as_str(), "test finding content", "high"],
+        )
+        .await
+        .unwrap();
 
         let mut rows = db
-            .conn()
             .query(
                 "SELECT id, content, confidence FROM findings WHERE id = ?1",
                 [fnd_id.as_str()],
@@ -468,26 +461,23 @@ mod tests {
         let db = test_db().await;
         let ses_id = db.generate_id("ses").await.unwrap();
 
-        db.conn()
-            .execute(
-                "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
-                [ses_id.as_str()],
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO sessions (id, status) VALUES (?1, 'active')",
+            [ses_id.as_str()],
+        )
+        .await
+        .unwrap();
 
         let fnd_id = db.generate_id("fnd").await.unwrap();
-        db.conn()
-            .execute(
-                "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
-                libsql::params![fnd_id.as_str(), ses_id.as_str(), "tokio async runtime compatibility", "high"],
-            )
-            .await
-            .unwrap();
+        db.execute_with(
+            "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
+            || libsql::params![fnd_id.as_str(), ses_id.as_str(), "tokio async runtime compatibility", "high"],
+        )
+        .await
+        .unwrap();
 
         // Porter stemming: "runtime" matches "runtime", "spawning" would match "spawn"
         let mut rows = db
-            .conn()
             .query(
                 "SELECT f.id FROM findings_fts JOIN findings f ON f.rowid = findings_fts.rowid WHERE findings_fts MATCH 'runtime' ORDER BY rank",
                 (),
@@ -503,16 +493,14 @@ mod tests {
     async fn fts5_trigger_populates_on_insert() {
         let db = test_db().await;
 
-        db.conn()
-            .execute(
-                "INSERT INTO research_items (id, title, description, status) VALUES ('res-test1', 'HTTP Client Research', 'Compare reqwest and hyper', 'open')",
-                (),
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO research_items (id, title, description, status) VALUES ('res-test1', 'HTTP Client Research', 'Compare reqwest and hyper', 'open')",
+            (),
+        )
+        .await
+        .unwrap();
 
         let mut rows = db
-            .conn()
             .query(
                 "SELECT rowid FROM research_fts WHERE research_fts MATCH 'reqwest'",
                 (),
@@ -529,17 +517,15 @@ mod tests {
     async fn entity_links_unique_constraint() {
         let db = test_db().await;
 
-        db.conn()
-            .execute(
-                "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation) VALUES ('lnk-test1', 'finding', 'fnd-1', 'hypothesis', 'hyp-1', 'validates')",
-                (),
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation) VALUES ('lnk-test1', 'finding', 'fnd-1', 'hypothesis', 'hyp-1', 'validates')",
+            (),
+        )
+        .await
+        .unwrap();
 
         // Duplicate should fail due to UNIQUE constraint
         let result = db
-            .conn()
             .execute(
                 "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation) VALUES ('lnk-test2', 'finding', 'fnd-1', 'hypothesis', 'hyp-1', 'validates')",
                 (),
@@ -553,67 +539,64 @@ mod tests {
         let db = test_db().await;
 
         // Session (needed as FK for others)
-        db.conn()
-            .execute("INSERT INTO sessions (id) VALUES ('ses-t1')", ())
+        db.execute("INSERT INTO sessions (id) VALUES ('ses-t1')", ())
             .await
             .unwrap();
 
         // Project meta
-        db.conn()
-            .execute(
-                "INSERT INTO project_meta (key, value) VALUES ('name', 'test-project')",
-                (),
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO project_meta (key, value) VALUES ('name', 'test-project')",
+            (),
+        )
+        .await
+        .unwrap();
 
         // Project dependency
-        db.conn().execute("INSERT INTO project_dependencies (ecosystem, name, version, source) VALUES ('rust', 'tokio', '1.49', 'cargo.toml')", ()).await.unwrap();
+        db.execute("INSERT INTO project_dependencies (ecosystem, name, version, source) VALUES ('rust', 'tokio', '1.49', 'cargo.toml')", ()).await.unwrap();
 
         // Research
-        db.conn().execute("INSERT INTO research_items (id, session_id, title) VALUES ('res-t1', 'ses-t1', 'Test research')", ()).await.unwrap();
+        db.execute("INSERT INTO research_items (id, session_id, title) VALUES ('res-t1', 'ses-t1', 'Test research')", ()).await.unwrap();
 
         // Finding
-        db.conn().execute("INSERT INTO findings (id, session_id, content) VALUES ('fnd-t1', 'ses-t1', 'Test finding')", ()).await.unwrap();
+        db.execute("INSERT INTO findings (id, session_id, content) VALUES ('fnd-t1', 'ses-t1', 'Test finding')", ()).await.unwrap();
 
         // Finding tag
-        db.conn()
-            .execute(
-                "INSERT INTO finding_tags (finding_id, tag) VALUES ('fnd-t1', 'verified')",
-                (),
-            )
-            .await
-            .unwrap();
+        db.execute(
+            "INSERT INTO finding_tags (finding_id, tag) VALUES ('fnd-t1', 'verified')",
+            (),
+        )
+        .await
+        .unwrap();
 
         // Hypothesis
-        db.conn().execute("INSERT INTO hypotheses (id, session_id, content) VALUES ('hyp-t1', 'ses-t1', 'Test hypothesis')", ()).await.unwrap();
+        db.execute("INSERT INTO hypotheses (id, session_id, content) VALUES ('hyp-t1', 'ses-t1', 'Test hypothesis')", ()).await.unwrap();
 
         // Insight
-        db.conn().execute("INSERT INTO insights (id, session_id, content) VALUES ('ins-t1', 'ses-t1', 'Test insight')", ()).await.unwrap();
+        db.execute("INSERT INTO insights (id, session_id, content) VALUES ('ins-t1', 'ses-t1', 'Test insight')", ()).await.unwrap();
 
         // Issue
-        db.conn().execute("INSERT INTO issues (id, session_id, title, type) VALUES ('iss-t1', 'ses-t1', 'Test issue', 'bug')", ()).await.unwrap();
+        db.execute("INSERT INTO issues (id, session_id, title, type) VALUES ('iss-t1', 'ses-t1', 'Test issue', 'bug')", ()).await.unwrap();
 
         // Task
-        db.conn().execute("INSERT INTO tasks (id, session_id, title) VALUES ('tsk-t1', 'ses-t1', 'Test task')", ()).await.unwrap();
+        db.execute("INSERT INTO tasks (id, session_id, title) VALUES ('tsk-t1', 'ses-t1', 'Test task')", ()).await.unwrap();
 
         // Implementation log
-        db.conn().execute("INSERT INTO implementation_log (id, task_id, session_id, file_path) VALUES ('imp-t1', 'tsk-t1', 'ses-t1', 'src/main.rs')", ()).await.unwrap();
+        db.execute("INSERT INTO implementation_log (id, task_id, session_id, file_path) VALUES ('imp-t1', 'tsk-t1', 'ses-t1', 'src/main.rs')", ()).await.unwrap();
 
         // Study
-        db.conn().execute("INSERT INTO studies (id, session_id, topic) VALUES ('stu-t1', 'ses-t1', 'Test study')", ()).await.unwrap();
+        db.execute("INSERT INTO studies (id, session_id, topic) VALUES ('stu-t1', 'ses-t1', 'Test study')", ()).await.unwrap();
 
         // Compatibility check
-        db.conn().execute("INSERT INTO compatibility_checks (id, session_id, package_a, package_b) VALUES ('cmp-t1', 'ses-t1', 'rust:tokio:1.49', 'rust:axum:0.8')", ()).await.unwrap();
+        db.execute("INSERT INTO compatibility_checks (id, session_id, package_a, package_b) VALUES ('cmp-t1', 'ses-t1', 'rust:tokio:1.49', 'rust:axum:0.8')", ()).await.unwrap();
 
         // Entity link
-        db.conn().execute("INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation) VALUES ('lnk-t1', 'finding', 'fnd-t1', 'hypothesis', 'hyp-t1', 'validates')", ()).await.unwrap();
+        db.execute("INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation) VALUES ('lnk-t1', 'finding', 'fnd-t1', 'hypothesis', 'hyp-t1', 'validates')", ()).await.unwrap();
 
         // Audit entry
-        db.conn().execute("INSERT INTO audit_trail (id, session_id, entity_type, entity_id, action) VALUES ('aud-t1', 'ses-t1', 'finding', 'fnd-t1', 'created')", ()).await.unwrap();
+        db.execute("INSERT INTO audit_trail (id, session_id, entity_type, entity_id, action) VALUES ('aud-t1', 'ses-t1', 'finding', 'fnd-t1', 'created')", ()).await.unwrap();
 
         // Session snapshot
-        db.conn().execute("INSERT INTO session_snapshots (session_id, summary) VALUES ('ses-t1', 'Test snapshot')", ()).await.unwrap();
+        db.execute("INSERT INTO session_snapshots (session_id, summary) VALUES ('ses-t1', 'Test snapshot')", ()).await.unwrap();
 
         // If we got here, all inserts succeeded
     }

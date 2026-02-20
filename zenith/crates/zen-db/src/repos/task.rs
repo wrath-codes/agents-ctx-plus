@@ -43,11 +43,10 @@ impl ZenService {
         let id = self.db().generate_id(PREFIX_TASK).await?;
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO tasks (id, research_id, issue_id, session_id, title, description, status, created_at, updated_at, org_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                libsql::params![
+                || libsql::params![
                     id.as_str(),
                     research_id,
                     issue_id,
@@ -102,7 +101,6 @@ impl ZenService {
     pub async fn get_task(&self, id: &str) -> Result<Task, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 &format!("SELECT {SELECT_COLS} FROM tasks WHERE id = ?1"),
                 [id],
@@ -164,8 +162,7 @@ impl ZenService {
         params.extend(org_params);
         let sql = format!("UPDATE tasks SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let updated = self.get_task(task_id).await?;
@@ -205,8 +202,7 @@ impl ZenService {
         let mut del_params: Vec<libsql::Value> = vec![task_id.into()];
         del_params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(del_params))
+            .execute_with(&sql, || libsql::params_from_iter(del_params.clone()))
             .await?;
 
         self.trail().append(&TrailOperation {
@@ -227,7 +223,7 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM tasks WHERE 1=1 {org_filter} ORDER BY status, created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -248,7 +244,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -278,8 +274,7 @@ impl ZenService {
         let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), task_id.into()];
         params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let updated = Task {
@@ -328,7 +323,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![issue_id.into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {

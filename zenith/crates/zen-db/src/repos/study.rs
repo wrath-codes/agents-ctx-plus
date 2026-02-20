@@ -87,11 +87,10 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO studies (id, session_id, research_id, topic, library, methodology, status, created_at, updated_at, org_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?8, ?9)",
-                libsql::params![
+                || libsql::params![
                     id.as_str(),
                     session_id,
                     research_id,
@@ -146,7 +145,6 @@ impl ZenService {
     pub async fn get_study(&self, id: &str) -> Result<Study, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 &format!("SELECT {STUDY_COLS} FROM studies WHERE id = ?1"),
                 [id],
@@ -208,8 +206,7 @@ impl ZenService {
         let sql = format!("UPDATE studies SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
 
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let now = Utc::now();
@@ -250,8 +247,7 @@ impl ZenService {
         let mut del_params: Vec<libsql::Value> = vec![study_id.into()];
         del_params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(del_params))
+            .execute_with(&sql, || libsql::params_from_iter(del_params.clone()))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
@@ -284,7 +280,7 @@ impl ZenService {
         let sql = format!(
             "SELECT {STUDY_COLS} FROM studies WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
 
         let mut studies = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -308,7 +304,7 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
         params.extend(org_params);
-        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
+        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
 
         let mut studies = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -338,8 +334,7 @@ impl ZenService {
         let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), study_id.into()];
         params.extend(org_params);
         self.db()
-            .conn()
-            .execute(&sql, libsql::params_from_iter(params))
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
 
         let detail = StatusChangedDetail {
@@ -389,11 +384,10 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO hypotheses (id, session_id, content, status, created_at, updated_at, org_id)
                  VALUES (?1, ?2, ?3, 'unverified', ?4, ?5, ?6)",
-                libsql::params![
+                || libsql::params![
                     hyp_id.as_str(),
                     session_id,
                     content,
@@ -460,11 +454,10 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO findings (id, session_id, content, confidence, created_at, updated_at, org_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                libsql::params![
+                || libsql::params![
                     fnd_id.as_str(),
                     session_id,
                     content,
@@ -553,11 +546,10 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
-            .execute(
+            .execute_with(
                 "INSERT INTO insights (id, session_id, content, confidence, created_at, updated_at, org_id)
                  VALUES (?1, ?2, ?3, 'high', ?4, ?5, ?6)",
-                libsql::params![
+                || libsql::params![
                     ins_id.as_str(),
                     session_id,
                     summary,
@@ -629,7 +621,6 @@ impl ZenService {
         for hid in &hyp_ids {
             let mut rows = self
                 .db()
-                .conn()
                 .query(
                     "SELECT id, content, status FROM hypotheses WHERE id = ?1",
                     [hid.as_str()],
@@ -648,7 +639,6 @@ impl ZenService {
         for fid in &fnd_ids {
             let mut rows = self
                 .db()
-                .conn()
                 .query(
                     "SELECT id, content, confidence FROM findings WHERE id = ?1",
                     [fid.as_str()],
@@ -667,7 +657,6 @@ impl ZenService {
         for iid in &ins_ids {
             let mut rows = self
                 .db()
-                .conn()
                 .query(
                     "SELECT id, content, confidence FROM insights WHERE id = ?1",
                     [iid.as_str()],
@@ -694,7 +683,6 @@ impl ZenService {
     pub async fn study_progress(&self, study_id: &str) -> Result<StudyProgress, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT
                     COUNT(*) as total,

@@ -37,10 +37,10 @@ impl ZenService {
         let now = Utc::now();
         let id = self.db().generate_id(PREFIX_LINK).await?;
 
-        self.db().conn().execute(
+        self.db().execute_with(
             "INSERT INTO entity_links (id, source_type, source_id, target_type, target_id, relation, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            libsql::params![
+            || libsql::params![
                 id.as_str(),
                 source_type.as_str(),
                 source_id,
@@ -99,7 +99,6 @@ impl ZenService {
     pub async fn get_link(&self, id: &str) -> Result<EntityLink, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
             .query(
                 "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE id = ?1",
@@ -115,7 +114,6 @@ impl ZenService {
         let now = Utc::now();
 
         self.db()
-            .conn()
             .execute("DELETE FROM entity_links WHERE id = ?1", [link_id])
             .await?;
 
@@ -161,11 +159,10 @@ impl ZenService {
     ) -> Result<Vec<EntityLink>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE source_type = ?1 AND source_id = ?2",
-                libsql::params![source_type.as_str(), source_id],
+                || libsql::params![source_type.as_str(), source_id],
             )
             .await?;
 
@@ -183,11 +180,10 @@ impl ZenService {
     ) -> Result<Vec<EntityLink>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT id, source_type, source_id, target_type, target_id, relation, created_at
              FROM entity_links WHERE target_type = ?1 AND target_id = ?2",
-                libsql::params![target_type.as_str(), target_id],
+                || libsql::params![target_type.as_str(), target_id],
             )
             .await?;
 
@@ -206,11 +202,10 @@ impl ZenService {
     ) -> Result<Vec<String>, DatabaseError> {
         let mut rows = self
             .db()
-            .conn()
-            .query(
+            .query_with(
                 "SELECT target_id FROM entity_links
              WHERE source_type = ?1 AND source_id = ?2 AND target_type = ?3",
-                libsql::params![source_type.as_str(), source_id, target_type.as_str()],
+                || libsql::params![source_type.as_str(), source_id, target_type.as_str()],
             )
             .await?;
 

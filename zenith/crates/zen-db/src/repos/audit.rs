@@ -27,10 +27,10 @@ impl ZenService {
     ///
     /// Returns `DatabaseError` if the INSERT fails.
     pub async fn append_audit(&self, entry: &AuditEntry) -> Result<(), DatabaseError> {
-        self.db().conn().execute(
+        self.db().execute_with(
             "INSERT INTO audit_trail (id, session_id, entity_type, entity_id, action, detail, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            libsql::params![
+            || libsql::params![
                 entry.id.as_str(),
                 entry.session_id.as_deref(),
                 entry.entity_type.as_str(),
@@ -87,8 +87,7 @@ impl ZenService {
 
         let mut rows = self
             .db()
-            .conn()
-            .query(&sql, libsql::params_from_iter(params))
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
             .await?;
         let mut entries = Vec::new();
 
@@ -117,13 +116,13 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<AuditEntry>, DatabaseError> {
-        let mut rows = self.db().conn().query(
+        let mut rows = self.db().query_with(
             "SELECT a.id, a.session_id, a.entity_type, a.entity_id, a.action, a.detail, a.created_at
              FROM audit_fts
              JOIN audit_trail a ON a.rowid = audit_fts.rowid
              WHERE audit_fts MATCH ?1
              ORDER BY rank LIMIT ?2",
-            libsql::params![query, limit],
+            || libsql::params![query, limit],
         ).await?;
 
         let mut entries = Vec::new();
