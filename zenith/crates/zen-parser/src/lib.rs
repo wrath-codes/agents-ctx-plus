@@ -87,7 +87,7 @@ pub fn extract_api(source: &str, file_path: &str) -> Result<Vec<ParsedItem>, Par
     };
 
     if items.is_empty() {
-        tracing::warn!(
+        tracing::debug!(
             file = file_path,
             "ast-grep extraction yielded 0 items; regex fallback not yet implemented"
         );

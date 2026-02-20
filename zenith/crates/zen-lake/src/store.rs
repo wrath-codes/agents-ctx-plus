@@ -52,7 +52,12 @@ impl ZenLake {
             ) VALUES (
                 COALESCE(
                     NULLIF(?, ''),
-                    substr(md5(concat(?, ':', ?, ':', ?, ':', ?, ':', ?, ':', ?)), 1, 16)
+                    substr(md5(concat(
+                        ?, ':', ?, ':', ?, ':', ?, ':', ?, ':', ?, ':',
+                        COALESCE(?, ''), ':',
+                        COALESCE(CAST(? AS VARCHAR), ''), ':',
+                        COALESCE(CAST(? AS VARCHAR), '')
+                    )), 1, 16)
                 ),
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
@@ -69,7 +74,7 @@ impl ZenLake {
             };
 
             stmt.execute(params![
-                // For ID: first is candidate, next 6 are md5 inputs (used only if candidate is empty)
+                // For ID: first is candidate; next values are md5 inputs.
                 sym.id,             // 1: candidate id
                 sym.ecosystem,      // 2: md5 input
                 sym.package,        // 3
@@ -77,27 +82,30 @@ impl ZenLake {
                 sym.file_path,      // 5
                 sym.kind,           // 6
                 sym.name,           // 7
-                sym.ecosystem,      // 8
-                sym.package,        // 9
-                sym.version,        // 10
-                sym.file_path,      // 11
-                sym.kind,           // 12
-                sym.name,           // 13
-                sym.signature,      // 14
-                sym.source,         // 15
-                sym.doc_comment,    // 16
-                sym.line_start,     // 17
-                sym.line_end,       // 18
-                sym.visibility,     // 19
-                sym.is_async,       // 20
-                sym.is_unsafe,      // 21
-                sym.is_error_type,  // 22
-                sym.returns_result, // 23
-                sym.return_type,    // 24
-                sym.generics,       // 25
-                sym.attributes,     // 26
-                sym.metadata,       // 27
-                embedding_sql,      // 28
+                sym.signature,      // 8
+                sym.line_start,     // 9
+                sym.line_end,       // 10
+                sym.ecosystem,      // 11
+                sym.package,        // 12
+                sym.version,        // 13
+                sym.file_path,      // 14
+                sym.kind,           // 15
+                sym.name,           // 16
+                sym.signature,      // 17
+                sym.source,         // 18
+                sym.doc_comment,    // 19
+                sym.line_start,     // 20
+                sym.line_end,       // 21
+                sym.visibility,     // 22
+                sym.is_async,       // 23
+                sym.is_unsafe,      // 24
+                sym.is_error_type,  // 25
+                sym.returns_result, // 26
+                sym.return_type,    // 27
+                sym.generics,       // 28
+                sym.attributes,     // 29
+                sym.metadata,       // 30
+                embedding_sql,      // 31
             ])?;
         }
 

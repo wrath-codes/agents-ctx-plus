@@ -365,11 +365,9 @@ fn parse_cargo_dependencies(
     for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
         if let Some(table) = document.get(section).and_then(TomlValue::as_table) {
             for (name, value) in table {
-                out.push((
-                    name.clone(),
-                    parse_cargo_version_value(value),
-                    "Cargo.toml".to_string(),
-                ));
+                if let Some((resolved_name, version)) = parse_cargo_dependency_entry(name, value) {
+                    out.push((resolved_name, version, "Cargo.toml".to_string()));
+                }
             }
         }
     }
@@ -382,11 +380,9 @@ fn parse_cargo_dependencies(
             .and_then(TomlValue::as_table)
     {
         for (name, value) in table {
-            out.push((
-                name.clone(),
-                parse_cargo_version_value(value),
-                "Cargo.toml".to_string(),
-            ));
+            if let Some((resolved_name, version)) = parse_cargo_dependency_entry(name, value) {
+                out.push((resolved_name, version, "Cargo.toml".to_string()));
+            }
         }
     }
 
@@ -461,6 +457,34 @@ fn parse_cargo_version_value(value: &TomlValue) -> Option<String> {
             .get("version")
             .and_then(TomlValue::as_str)
             .map(str::to_string),
+        _ => None,
+    }
+}
+
+fn parse_cargo_dependency_entry(name: &str, value: &TomlValue) -> Option<(String, Option<String>)> {
+    match value {
+        TomlValue::String(version) => Some((name.to_string(), Some(version.clone()))),
+        TomlValue::Table(table) => {
+            if table
+                .get("workspace")
+                .and_then(TomlValue::as_bool)
+                .unwrap_or(false)
+            {
+                return None;
+            }
+
+            if table.get("path").is_some() || table.get("git").is_some() {
+                return None;
+            }
+
+            let resolved_name = table
+                .get("package")
+                .and_then(TomlValue::as_str)
+                .unwrap_or(name)
+                .to_string();
+
+            Some((resolved_name, parse_cargo_version_value(value)))
+        }
         _ => None,
     }
 }
@@ -627,7 +651,10 @@ async fn index_dependency(
 
 #[cfg(test)]
 mod tests {
-    use super::{onboard_mode, parse_requirement_line, unique_deps};
+    use super::{
+        onboard_mode, parse_cargo_dependencies, parse_requirement_line, unique_deps,
+    };
+    use tempfile::TempDir;
 
     #[test]
     fn parses_requirements_equals() {
@@ -673,5 +700,41 @@ mod tests {
         assert_eq!(onboard_mode(true, 0, 0), "local");
         assert_eq!(onboard_mode(true, 0, 3), "cloud");
         assert_eq!(onboard_mode(true, 2, 3), "hybrid");
+    }
+
+    #[test]
+    fn cargo_parser_skips_path_and_workspace_dependencies() {
+        let temp = TempDir::new().expect("tempdir should create");
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            r#"
+                [dependencies]
+                anyhow = "1"
+                aether-config = { path = "../aether-config" }
+                serde_json = { workspace = true }
+            "#,
+        )
+        .expect("Cargo.toml should write");
+
+        let deps = parse_cargo_dependencies(temp.path(), true).expect("dependencies should parse");
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].0, "anyhow");
+    }
+
+    #[test]
+    fn cargo_parser_uses_package_name_for_renamed_dependencies() {
+        let temp = TempDir::new().expect("tempdir should create");
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            r#"
+                [dependencies]
+                serde1 = { package = "serde", version = "1" }
+            "#,
+        )
+        .expect("Cargo.toml should write");
+
+        let deps = parse_cargo_dependencies(temp.path(), false).expect("dependencies should parse");
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].0, "serde");
     }
 }
