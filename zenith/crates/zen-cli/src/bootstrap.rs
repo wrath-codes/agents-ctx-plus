@@ -33,7 +33,21 @@ fn is_ci() -> bool {
 
 fn load_project_dotenv(flags: &GlobalFlags) -> anyhow::Result<()> {
     if let Some(project) = &flags.project {
-        let env_path = PathBuf::from(project).join(".env");
+        let project_path = PathBuf::from(project);
+        let root = if project_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == ".zenith")
+        {
+            project_path
+                .parent()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or(project_path.clone())
+        } else {
+            project_path
+        };
+
+        let env_path = root.join(".env");
         if env_path.exists() {
             dotenvy::from_path(&env_path)
                 .with_context(|| format!("failed to load dotenv file at {}", env_path.display()))?;

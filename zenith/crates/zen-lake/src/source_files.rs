@@ -7,9 +7,9 @@
 //!
 //! Used by `znt grep` (Phase 4) to search source code content with Rust regex.
 
-use duckdb::{Connection, params};
+use duckdb::{params, AccessMode, Config, Connection};
 
-use crate::LakeError;
+use crate::{LakeError, OpenMode};
 
 /// DDL for the source files table.
 const CREATE_SOURCE_FILES: &str = "
@@ -68,8 +68,26 @@ impl SourceFileStore {
     ///
     /// Returns [`LakeError::DuckDb`] if the file cannot be opened or schema creation fails.
     pub fn open(path: &str) -> Result<Self, LakeError> {
-        let conn = Connection::open(path)?;
-        conn.execute_batch(CREATE_SOURCE_FILES)?;
+        Self::open_with_mode(path, OpenMode::ReadWrite)
+    }
+
+    /// Open source file store with explicit mode.
+    ///
+    /// Read-only mode skips schema initialization and expects the file/schema to exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if opening fails.
+    pub fn open_with_mode(path: &str, mode: OpenMode) -> Result<Self, LakeError> {
+        let access = match mode {
+            OpenMode::ReadOnly => AccessMode::ReadOnly,
+            OpenMode::ReadWrite => AccessMode::ReadWrite,
+        };
+        let config = Config::default().access_mode(access)?;
+        let conn = Connection::open_with_flags(path, config)?;
+        if mode == OpenMode::ReadWrite {
+            conn.execute_batch(CREATE_SOURCE_FILES)?;
+        }
         Ok(Self { conn })
     }
 

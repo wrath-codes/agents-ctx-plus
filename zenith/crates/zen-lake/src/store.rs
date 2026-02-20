@@ -44,7 +44,7 @@ impl ZenLake {
     /// Returns [`LakeError::DuckDb`] if any INSERT fails.
     pub fn store_symbols(&self, symbols: &[ApiSymbolRow]) -> Result<(), LakeError> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO api_symbols (
+            "INSERT OR REPLACE INTO api_symbols (
                 id, ecosystem, package, version, file_path, kind, name,
                 signature, source, doc_comment, line_start, line_end,
                 visibility, is_async, is_unsafe, is_error_type, returns_result,
@@ -123,7 +123,7 @@ impl ZenLake {
     /// Returns [`LakeError::DuckDb`] if any INSERT fails.
     pub fn store_doc_chunks(&self, chunks: &[DocChunkRow]) -> Result<(), LakeError> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO doc_chunks (
+            "INSERT OR REPLACE INTO doc_chunks (
                 id, ecosystem, package, version, chunk_index,
                 title, content, source_file, format, embedding
             ) VALUES (

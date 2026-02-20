@@ -28,7 +28,14 @@ pub use r2_write::R2WriteResult;
 pub use schemas::{ApiSymbolRow, DocChunkRow};
 pub use source_files::{SourceFile, SourceFileStore};
 
-use duckdb::Connection;
+use duckdb::{AccessMode, Config, Connection};
+
+/// File open mode for local DuckDB-backed stores.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpenMode {
+    ReadOnly,
+    ReadWrite,
+}
 
 /// Local `DuckDB` lake for indexed package data.
 ///
@@ -50,9 +57,27 @@ impl ZenLake {
     ///
     /// Returns [`LakeError::DuckDb`] if the file cannot be opened or schema creation fails.
     pub fn open_local(path: &str) -> Result<Self, LakeError> {
-        let conn = Connection::open(path)?;
+        Self::open_local_with_mode(path, OpenMode::ReadWrite)
+    }
+
+    /// Open or create a local `DuckDB` lake file with explicit access mode.
+    ///
+    /// Read-only mode skips schema initialization and expects tables to exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LakeError::DuckDb`] if the file cannot be opened.
+    pub fn open_local_with_mode(path: &str, mode: OpenMode) -> Result<Self, LakeError> {
+        let access = match mode {
+            OpenMode::ReadOnly => AccessMode::ReadOnly,
+            OpenMode::ReadWrite => AccessMode::ReadWrite,
+        };
+        let config = Config::default().access_mode(access)?;
+        let conn = Connection::open_with_flags(path, config)?;
         let lake = Self { conn };
-        lake.init_schema()?;
+        if mode == OpenMode::ReadWrite {
+            lake.init_schema()?;
+        }
         Ok(lake)
     }
 

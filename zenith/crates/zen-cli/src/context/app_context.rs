@@ -5,8 +5,23 @@ use zen_config::ZenConfig;
 use zen_core::identity::AuthIdentity;
 use zen_db::service::ZenService;
 use zen_embeddings::EmbeddingEngine;
-use zen_lake::{SourceFileStore, ZenLake};
+use zen_lake::{OpenMode, SourceFileStore, ZenLake};
 use zen_registry::RegistryClient;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LakeAccessMode {
+    ReadOnly,
+    ReadWrite,
+}
+
+impl From<LakeAccessMode> for OpenMode {
+    fn from(value: LakeAccessMode) -> Self {
+        match value {
+            LakeAccessMode::ReadOnly => OpenMode::ReadOnly,
+            LakeAccessMode::ReadWrite => OpenMode::ReadWrite,
+        }
+    }
+}
 
 /// Shared application resources initialized once at startup.
 pub struct AppContext {
@@ -23,13 +38,27 @@ pub struct AppContext {
 
 impl AppContext {
     /// Initialize all shared resources using the discovered project root.
-    pub async fn init(project_root: PathBuf, config: ZenConfig) -> anyhow::Result<Self> {
+    pub async fn init(
+        project_root: PathBuf,
+        config: ZenConfig,
+        lake_access_mode: LakeAccessMode,
+    ) -> anyhow::Result<Self> {
         let zenith_dir = project_root.join(".zenith");
         let db_path = zenith_dir.join("zenith.db");
         let synced_path = zenith_dir.join("zenith-synced.db");
         let trail_dir = zenith_dir.join("trail");
         let lake_path = zenith_dir.join("lake.duckdb");
         let source_path = zenith_dir.join("source_files.duckdb");
+
+        std::fs::create_dir_all(&zenith_dir).with_context(|| {
+            format!(
+                "failed to create zenith directory at {}",
+                zenith_dir.display()
+            )
+        })?;
+        std::fs::create_dir_all(&trail_dir).with_context(|| {
+            format!("failed to create trail directory at {}", trail_dir.display())
+        })?;
 
         let db_path_str = db_path.to_string_lossy();
         let synced_path_str = synced_path.to_string_lossy();
@@ -83,9 +112,30 @@ impl AppContext {
                 .context("failed to initialize zen-db service")?
         };
 
-        let lake = ZenLake::open_local(&lake_path_str).context("failed to open local zen lake")?;
+        let lake = match ZenLake::open_local_with_mode(&lake_path_str, lake_access_mode.into()) {
+            Ok(lake) => lake,
+            Err(error)
+                if lake_access_mode == LakeAccessMode::ReadOnly
+                    && error.to_string().contains("database does not exist") =>
+            {
+                ZenLake::open_local_with_mode(&lake_path_str, OpenMode::ReadWrite)
+                    .context("failed to initialize local zen lake")?
+            }
+            Err(error) => return Err(error).context("failed to open local zen lake"),
+        };
+
         let source_store =
-            SourceFileStore::open(&source_path_str).context("failed to open source file store")?;
+            match SourceFileStore::open_with_mode(&source_path_str, lake_access_mode.into()) {
+                Ok(store) => store,
+                Err(error)
+                    if lake_access_mode == LakeAccessMode::ReadOnly
+                        && error.to_string().contains("database does not exist") =>
+                {
+                    SourceFileStore::open_with_mode(&source_path_str, OpenMode::ReadWrite)
+                        .context("failed to initialize source file store")?
+                }
+                Err(error) => return Err(error).context("failed to open source file store"),
+            };
         let embedder = EmbeddingEngine::new().context("failed to initialize embedding engine")?;
         let registry = RegistryClient::new();
 
