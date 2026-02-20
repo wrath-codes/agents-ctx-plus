@@ -39,15 +39,16 @@ impl ZenService {
         let sessions = self.list_sessions(None, 1).await?;
         let last_session = sessions.into_iter().next();
 
+        let (task_org_filter, task_org_params) = self.org_id_filter(1);
+        let task_sql = format!(
+            "SELECT id, research_id, issue_id, session_id, title, description, status, created_at, updated_at \
+             FROM tasks WHERE status IN ('open', 'in_progress') {task_org_filter} \
+             ORDER BY status, created_at"
+        );
         let mut task_rows = self
             .db()
             .conn()
-            .query(
-                "SELECT id, research_id, issue_id, session_id, title, description, status, created_at, updated_at \
-                 FROM tasks WHERE status IN ('open', 'in_progress') \
-                 ORDER BY status, created_at",
-                (),
-            )
+            .query(&task_sql, libsql::params_from_iter(task_org_params))
             .await?;
 
         let mut open_tasks = Vec::new();
@@ -55,15 +56,16 @@ impl ZenService {
             open_tasks.push(row_to_task(&row)?);
         }
 
+        let (hyp_org_filter, hyp_org_params) = self.org_id_filter(1);
+        let hyp_sql = format!(
+            "SELECT id, research_id, finding_id, session_id, content, status, reason, created_at, updated_at \
+             FROM hypotheses WHERE status IN ('unverified', 'analyzing') {hyp_org_filter} \
+             ORDER BY created_at DESC"
+        );
         let mut hyp_rows = self
             .db()
             .conn()
-            .query(
-                "SELECT id, research_id, finding_id, session_id, content, status, reason, created_at, updated_at \
-                 FROM hypotheses WHERE status IN ('unverified', 'analyzing') \
-                 ORDER BY created_at DESC",
-                (),
-            )
+            .query(&hyp_sql, libsql::params_from_iter(hyp_org_params))
             .await?;
 
         let mut pending_hypotheses = Vec::new();

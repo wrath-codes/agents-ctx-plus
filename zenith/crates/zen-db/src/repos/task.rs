@@ -216,16 +216,11 @@ impl ZenService {
     }
 
     pub async fn list_tasks(&self, limit: u32) -> Result<Vec<Task>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!(
-                    "SELECT {SELECT_COLS} FROM tasks ORDER BY status, created_at DESC LIMIT {limit}"
-                ),
-                (),
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT {SELECT_COLS} FROM tasks WHERE 1=1 {org_filter} ORDER BY status, created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -235,21 +230,18 @@ impl ZenService {
     }
 
     pub async fn search_tasks(&self, query: &str, limit: u32) -> Result<Vec<Task>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!(
-                    "SELECT t.id, t.research_id, t.issue_id, t.session_id, t.title, t.description, \
-                 t.status, t.created_at, t.updated_at \
-                 FROM tasks_fts \
-                 JOIN tasks t ON t.rowid = tasks_fts.rowid \
-                 WHERE tasks_fts MATCH ?1 \
-                 ORDER BY rank LIMIT ?2"
-                ),
-                libsql::params![query, limit],
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!(
+            "SELECT t.id, t.research_id, t.issue_id, t.session_id, t.title, t.description, \
+             t.status, t.created_at, t.updated_at \
+             FROM tasks_fts \
+             JOIN tasks t ON t.rowid = tasks_fts.rowid \
+             WHERE tasks_fts MATCH ?1 {org_filter} \
+             ORDER BY rank LIMIT ?2"
+        );
+        let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -322,12 +314,13 @@ impl ZenService {
     }
 
     pub async fn get_tasks_for_issue(&self, issue_id: &str) -> Result<Vec<Task>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM tasks WHERE issue_id = ?1 ORDER BY status, created_at"
-            ),
-            [issue_id],
-        ).await?;
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!(
+            "SELECT {SELECT_COLS} FROM tasks WHERE issue_id = ?1 {org_filter} ORDER BY status, created_at"
+        );
+        let mut params: Vec<libsql::Value> = vec![issue_id.into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {

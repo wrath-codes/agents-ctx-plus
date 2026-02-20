@@ -41,14 +41,15 @@ impl ZenService {
         let id = self.db().generate_id(PREFIX_RESEARCH).await?;
 
         self.db().conn().execute(
-            "INSERT INTO research_items (id, session_id, title, description, status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?5)",
+            "INSERT INTO research_items (id, session_id, title, description, status, created_at, updated_at, org_id)
+             VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?5, ?6)",
             libsql::params![
                 id.as_str(),
                 session_id,
                 title,
                 description,
-                now.to_rfc3339()
+                now.to_rfc3339(),
+                self.org_id()
             ],
         ).await?;
 
@@ -231,17 +232,12 @@ impl ZenService {
     ///
     /// Returns `DatabaseError` if the query fails.
     pub async fn list_research(&self, limit: u32) -> Result<Vec<ResearchItem>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!(
-                    "SELECT id, session_id, title, description, status, created_at, updated_at
-                 FROM research_items ORDER BY created_at DESC LIMIT {limit}"
-                ),
-                (),
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT id, session_id, title, description, status, created_at, updated_at
+             FROM research_items WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {

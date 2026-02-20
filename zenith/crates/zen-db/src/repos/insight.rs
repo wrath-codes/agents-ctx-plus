@@ -203,17 +203,12 @@ impl ZenService {
     }
 
     pub async fn list_insights(&self, limit: u32) -> Result<Vec<Insight>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!(
-                "SELECT id, research_id, session_id, content, confidence, created_at, updated_at
-                 FROM insights ORDER BY created_at DESC LIMIT {limit}"
-            ),
-                (),
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT id, research_id, session_id, content, confidence, created_at, updated_at
+             FROM insights WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut insights = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -227,14 +222,17 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<Insight>, DatabaseError> {
-        let mut rows = self.db().conn().query(
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!(
             "SELECT i.id, i.research_id, i.session_id, i.content, i.confidence, i.created_at, i.updated_at
              FROM insights_fts
              JOIN insights i ON i.rowid = insights_fts.rowid
-             WHERE insights_fts MATCH ?1
-             ORDER BY rank LIMIT ?2",
-            libsql::params![query, limit],
-        ).await?;
+             WHERE insights_fts MATCH ?1 {org_filter}
+             ORDER BY rank LIMIT ?2"
+        );
+        let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut insights = Vec::new();
         while let Some(row) = rows.next().await? {

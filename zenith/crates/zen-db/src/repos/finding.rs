@@ -39,8 +39,8 @@ impl ZenService {
         let id = self.db().generate_id(PREFIX_FINDING).await?;
 
         self.db().conn().execute(
-            "INSERT INTO findings (id, research_id, session_id, content, source, confidence, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO findings (id, research_id, session_id, content, source, confidence, created_at, updated_at, org_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             libsql::params![
                 id.as_str(),
                 research_id,
@@ -49,7 +49,8 @@ impl ZenService {
                 source,
                 confidence.as_str(),
                 now.to_rfc3339(),
-                now.to_rfc3339()
+                now.to_rfc3339(),
+                self.org_id()
             ],
         ).await?;
 
@@ -217,13 +218,12 @@ impl ZenService {
     }
 
     pub async fn list_findings(&self, limit: u32) -> Result<Vec<Finding>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT id, research_id, session_id, content, source, confidence, created_at, updated_at
-                 FROM findings ORDER BY created_at DESC LIMIT {limit}"
-            ),
-            (),
-        ).await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT id, research_id, session_id, content, source, confidence, created_at, updated_at
+             FROM findings WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut findings = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -237,14 +237,17 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<Finding>, DatabaseError> {
-        let mut rows = self.db().conn().query(
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!(
             "SELECT f.id, f.research_id, f.session_id, f.content, f.source, f.confidence, f.created_at, f.updated_at
              FROM findings_fts
              JOIN findings f ON f.rowid = findings_fts.rowid
-             WHERE findings_fts MATCH ?1
-             ORDER BY rank LIMIT ?2",
-            libsql::params![query, limit],
-        ).await?;
+             WHERE findings_fts MATCH ?1 {org_filter}
+             ORDER BY rank LIMIT ?2"
+        );
+        let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut findings = Vec::new();
         while let Some(row) = rows.next().await? {

@@ -650,6 +650,40 @@ impl fmt::Display for TrailOp {
 }
 
 // ---------------------------------------------------------------------------
+// Visibility
+// ---------------------------------------------------------------------------
+
+/// Visibility tier for catalog entries and cloud-indexed data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Visibility {
+    /// Visible to all authenticated users.
+    Public,
+    /// Visible to members of the same Clerk organization.
+    Team,
+    /// Visible only to the owner.
+    Private,
+}
+
+impl Visibility {
+    /// SQL string representation.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Team => "team",
+            Self::Private => "private",
+        }
+    }
+}
+
+impl fmt::Display for Visibility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -786,6 +820,25 @@ mod tests {
     );
     test_serde_roundtrip!(trail_op_untag, TrailOp, TrailOp::Untag, "untag");
 
+    test_serde_roundtrip!(
+        visibility_public,
+        Visibility,
+        Visibility::Public,
+        "public"
+    );
+    test_serde_roundtrip!(
+        visibility_team,
+        Visibility,
+        Visibility::Team,
+        "team"
+    );
+    test_serde_roundtrip!(
+        visibility_private,
+        Visibility,
+        Visibility::Private,
+        "private"
+    );
+
     // --- Transition tests ---
 
     #[test]
@@ -896,5 +949,8 @@ mod tests {
         assert_eq!(format!("{}", EntityType::ImplLog), "impl_log");
         assert_eq!(format!("{}", Relation::DerivedFrom), "derived_from");
         assert_eq!(format!("{}", TrailOp::Transition), "transition");
+        assert_eq!(format!("{}", Visibility::Public), "public");
+        assert_eq!(format!("{}", Visibility::Team), "team");
+        assert_eq!(format!("{}", Visibility::Private), "private");
     }
 }

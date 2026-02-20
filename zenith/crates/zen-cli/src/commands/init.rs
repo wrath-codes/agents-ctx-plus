@@ -72,6 +72,7 @@ pub async fn handle(args: &InitArgs, flags: &GlobalFlags) -> anyhow::Result<()> 
     let service = ZenService::new_local(
         &zenith_dir.join("zenith.db").to_string_lossy(),
         Some(zenith_dir.join("trail")),
+        None,
     )
     .await
     .context("failed to initialize zenith database")?;

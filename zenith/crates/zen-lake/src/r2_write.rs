@@ -6,6 +6,7 @@ use chrono::Utc;
 use serde::Serialize;
 use serde_arrow::schema::{SchemaLike, TracingOptions};
 use zen_config::R2Config;
+use zen_core::enums::Visibility;
 
 use crate::{ApiSymbolRow, DocChunkRow, LakeError, ZenLake};
 
@@ -44,11 +45,18 @@ fn sanitize_segment(input: &str) -> String {
     capped
 }
 
-fn symbols_dataset_root(r2: &R2Config, ecosystem: &str, package: &str, version: &str) -> String {
+fn symbols_dataset_root(
+    r2: &R2Config,
+    ecosystem: &str,
+    package: &str,
+    version: &str,
+    visibility: Visibility,
+) -> String {
     let ts = Utc::now().timestamp_millis();
     format!(
-        "s3://{}/lance/{}/{}/{}/symbols/{}",
+        "s3://{}/lance/{}/{}/{}/{}/symbols/{}",
         r2.bucket_name,
+        visibility.as_str(),
         sanitize_segment(ecosystem),
         sanitize_segment(package),
         sanitize_segment(version),
@@ -230,6 +238,7 @@ impl ZenLake {
         ecosystem: &str,
         package: &str,
         version: &str,
+        visibility: Visibility,
     ) -> Result<R2WriteResult, LakeError> {
         if !r2.is_configured() {
             return Err(LakeError::Other(
@@ -261,7 +270,7 @@ impl ZenLake {
             let batch = serde_arrow::to_record_batch(&fields, &symbols).map_err(|e| {
                 LakeError::Other(format!("serde_arrow symbol conversion failed: {e}"))
             })?;
-            let root = symbols_dataset_root(r2, ecosystem, package, version);
+            let root = symbols_dataset_root(r2, ecosystem, package, version, visibility);
             Some(Self::write_batch_to_r2(r2, &root, "symbols", batch).await?)
         };
 
@@ -278,6 +287,7 @@ impl ZenLake {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::ZenLake;
     use zen_config::R2Config;
 
@@ -293,7 +303,7 @@ mod tests {
         };
 
         let result = lake
-            .write_to_r2(&r2, "rust", "tokio", "1.40.0")
+            .write_to_r2(&r2, "rust", "tokio", "1.40.0", Visibility::Public)
             .await
             .unwrap();
 
@@ -301,5 +311,25 @@ mod tests {
         assert_eq!(result.doc_chunk_count, 0);
         assert!(result.symbols_lance_path.is_none());
         assert!(result.doc_chunks_lance_path.is_none());
+    }
+
+    #[test]
+    fn r2_path_includes_visibility_prefix() {
+        let r2 = R2Config {
+            account_id: "acc".to_string(),
+            access_key_id: "key".to_string(),
+            secret_access_key: "secret".to_string(),
+            bucket_name: "zenith-bucket".to_string(),
+            endpoint: String::new(),
+        };
+
+        let public_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Public);
+        assert!(public_root.starts_with("s3://zenith-bucket/lance/public/"));
+
+        let private_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Private);
+        assert!(private_root.starts_with("s3://zenith-bucket/lance/private/"));
+
+        let team_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Team);
+        assert!(team_root.starts_with("s3://zenith-bucket/lance/team/"));
     }
 }

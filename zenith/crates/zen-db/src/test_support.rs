@@ -2,6 +2,8 @@
 
 #[cfg(test)]
 pub(crate) mod helpers {
+    use zen_core::identity::AuthIdentity;
+
     use crate::ZenDb;
     use crate::service::ZenService;
     use crate::trail::writer::TrailWriter;
@@ -9,14 +11,20 @@ pub(crate) mod helpers {
     /// Create an in-memory ZenService with trail disabled (for pure DB tests).
     pub async fn test_service() -> ZenService {
         let db = ZenDb::open_local(":memory:").await.unwrap();
-        ZenService::from_db(db, TrailWriter::disabled())
+        ZenService::from_db(db, TrailWriter::disabled(), None)
     }
 
     /// Create an in-memory ZenService with trail enabled writing to a temp dir.
     pub async fn test_service_with_trail(trail_dir: std::path::PathBuf) -> ZenService {
         let db = ZenDb::open_local(":memory:").await.unwrap();
         let trail = TrailWriter::new(trail_dir).unwrap();
-        ZenService::from_db(db, trail)
+        ZenService::from_db(db, trail, None)
+    }
+
+    /// Create an in-memory ZenService with a specific identity (for visibility tests).
+    pub async fn test_service_with_identity(identity: AuthIdentity) -> ZenService {
+        let db = ZenDb::open_local(":memory:").await.unwrap();
+        ZenService::from_db(db, TrailWriter::disabled(), Some(identity))
     }
 
     /// Start a session and return its ID (convenience for tests that need a session).

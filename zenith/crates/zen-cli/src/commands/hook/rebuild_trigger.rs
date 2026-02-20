@@ -31,7 +31,7 @@ fn remove_if_exists(path: &Path) -> anyhow::Result<()> {
 }
 
 async fn open_service(db_path: &Path, trail_dir: &Path) -> anyhow::Result<ZenService> {
-    ZenService::new_local(&db_path.to_string_lossy(), Some(trail_dir.to_path_buf()))
+    ZenService::new_local(&db_path.to_string_lossy(), Some(trail_dir.to_path_buf()), None)
         .await
         .context("failed to open zen service for rebuild")
 }

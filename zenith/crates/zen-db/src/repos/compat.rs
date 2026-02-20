@@ -208,10 +208,11 @@ impl ZenService {
     }
 
     pub async fn list_compat(&self, limit: u32) -> Result<Vec<CompatCheck>, DatabaseError> {
+        let (org_filter, org_params) = self.org_id_filter(1);
         let sql = format!(
-            "SELECT {SELECT_COLS} FROM compatibility_checks ORDER BY created_at DESC LIMIT {limit}"
+            "SELECT {SELECT_COLS} FROM compatibility_checks WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().conn().query(&sql, ()).await?;
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
             results.push(row_to_compat(&row)?);
@@ -224,16 +225,16 @@ impl ZenService {
         package_a: &str,
         package_b: &str,
     ) -> Result<Option<CompatCheck>, DatabaseError> {
+        let (org_filter, org_params) = self.org_id_filter(3);
         let sql = format!(
             "SELECT {SELECT_COLS} FROM compatibility_checks
-             WHERE (package_a = ?1 AND package_b = ?2) OR (package_a = ?2 AND package_b = ?1)
+             WHERE ((package_a = ?1 AND package_b = ?2) OR (package_a = ?2 AND package_b = ?1))
+             {org_filter}
              LIMIT 1"
         );
-        let mut rows = self
-            .db()
-            .conn()
-            .query(&sql, libsql::params![package_a, package_b])
-            .await?;
+        let mut params: Vec<libsql::Value> = vec![package_a.into(), package_b.into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
         match rows.next().await? {
             Some(row) => Ok(Some(row_to_compat(&row)?)),
             None => Ok(None),

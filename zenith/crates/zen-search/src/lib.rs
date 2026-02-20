@@ -406,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_graph_query_returns_analysis() {
-        let service = ZenService::new_local(":memory:", None)
+        let service = ZenService::new_local(":memory:", None, None)
             .await
             .expect("create service");
 

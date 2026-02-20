@@ -10,14 +10,15 @@ use zen_registry::RegistryClient;
 
 /// Shared application resources initialized once at startup.
 pub struct AppContext {
-    pub service: ZenService,
-    pub config: ZenConfig,
-    pub lake: ZenLake,
-    pub source_store: SourceFileStore,
-    pub embedder: EmbeddingEngine,
-    pub registry: RegistryClient,
-    pub project_root: PathBuf,
-    pub identity: Option<AuthIdentity>,
+pub service: ZenService,
+pub config: ZenConfig,
+pub lake: ZenLake,
+pub source_store: SourceFileStore,
+pub embedder: EmbeddingEngine,
+pub registry: RegistryClient,
+pub project_root: PathBuf,
+pub identity: Option<AuthIdentity>,
+pub auth_token: Option<String>,
 }
 
 impl AppContext {
@@ -51,7 +52,7 @@ impl AppContext {
                 .unwrap_or(&config.turso.auth_token);
 
             if token.is_empty() {
-                ZenService::new_local(&db_path_str, Some(trail_dir))
+                ZenService::new_local(&db_path_str, Some(trail_dir), identity.clone())
                     .await
                     .context("failed to initialize zen-db service")?
             } else {
@@ -60,6 +61,7 @@ impl AppContext {
                     &config.turso.url,
                     token,
                     Some(trail_dir.clone()),
+                    identity.clone(),
                 )
                 .await
                 {
@@ -69,14 +71,14 @@ impl AppContext {
                             %error,
                             "failed to initialize synced zen-db service; falling back to local"
                         );
-                        ZenService::new_local(&db_path_str, Some(trail_dir))
+                        ZenService::new_local(&db_path_str, Some(trail_dir), identity.clone())
                             .await
                             .context("failed to initialize zen-db service")?
                     }
                 }
             }
         } else {
-            ZenService::new_local(&db_path_str, Some(trail_dir))
+            ZenService::new_local(&db_path_str, Some(trail_dir), identity.clone())
                 .await
                 .context("failed to initialize zen-db service")?
         };
@@ -96,6 +98,7 @@ impl AppContext {
             registry,
             project_root,
             identity,
+            auth_token,
         })
     }
 }

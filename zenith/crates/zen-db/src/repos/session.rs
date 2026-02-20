@@ -35,8 +35,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO sessions (id, started_at, status) VALUES (?1, ?2, 'active')",
-                libsql::params![id.as_str(), now.to_rfc3339()],
+                "INSERT INTO sessions (id, started_at, status, org_id) VALUES (?1, ?2, 'active', ?3)",
+                libsql::params![id.as_str(), now.to_rfc3339(), self.org_id()],
             )
             .await?;
 
@@ -168,26 +168,22 @@ impl ZenService {
 
         let mut rows = match status {
             Some(s) => {
-                self.db()
-                    .conn()
-                    .query(
-                        "SELECT id, started_at, ended_at, status, summary FROM sessions
-                     WHERE status = ?1 ORDER BY started_at DESC LIMIT ?2",
-                        libsql::params![s.as_str(), limit],
-                    )
-                    .await?
+                let (org_filter, org_params) = self.org_id_filter(3);
+                let sql = format!(
+                    "SELECT id, started_at, ended_at, status, summary FROM sessions
+                     WHERE status = ?1 {org_filter} ORDER BY started_at DESC LIMIT ?2"
+                );
+                let mut params: Vec<libsql::Value> = vec![s.as_str().into(), (limit as i64).into()];
+                params.extend(org_params);
+                self.db().conn().query(&sql, libsql::params_from_iter(params)).await?
             }
             None => {
-                self.db()
-                    .conn()
-                    .query(
-                        &format!(
-                            "SELECT id, started_at, ended_at, status, summary FROM sessions
-                         ORDER BY started_at DESC LIMIT {limit}"
-                        ),
-                        (),
-                    )
-                    .await?
+                let (org_filter, org_params) = self.org_id_filter(1);
+                let sql = format!(
+                    "SELECT id, started_at, ended_at, status, summary FROM sessions
+                     WHERE 1=1 {org_filter} ORDER BY started_at DESC LIMIT {limit}"
+                );
+                self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?
             }
         };
 

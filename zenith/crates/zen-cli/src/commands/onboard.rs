@@ -11,6 +11,7 @@ use tokio::process::Command as TokioCommand;
 use tokio::time::timeout;
 use toml::Value as TomlValue;
 use zen_core::entities::ProjectDependency;
+use zen_core::enums::Visibility;
 
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::OnboardArgs;
@@ -584,7 +585,7 @@ async fn index_dependency(
     if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
         match ctx
             .lake
-            .write_to_r2(&ctx.config.r2, &dep.ecosystem, &dep.name, &version)
+            .write_to_r2(&ctx.config.r2, &dep.ecosystem, &dep.name, &version, Visibility::Public)
             .await
         {
             Ok(export) => {
@@ -596,6 +597,9 @@ async fn index_dependency(
                             &dep.name,
                             &version,
                             symbols_path,
+                            Visibility::Public,
+                            None,
+                            ctx.identity.as_ref().map(|i| i.user_id.as_str()),
                         )
                         .await
                 {

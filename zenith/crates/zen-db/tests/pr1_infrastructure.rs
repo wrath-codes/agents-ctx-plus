@@ -17,11 +17,11 @@ use zen_db::service::ZenService;
 use zen_db::trail::writer::TrailWriter;
 
 async fn test_service() -> ZenService {
-    ZenService::new_local(":memory:", None).await.unwrap()
+    ZenService::new_local(":memory:", None, None).await.unwrap()
 }
 
 async fn test_service_with_trail(trail_dir: &std::path::Path) -> ZenService {
-    ZenService::new_local(":memory:", Some(trail_dir.to_path_buf()))
+    ZenService::new_local(":memory:", Some(trail_dir.to_path_buf()), None)
         .await
         .unwrap()
 }
@@ -32,7 +32,7 @@ async fn test_service_with_trail(trail_dir: &std::path::Path) -> ZenService {
 
 #[tokio::test]
 async fn service_new_local() {
-    let svc = ZenService::new_local(":memory:", None).await.unwrap();
+    let svc = ZenService::new_local(":memory:", None, None).await.unwrap();
     assert!(!svc.trail().is_enabled());
 }
 

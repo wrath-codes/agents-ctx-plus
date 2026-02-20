@@ -221,7 +221,7 @@ mod tests {
     use super::*;
 
     async fn make_service() -> ZenService {
-        ZenService::new_local(":memory:", None).await.unwrap()
+        ZenService::new_local(":memory:", None, None).await.unwrap()
     }
 
     async fn insert_link(

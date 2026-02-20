@@ -271,14 +271,11 @@ impl ZenService {
     }
 
     pub async fn list_studies(&self, limit: u32) -> Result<Vec<Study>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!("SELECT {STUDY_COLS} FROM studies ORDER BY created_at DESC LIMIT {limit}"),
-                (),
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT {STUDY_COLS} FROM studies WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut studies = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -292,20 +289,17 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<Study>, DatabaseError> {
-        let mut rows = self
-            .db()
-            .conn()
-            .query(
-                &format!(
-                    "SELECT s.{STUDY_COLS} FROM studies_fts
-                     JOIN studies s ON s.rowid = studies_fts.rowid
-                     WHERE studies_fts MATCH ?1
-                     ORDER BY rank LIMIT ?2",
-                    STUDY_COLS = "id, s.session_id, s.research_id, s.topic, s.library, s.methodology, s.status, s.summary, s.created_at, s.updated_at"
-                ),
-                libsql::params![query, limit],
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!(
+            "SELECT s.{STUDY_COLS} FROM studies_fts
+             JOIN studies s ON s.rowid = studies_fts.rowid
+             WHERE studies_fts MATCH ?1 {org_filter}
+             ORDER BY rank LIMIT ?2",
+            STUDY_COLS = "id, s.session_id, s.research_id, s.topic, s.library, s.methodology, s.status, s.summary, s.created_at, s.updated_at"
+        );
+        let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut studies = Vec::new();
         while let Some(row) = rows.next().await? {

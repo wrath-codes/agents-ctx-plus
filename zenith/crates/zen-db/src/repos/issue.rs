@@ -47,10 +47,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                &format!(
-                    "INSERT INTO issues ({SELECT_COLS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
-                ),
+                "INSERT INTO issues (id, type, parent_id, title, description, status, priority, session_id, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 libsql::params![
                     id.as_str(),
                     issue_type.as_str(),
@@ -61,7 +59,8 @@ impl ZenService {
                     priority as i64,
                     session_id,
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;
@@ -229,12 +228,11 @@ impl ZenService {
     }
 
     pub async fn list_issues(&self, limit: u32) -> Result<Vec<Issue>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM issues ORDER BY priority, created_at DESC LIMIT {limit}"
-            ),
-            (),
-        ).await?;
+        let (org_filter, org_params) = self.org_id_filter(1);
+        let sql = format!(
+            "SELECT {SELECT_COLS} FROM issues WHERE 1=1 {org_filter} ORDER BY priority, created_at DESC LIMIT {limit}"
+        );
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
 
         let mut issues = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -333,12 +331,13 @@ impl ZenService {
     }
 
     pub async fn get_child_issues(&self, parent_id: &str) -> Result<Vec<Issue>, DatabaseError> {
-        let mut rows = self.db().conn().query(
-            &format!(
-                "SELECT {SELECT_COLS} FROM issues WHERE parent_id = ?1 ORDER BY priority, created_at"
-            ),
-            [parent_id],
-        ).await?;
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!(
+            "SELECT {SELECT_COLS} FROM issues WHERE parent_id = ?1 {org_filter} ORDER BY priority, created_at"
+        );
+        let mut params: Vec<libsql::Value> = vec![parent_id.into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut issues = Vec::new();
         while let Some(row) = rows.next().await? {

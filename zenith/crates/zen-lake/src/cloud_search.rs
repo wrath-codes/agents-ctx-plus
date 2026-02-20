@@ -1,4 +1,5 @@
 use libsql::{Builder, Connection};
+use zen_core::identity::AuthIdentity;
 
 use crate::{LakeError, ZenLake};
 
@@ -209,6 +210,111 @@ impl ZenLake {
         )
         .await
     }
+
+    /// Discover catalog Lance paths with visibility scoping via a Turso connection.
+    ///
+    /// Uses the same visibility filter as `catalog_paths_for_package_scoped()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `LakeError` if remote connection or query execution fails.
+    pub async fn discover_catalog_paths_scoped(
+        &self,
+        turso_url: &str,
+        turso_auth_token: &str,
+        ecosystem: &str,
+        package: &str,
+        version: Option<&str>,
+        identity: Option<&AuthIdentity>,
+    ) -> Result<Vec<String>, LakeError> {
+        let db = Builder::new_remote(turso_url.to_string(), turso_auth_token.to_string())
+            .build()
+            .await?;
+        let conn = db.connect()?;
+        Self::discover_catalog_paths_scoped_with_conn(&conn, ecosystem, package, version, identity)
+            .await
+    }
+
+    async fn discover_catalog_paths_scoped_with_conn(
+        conn: &Connection,
+        ecosystem: &str,
+        package: &str,
+        version: Option<&str>,
+        identity: Option<&AuthIdentity>,
+    ) -> Result<Vec<String>, LakeError> {
+        let mut params: Vec<libsql::Value> = vec![ecosystem.into(), package.into()];
+        let mut idx: u32 = 3;
+
+        let version_clause = if let Some(v) = version {
+            params.push(v.into());
+            idx = 4;
+            "AND version = ?3"
+        } else {
+            ""
+        };
+
+        // Build visibility filter
+        let vis_clause = match identity {
+            Some(id) => {
+                let mut clauses = vec!["visibility = 'public'".to_string()];
+                if let Some(ref org_id) = id.org_id {
+                    clauses.push(format!("(visibility = 'team' AND org_id = ?{idx})"));
+                    params.push(org_id.as_str().into());
+                    idx += 1;
+                }
+                clauses.push(format!("(visibility = 'private' AND owner_sub = ?{idx})"));
+                params.push(id.user_id.as_str().into());
+                format!("AND ({})", clauses.join(" OR "))
+            }
+            None => "AND visibility = 'public'".to_string(),
+        };
+
+        let sql = format!(
+            "SELECT lance_path FROM dl_data_file
+             WHERE ecosystem = ?1 AND package = ?2 {version_clause}
+               AND lance_path LIKE '%symbols.lance%'
+             {vis_clause}
+             ORDER BY created_at DESC, id DESC"
+        );
+
+        let mut paths = Vec::new();
+        let mut rows = conn
+            .query(&sql, libsql::params_from_iter(params))
+            .await?;
+        while let Some(row) = rows.next().await? {
+            paths.push(row.get::<String>(0)?);
+        }
+        Ok(paths)
+    }
+
+    /// Full cloud vector search with visibility scoping.
+    ///
+    /// # Errors
+    ///
+    /// Returns `LakeError` if catalog lookup or Lance querying fails.
+    pub async fn search_cloud_vector_scoped(
+        &self,
+        turso_url: &str,
+        turso_auth_token: &str,
+        ecosystem: &str,
+        package: &str,
+        version: Option<&str>,
+        query_embedding: &[f32],
+        k: u32,
+        identity: Option<&AuthIdentity>,
+    ) -> Result<Vec<CloudVectorSearchResult>, LakeError> {
+        let paths = self
+            .discover_catalog_paths_scoped(
+                turso_url,
+                turso_auth_token,
+                ecosystem,
+                package,
+                version,
+                identity,
+            )
+            .await?;
+        self.search_lance_paths(&paths, query_embedding, k)
+    }
 }
 
 #[cfg(test)]
@@ -389,7 +495,7 @@ mod tests {
         }])
         .unwrap();
 
-        let export = match lake.write_to_r2(&r2, &ecosystem, &package, version).await {
+        let export = match lake.write_to_r2(&r2, &ecosystem, &package, version, zen_core::enums::Visibility::Public).await {
             Ok(export) => export,
             Err(error) => {
                 eprintln!("SKIP: R2 export failed: {error}");
