@@ -8,6 +8,8 @@ use zen_embeddings::EmbeddingEngine;
 use zen_lake::{OpenMode, SourceFileStore, ZenLake};
 use zen_registry::RegistryClient;
 
+use super::catalog_cache::CatalogCache;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LakeAccessMode {
     ReadOnly,
@@ -34,6 +36,7 @@ pub struct AppContext {
     pub project_root: PathBuf,
     pub identity: Option<AuthIdentity>,
     pub auth_token: Option<String>,
+    pub catalog_cache: Option<CatalogCache>,
 }
 
 impl AppContext {
@@ -49,6 +52,7 @@ impl AppContext {
         let trail_dir = zenith_dir.join("trail");
         let lake_path = zenith_dir.join("lake.duckdb");
         let source_path = zenith_dir.join("source_files.duckdb");
+        let cache_path = zenith_dir.join("query_cache.db");
 
         std::fs::create_dir_all(&zenith_dir).with_context(|| {
             format!(
@@ -57,7 +61,10 @@ impl AppContext {
             )
         })?;
         std::fs::create_dir_all(&trail_dir).with_context(|| {
-            format!("failed to create trail directory at {}", trail_dir.display())
+            format!(
+                "failed to create trail directory at {}",
+                trail_dir.display()
+            )
         })?;
 
         let db_path_str = db_path.to_string_lossy();
@@ -76,9 +83,7 @@ impl AppContext {
             };
 
             // Use auth-resolved token, fall back to config.turso.auth_token (tier 4)
-            let token = auth_token
-                .as_deref()
-                .unwrap_or(&config.turso.auth_token);
+            let token = auth_token.as_deref().unwrap_or(&config.turso.auth_token);
 
             if token.is_empty() {
                 ZenService::new_local(&db_path_str, Some(trail_dir), identity.clone())
@@ -138,6 +143,22 @@ impl AppContext {
             };
         let embedder = EmbeddingEngine::new().context("failed to initialize embedding engine")?;
         let registry = RegistryClient::new();
+        let cache_ttl = std::env::var("ZENITH_CACHE__CATALOG_TTL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(86_400);
+        let catalog_cache = match CatalogCache::open(
+            &cache_path,
+            std::time::Duration::from_secs(cache_ttl),
+        )
+        .await
+        {
+            Ok(cache) => Some(cache),
+            Err(error) => {
+                tracing::warn!(%error, "failed to open query cache; continuing without local catalog cache");
+                None
+            }
+        };
 
         Ok(Self {
             service,
@@ -149,6 +170,7 @@ impl AppContext {
             project_root,
             identity,
             auth_token,
+            catalog_cache,
         })
     }
 }
@@ -197,7 +219,9 @@ async fn resolve_auth(config: &ZenConfig) -> (Option<String>, Option<AuthIdentit
             (Some(claims.raw_jwt), Some(identity))
         }
         Ok(None) => {
-            tracing::debug!("no Clerk auth token found via keyring/env/file; running in local mode");
+            tracing::debug!(
+                "no Clerk auth token found via keyring/env/file; running in local mode"
+            );
             (None, None)
         }
         Err(error) => {

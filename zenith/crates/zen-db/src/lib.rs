@@ -165,8 +165,7 @@ impl ZenDb {
         sql: &str,
         params: P,
     ) -> Result<libsql::Rows, DatabaseError> {
-        self.retry_op(|| self.conn.query(sql, params.clone()))
-            .await
+        self.retry_op(|| self.conn.query(sql, params.clone())).await
     }
 
     /// Query with a params factory (for non-Clone params like
@@ -184,8 +183,7 @@ impl ZenDb {
         F: FnMut() -> P,
         P: IntoParams,
     {
-        self.retry_op(|| self.conn.query(sql, make_params()))
-            .await
+        self.retry_op(|| self.conn.query(sql, make_params())).await
     }
 
     /// Access the underlying libSQL connection for direct queries.
@@ -236,8 +234,8 @@ impl ZenDb {
         for attempt in 1..=self.retry.max_attempts {
             match f().await {
                 Ok(v) => return Ok(v),
-                Err(e) if retry::is_transient_turso_error(&e)
-                    && attempt < self.retry.max_attempts =>
+                Err(e)
+                    if retry::is_transient_turso_error(&e) && attempt < self.retry.max_attempts =>
                 {
                     tracing::warn!(
                         attempt,
@@ -438,7 +436,14 @@ mod tests {
 
         db.execute_with(
             "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
-            || libsql::params![fnd_id.as_str(), ses_id.as_str(), "test finding content", "high"],
+            || {
+                libsql::params![
+                    fnd_id.as_str(),
+                    ses_id.as_str(),
+                    "test finding content",
+                    "high"
+                ]
+            },
         )
         .await
         .unwrap();
@@ -471,7 +476,14 @@ mod tests {
         let fnd_id = db.generate_id("fnd").await.unwrap();
         db.execute_with(
             "INSERT INTO findings (id, session_id, content, confidence) VALUES (?1, ?2, ?3, ?4)",
-            || libsql::params![fnd_id.as_str(), ses_id.as_str(), "tokio async runtime compatibility", "high"],
+            || {
+                libsql::params![
+                    fnd_id.as_str(),
+                    ses_id.as_str(),
+                    "tokio async runtime compatibility",
+                    "high"
+                ]
+            },
         )
         .await
         .unwrap();
@@ -578,13 +590,23 @@ mod tests {
         db.execute("INSERT INTO issues (id, session_id, title, type) VALUES ('iss-t1', 'ses-t1', 'Test issue', 'bug')", ()).await.unwrap();
 
         // Task
-        db.execute("INSERT INTO tasks (id, session_id, title) VALUES ('tsk-t1', 'ses-t1', 'Test task')", ()).await.unwrap();
+        db.execute(
+            "INSERT INTO tasks (id, session_id, title) VALUES ('tsk-t1', 'ses-t1', 'Test task')",
+            (),
+        )
+        .await
+        .unwrap();
 
         // Implementation log
         db.execute("INSERT INTO implementation_log (id, task_id, session_id, file_path) VALUES ('imp-t1', 'tsk-t1', 'ses-t1', 'src/main.rs')", ()).await.unwrap();
 
         // Study
-        db.execute("INSERT INTO studies (id, session_id, topic) VALUES ('stu-t1', 'ses-t1', 'Test study')", ()).await.unwrap();
+        db.execute(
+            "INSERT INTO studies (id, session_id, topic) VALUES ('stu-t1', 'ses-t1', 'Test study')",
+            (),
+        )
+        .await
+        .unwrap();
 
         // Compatibility check
         db.execute("INSERT INTO compatibility_checks (id, session_id, package_a, package_b) VALUES ('cmp-t1', 'ses-t1', 'rust:tokio:1.49', 'rust:axum:0.8')", ()).await.unwrap();

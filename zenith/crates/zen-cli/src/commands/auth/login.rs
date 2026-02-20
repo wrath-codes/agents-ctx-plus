@@ -74,7 +74,9 @@ pub(crate) fn resolve_frontend_api(config: &zen_config::ZenConfig) -> anyhow::Re
         .strip_prefix("https://")
         .or_else(|| jwks_url.strip_prefix("http://"))
         .and_then(|rest| rest.split('/').next())
-        .ok_or_else(|| anyhow::anyhow!("invalid JWKS URL format — set ZENITH_CLERK__FRONTEND_URL"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("invalid JWKS URL format — set ZENITH_CLERK__FRONTEND_URL")
+        })?;
 
     Ok(host.to_string())
 }

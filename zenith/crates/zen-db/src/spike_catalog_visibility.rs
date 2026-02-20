@@ -62,7 +62,9 @@ macro_rules! turso_op {
         for __attempt in 1..=__cfg.max_attempts {
             match __result {
                 Ok(ref _v) => break,
-                Err(ref e) if is_spike_transient_turso_error(e) && __attempt < __cfg.max_attempts => {
+                Err(ref e)
+                    if is_spike_transient_turso_error(e) && __attempt < __cfg.max_attempts =>
+                {
                     eprintln!(
                         "  Turso transient (attempt {__attempt}/{}), retrying in {__delay:?}: {e}",
                         __cfg.max_attempts
@@ -72,7 +74,10 @@ macro_rules! turso_op {
                     __result = $expr;
                 }
                 Err(ref e) if is_spike_transient_turso_error(e) => {
-                    eprintln!("SKIP: Turso transient infra error after {} attempts: {e}", __cfg.max_attempts);
+                    eprintln!(
+                        "SKIP: Turso transient infra error after {} attempts: {e}",
+                        __cfg.max_attempts
+                    );
                     return;
                 }
                 Err(_) => break,
@@ -506,16 +511,18 @@ async fn spike_turso_catalog_embedded_replica() {
     };
     let conn = db.connect().unwrap();
     turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
-    turso_op!(conn.execute(
-        &format!(
-            "INSERT INTO {table} (ecosystem, package, version, visibility,
+    turso_op!(
+        conn.execute(
+            &format!(
+                "INSERT INTO {table} (ecosystem, package, version, visibility,
              r2_lance_path, symbol_count, indexed_by, indexed_at) VALUES
             ('rust', 'serde', '1.0.0', 'public',
              's3://zenith/lance/rust/serde/1.0.0', 800, 'user_test', '2026-02-08T00:00:00Z')"
-        ),
-        (),
-    )
-    .await);
+            ),
+            (),
+        )
+        .await
+    );
     drop(conn);
     drop(db);
     eprintln!("  Wrote catalog row via remote connection");
@@ -543,12 +550,13 @@ async fn spike_turso_catalog_embedded_replica() {
 
     let conn = replica_db.connect().unwrap();
     let (pkg, count) = {
-        let mut rows = turso_op!(conn
-            .query(
+        let mut rows = turso_op!(
+            conn.query(
                 &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
                 (),
             )
-            .await);
+            .await
+        );
         let row = turso_op!(rows.next().await).expect("Should find serde row");
         let pkg: String = row.get(0).unwrap();
         let count: i64 = row.get(1).unwrap();
@@ -781,23 +789,26 @@ async fn spike_catalog_to_lance_search_e2e() {
 
     let table = unique_table("idx_e2e");
     turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
-    turso_op!(conn.execute(
-        &format!(
-            "INSERT INTO {table} (ecosystem, package, version, visibility,
+    turso_op!(
+        conn.execute(
+            &format!(
+                "INSERT INTO {table} (ecosystem, package, version, visibility,
              r2_lance_path, symbol_count, indexed_by, indexed_at) VALUES
             ('rust', 'tokio', '1.49.0', 'public', ?1, 3, 'test', '2026-02-08T00:00:00Z')"
-        ),
-        [dataset_path.as_str()],
-    )
-    .await);
+            ),
+            [dataset_path.as_str()],
+        )
+        .await
+    );
 
     // 3. Query Turso to get lance path
-    let mut rows = turso_op!(conn
-        .query(
+    let mut rows = turso_op!(
+        conn.query(
             &format!("SELECT r2_lance_path FROM {table} WHERE package = 'tokio'"),
             (),
         )
-        .await);
+        .await
+    );
     let row = turso_op!(rows.next().await).expect("Should find tokio");
     let lance_path: String = row.get(0).unwrap();
 
@@ -936,8 +947,8 @@ async fn spike_three_tier_search() {
     ).await);
 
     // Query as team member of org_acme → should see public + team (NOT private)
-    let mut rows = turso_op!(conn
-        .query(
+    let mut rows = turso_op!(
+        conn.query(
             &format!(
                 "SELECT package, r2_lance_path FROM {table} WHERE
              visibility = 'public'
@@ -946,7 +957,8 @@ async fn spike_three_tier_search() {
             ),
             (),
         )
-        .await);
+        .await
+    );
 
     let mut team_paths = vec![];
     while let Some(row) = turso_op!(rows.next().await) {
@@ -1039,20 +1051,22 @@ async fn spike_private_code_indexing() {
     turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
 
     // Insert private package owned by the JWT user
-    turso_op!(conn.execute(
-        &format!(
-            "INSERT INTO {table} (ecosystem, package, version, visibility, owner_id,
+    turso_op!(
+        conn.execute(
+            &format!(
+                "INSERT INTO {table} (ecosystem, package, version, visibility, owner_id,
              r2_lance_path, indexed_by, indexed_at) VALUES
             ('rust', 'my-secret-app', '0.1.0', 'private', '{user_id}',
              '/tmp/fake/path.lance', '{user_id}', '2026-02-08T00:00:00Z')"
-        ),
-        (),
-    )
-    .await);
+            ),
+            (),
+        )
+        .await
+    );
 
     // Owner query: should find it
-    let mut rows = turso_op!(conn
-        .query(
+    let mut rows = turso_op!(
+        conn.query(
             &format!(
                 "SELECT package FROM {table} WHERE
              visibility = 'public'
@@ -1060,16 +1074,16 @@ async fn spike_private_code_indexing() {
             ),
             [user_id.as_str()],
         )
-        .await);
-    let row = turso_op!(rows.next().await)
-        .expect("Owner should see private package");
+        .await
+    );
+    let row = turso_op!(rows.next().await).expect("Owner should see private package");
     let pkg: String = row.get(0).unwrap();
     assert_eq!(pkg, "my-secret-app");
     eprintln!("  Owner ({user_id}) sees: {pkg}");
 
     // Non-owner query: should NOT find it
-    let mut rows = turso_op!(conn
-        .query(
+    let mut rows = turso_op!(
+        conn.query(
             &format!(
                 "SELECT package FROM {table} WHERE
              visibility = 'public'
@@ -1077,7 +1091,8 @@ async fn spike_private_code_indexing() {
             ),
             (),
         )
-        .await);
+        .await
+    );
     let none = turso_op!(rows.next().await);
     assert!(none.is_none(), "Non-owner should NOT see private package");
     eprintln!("  Non-owner (user_impostor) sees: nothing");
@@ -1343,82 +1358,108 @@ async fn spike_two_turso_replicas_same_process() {
 
     // Write to A
     let conn_a = replica_a.connect().unwrap();
-    turso_op!(conn_a
-        .execute(
-            "CREATE TABLE IF NOT EXISTS test_a (id INTEGER PRIMARY KEY, val TEXT)",
-            (),
-        )
-        .await
-        .map(|_| ()));
-    turso_op!(conn_a
-        .execute("INSERT OR REPLACE INTO test_a VALUES (1, 'from_a')", ())
-        .await
-        .map(|_| ()));
+    turso_op!(
+        conn_a
+            .execute(
+                "CREATE TABLE IF NOT EXISTS test_a (id INTEGER PRIMARY KEY, val TEXT)",
+                (),
+            )
+            .await
+            .map(|_| ())
+    );
+    turso_op!(
+        conn_a
+            .execute("INSERT OR REPLACE INTO test_a VALUES (1, 'from_a')", ())
+            .await
+            .map(|_| ())
+    );
 
     // Write to B
     let conn_b = replica_b.connect().unwrap();
-    turso_op!(conn_b
-        .execute(
-            "CREATE TABLE IF NOT EXISTS test_b (id INTEGER PRIMARY KEY, val TEXT)",
-            (),
-        )
-        .await
-        .map(|_| ()));
-    turso_op!(conn_b
-        .execute("INSERT OR REPLACE INTO test_b VALUES (1, 'from_b')", ())
-        .await
-        .map(|_| ()));
+    turso_op!(
+        conn_b
+            .execute(
+                "CREATE TABLE IF NOT EXISTS test_b (id INTEGER PRIMARY KEY, val TEXT)",
+                (),
+            )
+            .await
+            .map(|_| ())
+    );
+    turso_op!(
+        conn_b
+            .execute("INSERT OR REPLACE INTO test_b VALUES (1, 'from_b')", ())
+            .await
+            .map(|_| ())
+    );
 
     // Sync both
     turso_op!(replica_a.sync().await);
     turso_op!(replica_b.sync().await);
 
     // Query A — should NOT see test_b
-    let has_test_b = turso_op!(async {
-        let mut rows = conn_a
-            .query(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'",
-                (),
-            )
-            .await?;
-        rows.next().await.map(|row| row.is_some())
-    }
-    .await);
+    let has_test_b = turso_op!(
+        async {
+            let mut rows = conn_a
+                .query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='test_b'",
+                    (),
+                )
+                .await?;
+            rows.next().await.map(|row| row.is_some())
+        }
+        .await
+    );
     assert!(!has_test_b, "DB A should NOT have test_b table");
 
     // Query B — should NOT see test_a
-    let has_test_a = turso_op!(async {
-        let mut rows = conn_b
-            .query(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'",
-                (),
-            )
-            .await?;
-        rows.next().await.map(|row| row.is_some())
-    }
-    .await);
+    let has_test_a = turso_op!(
+        async {
+            let mut rows = conn_b
+                .query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='test_a'",
+                    (),
+                )
+                .await?;
+            rows.next().await.map(|row| row.is_some())
+        }
+        .await
+    );
     assert!(!has_test_a, "DB B should NOT have test_a table");
 
     // Query A — should see its own data
-    let val_a: String = turso_op!(async {
-        let mut rows = conn_a.query("SELECT val FROM test_a WHERE id = 1", ()).await?;
-        let Some(row) = rows.next().await? else {
-            return Err(libsql::Error::SqliteFailure(1, "missing row for test_a".to_string()));
-        };
-        row.get(0)
-    }
-    .await);
+    let val_a: String = turso_op!(
+        async {
+            let mut rows = conn_a
+                .query("SELECT val FROM test_a WHERE id = 1", ())
+                .await?;
+            let Some(row) = rows.next().await? else {
+                return Err(libsql::Error::SqliteFailure(
+                    1,
+                    "missing row for test_a".to_string(),
+                ));
+            };
+            row.get(0)
+        }
+        .await
+    );
     assert_eq!(val_a, "from_a");
 
     // Query B — should see its own data
-    let val_b: String = turso_op!(async {
-        let mut rows = conn_b.query("SELECT val FROM test_b WHERE id = 1", ()).await?;
-        let Some(row) = rows.next().await? else {
-            return Err(libsql::Error::SqliteFailure(1, "missing row for test_b".to_string()));
-        };
-        row.get(0)
-    }
-    .await);
+    let val_b: String = turso_op!(
+        async {
+            let mut rows = conn_b
+                .query("SELECT val FROM test_b WHERE id = 1", ())
+                .await?;
+            let Some(row) = rows.next().await? else {
+                return Err(libsql::Error::SqliteFailure(
+                    1,
+                    "missing row for test_b".to_string(),
+                ));
+            };
+            row.get(0)
+        }
+        .await
+    );
     assert_eq!(val_b, "from_b");
 
     eprintln!("  Both replicas coexist — isolated data, no interference");
@@ -1427,7 +1468,12 @@ async fn spike_two_turso_replicas_same_process() {
     drop(replica_b);
 
     // Cleanup
-    turso_op!(conn_a.execute("DROP TABLE IF EXISTS test_a", ()).await.map(|_| ()));
+    turso_op!(
+        conn_a
+            .execute("DROP TABLE IF EXISTS test_a", ())
+            .await
+            .map(|_| ())
+    );
     turso_op!(replica_a.sync().await);
     delete_turso_db(&db_b_name).await;
 

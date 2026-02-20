@@ -8,6 +8,22 @@ pub enum OutputFormat {
     Raw,
 }
 
+/// Progress rendering mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum ProgressMode {
+    Auto,
+    On,
+    Off,
+}
+
+/// Color rendering mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum ColorMode {
+    Auto,
+    Always,
+    Never,
+}
+
 /// Global flags available before or after subcommands.
 #[derive(Clone, Debug)]
 pub struct GlobalFlags {
@@ -16,4 +32,6 @@ pub struct GlobalFlags {
     pub quiet: bool,
     pub verbose: bool,
     pub project: Option<String>,
+    pub progress: ProgressMode,
+    pub color: ColorMode,
 }

@@ -41,9 +41,7 @@ async fn service_with_org(org_id: &str) -> ZenService {
 }
 
 async fn service_without_identity() -> ZenService {
-    ZenService::new_local(":memory:", None, None)
-        .await
-        .unwrap()
+    ZenService::new_local(":memory:", None, None).await.unwrap()
 }
 
 async fn service_personal() -> ZenService {
@@ -78,7 +76,10 @@ async fn migration_003_adds_org_id_column() {
             has_org_id = true;
         }
     }
-    assert!(has_org_id, "findings table should have org_id column after migration 003");
+    assert!(
+        has_org_id,
+        "findings table should have org_id column after migration 003"
+    );
 }
 
 #[tokio::test]
@@ -255,7 +256,11 @@ async fn list_findings_no_identity_sees_only_null_org_id() {
 
     // No identity → should see only NULL org_id
     let findings = svc.list_findings(100).await.unwrap();
-    assert_eq!(findings.len(), 1, "no identity should see only local findings");
+    assert_eq!(
+        findings.len(),
+        1,
+        "no identity should see only local findings"
+    );
     assert_eq!(findings[0].content, "local finding");
 }
 
@@ -281,7 +286,11 @@ async fn list_findings_with_org_sees_org_and_null() {
         .unwrap();
 
     let findings = svc.list_findings(100).await.unwrap();
-    assert_eq!(findings.len(), 2, "should see org + pre-auth (NULL) findings");
+    assert_eq!(
+        findings.len(),
+        2,
+        "should see org + pre-auth (NULL) findings"
+    );
 }
 
 // ---------------------------------------------------------------------------

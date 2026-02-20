@@ -61,8 +61,7 @@ pub fn decode_expiry(jwt: &str) -> Result<chrono::DateTime<chrono::Utc>, AuthErr
 mod tests {
     use super::*;
     fn make_jwt_with_exp(exp: i64) -> String {
-        let header =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
+        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
         let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(format!(r#"{{"sub":"user_123","exp":{exp}}}"#));
         let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode("fake_sig");
@@ -93,21 +92,30 @@ mod tests {
     fn decode_expiry_invalid_format() {
         let result = decode_expiry("not-a-jwt");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid JWT format"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid JWT format")
+        );
     }
 
     #[test]
     fn decode_expiry_missing_exp_claim() {
-        let header =
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
-        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(r#"{"sub":"user_123"}"#);
+        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"alg":"RS256"}"#);
+        let payload =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(r#"{"sub":"user_123"}"#);
         let signature = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode("fake_sig");
         let jwt = format!("{header}.{payload}.{signature}");
 
         let result = decode_expiry(&jwt);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing exp claim"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("missing exp claim")
+        );
     }
 
     #[test]

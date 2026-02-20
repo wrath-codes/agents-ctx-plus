@@ -7,6 +7,7 @@ use crate::cli::root_commands::IndexArgs;
 use crate::context::AppContext;
 use crate::output::output;
 use crate::pipeline::IndexingPipeline;
+use crate::progress::Progress;
 
 #[derive(Debug, Serialize)]
 struct IndexResponse {
@@ -29,6 +30,8 @@ pub async fn handle(
     ctx: &mut AppContext,
     flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
+    let progress = Progress::spinner("index: preparing project indexing");
+
     let identity = ctx.identity.as_ref().ok_or_else(|| {
         anyhow::anyhow!("private indexing requires authentication — run `znt auth login`")
     })?;
@@ -67,6 +70,8 @@ pub async fn handle(
         true,
     )
     .context("indexing pipeline failed")?;
+
+    progress.set_message("index: processing export and catalog registration");
 
     let mut r2_exported = false;
     let mut catalog_registered = false;
@@ -115,6 +120,8 @@ pub async fn handle(
             ),
         }
     }
+
+    progress.finish_ok("index: completed");
 
     output(
         &IndexResponse {

@@ -1,9 +1,9 @@
 use clap::{Args, Subcommand};
 
 use crate::cli::subcommands::{
-    AuthCommands, CacheCommands, CompatCommands, FindingCommands, HookCommands,
-    HypothesisCommands, InsightCommands, IssueCommands, PrdCommands, ResearchCommands,
-    SessionCommands, StudyCommands, TaskCommands, TeamCommands,
+    AuthCommands, CacheCommands, CompatCommands, FindingCommands, HookCommands, HypothesisCommands,
+    InsightCommands, IssueCommands, PrdCommands, ResearchCommands, SessionCommands, StudyCommands,
+    TaskCommands, TeamCommands,
 };
 
 /// Top-level command tree.

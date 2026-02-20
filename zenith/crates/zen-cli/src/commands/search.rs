@@ -12,6 +12,7 @@ use crate::cli::GlobalFlags;
 use crate::cli::root_commands::SearchArgs;
 use crate::commands::shared::limit::effective_limit;
 use crate::context::AppContext;
+use crate::context::CacheLookup;
 use crate::output::output;
 
 #[derive(Debug, Serialize)]
@@ -244,36 +245,126 @@ async fn try_cloud_vector_search(
     };
 
     let query_embedding = ctx.embedder.embed_single(&args.query)?;
-    let auth_token = ctx
-        .auth_token
-        .as_deref()
-        .unwrap_or(&ctx.config.turso.auth_token);
-    let cloud = match ctx
-        .lake
-        .search_cloud_vector_scoped(
-            &ctx.config.turso.url,
-            auth_token,
-            ecosystem,
-            package,
-            args.version.as_deref(),
-            &query_embedding,
-            limit,
-            ctx.identity.as_ref(),
-        )
+    let scope = cache_scope_key(ctx.identity.as_ref());
+
+    let mut stale_paths = Vec::new();
+    if let Some(cache) = &ctx.catalog_cache {
+        match cache
+            .get_paths(ecosystem, package, args.version.as_deref(), &scope)
+            .await
+        {
+            Ok(CacheLookup::Fresh(paths)) if !paths.is_empty() => {
+                let paths = canonical_lance_locators(paths);
+                if paths.is_empty() {
+                    tracing::debug!(
+                        ecosystem = %ecosystem,
+                        package = %package,
+                        "search: cache had no canonical table-uri paths; falling back to remote lookup"
+                    );
+                } else {
+                    match map_cloud_paths_to_search_results(
+                        &ctx.lake,
+                        ctx.config.r2.is_configured().then_some(&ctx.config.r2),
+                        ecosystem,
+                        package,
+                        &paths,
+                        &query_embedding,
+                        limit,
+                    )
+                    .await
+                    {
+                        Ok(mapped) => {
+                            if mapped.is_empty() {
+                                tracing::warn!(
+                                    ecosystem = %ecosystem,
+                                    package = %package,
+                                    "search: cached lance paths returned no results; refreshing from remote catalog"
+                                );
+                                stale_paths = paths;
+                            } else {
+                                return Ok(Some(mapped));
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                %error,
+                                ecosystem = %ecosystem,
+                                package = %package,
+                                "search: cached lance paths failed; falling back to remote catalog"
+                            );
+                            stale_paths = paths;
+                        }
+                    }
+                }
+            }
+            Ok(CacheLookup::Stale(paths)) => stale_paths = canonical_lance_locators(paths),
+            Ok(CacheLookup::Miss) => {}
+            Err(error) => tracing::warn!(%error, "search: cache lookup failed"),
+            _ => {}
+        }
+    }
+
+    let paths = match ctx
+        .service
+        .catalog_paths_for_package_scoped(ecosystem, package, args.version.as_deref())
         .await
     {
-        Ok(results) => results,
+        Ok(paths) => paths,
         Err(error) => {
-            tracing::warn!(%error, "search: cloud vector search failed; falling back to local cache");
-            return Ok(None);
+            if stale_paths.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "search: cloud catalog lookup failed and no cache available: {error}"
+                ));
+            }
+
+            tracing::warn!(%error, "search: cloud lookup failed; using stale catalog cache");
+            stale_paths
         }
     };
 
+    let paths = canonical_lance_locators(paths);
+
+    if paths.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
+
+    if let Some(cache) = &ctx.catalog_cache
+        && let Err(error) = cache
+            .put_paths(ecosystem, package, args.version.as_deref(), &scope, &paths)
+            .await
+    {
+        tracing::warn!(%error, "search: failed to update local catalog cache");
+    }
+
+    let mapped = map_cloud_paths_to_search_results(
+        &ctx.lake,
+        ctx.config.r2.is_configured().then_some(&ctx.config.r2),
+        ecosystem,
+        package,
+        &paths,
+        &query_embedding,
+        limit,
+    )
+    .await?;
+    Ok(Some(mapped))
+}
+
+async fn map_cloud_paths_to_search_results(
+    lake: &zen_lake::ZenLake,
+    r2_config: Option<&zen_config::R2Config>,
+    ecosystem: &str,
+    package: &str,
+    paths: &[String],
+    query_embedding: &[f32],
+    limit: u32,
+) -> anyhow::Result<Vec<SearchResult>> {
+    let cloud = lake
+        .search_lance_paths_with_r2(paths, query_embedding, limit, r2_config)
+        .await
+        .map_err(|error| anyhow::anyhow!("search: native Lance query failed: {error}"))?;
+
     if cloud.is_empty() {
-        tracing::debug!(
-            "search: cloud vector search returned no results; falling back to local cache"
-        );
-        return Ok(None);
+        return Ok(Vec::new());
     }
 
     let mapped = cloud
@@ -281,8 +372,8 @@ async fn try_cloud_vector_search(
         .map(|item| {
             SearchResult::Vector(VectorSearchResult {
                 id: item.id,
-                ecosystem: ecosystem.clone(),
-                package: package.clone(),
+                ecosystem: ecosystem.to_string(),
+                package: package.to_string(),
                 version: item.version,
                 kind: item.kind,
                 name: item.name,
@@ -297,7 +388,26 @@ async fn try_cloud_vector_search(
         })
         .collect::<Vec<_>>();
 
-    Ok(Some(mapped))
+    Ok(mapped)
+}
+
+fn cache_scope_key(identity: Option<&zen_core::identity::AuthIdentity>) -> String {
+    match identity {
+        Some(identity) => {
+            if let Some(org_id) = &identity.org_id {
+                return format!("org:{org_id}:user:{}", identity.user_id);
+            }
+            format!("user:{}", identity.user_id)
+        }
+        None => "anonymous".to_string(),
+    }
+}
+
+fn canonical_lance_locators(paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|path| path.contains(".lance") && !path.contains('#'))
+        .collect()
 }
 
 #[cfg(test)]

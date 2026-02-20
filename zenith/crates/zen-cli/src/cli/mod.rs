@@ -4,7 +4,7 @@ pub mod global;
 pub mod root_commands;
 pub mod subcommands;
 
-pub use global::{GlobalFlags, OutputFormat};
+pub use global::{ColorMode, GlobalFlags, OutputFormat, ProgressMode};
 pub use root_commands::Commands;
 
 /// Top-level CLI parser for the `znt` binary.
@@ -33,6 +33,14 @@ pub struct Cli {
     /// Project root path (defaults to auto-detect via .zenith)
     #[arg(short, long, global = true)]
     pub project: Option<String>,
+
+    /// Progress rendering mode: auto, on, off
+    #[arg(long, global = true, default_value = "auto")]
+    pub progress: ProgressMode,
+
+    /// Table color mode: auto, always, never
+    #[arg(long, global = true, default_value = "auto")]
+    pub color: ColorMode,
 }
 
 impl Cli {
@@ -45,6 +53,8 @@ impl Cli {
             quiet: self.quiet,
             verbose: self.verbose,
             project: self.project.clone(),
+            progress: self.progress,
+            color: self.color,
         }
     }
 }
@@ -53,7 +63,7 @@ impl Cli {
 mod tests {
     use clap::{CommandFactory, Parser};
 
-    use super::{Cli, Commands, GlobalFlags, OutputFormat};
+    use super::{Cli, ColorMode, Commands, GlobalFlags, OutputFormat, ProgressMode};
 
     #[test]
     fn clap_command_tree_is_valid() {
@@ -106,10 +116,21 @@ mod tests {
 
     #[test]
     fn global_flags_extraction_copies_values() {
-        let cli = Cli::try_parse_from(["znt", "--project", "/tmp/demo", "whats-next"])
-            .expect("cli should parse");
+        let cli = Cli::try_parse_from([
+            "znt",
+            "--project",
+            "/tmp/demo",
+            "--progress",
+            "off",
+            "--color",
+            "never",
+            "whats-next",
+        ])
+        .expect("cli should parse");
         let flags: GlobalFlags = cli.global_flags();
         assert_eq!(flags.project.as_deref(), Some("/tmp/demo"));
+        assert_eq!(flags.progress, ProgressMode::Off);
+        assert_eq!(flags.color, ColorMode::Never);
     }
 
     #[test]

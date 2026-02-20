@@ -122,8 +122,9 @@ impl ZenService {
             .query_with(
                 "SELECT 1 FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
-                   AND lance_path LIKE '%symbols.lance%'
-                   AND visibility = 'public'
+                    AND instr(lance_path, '.lance') > 0
+                    AND instr(lance_path, '#') = 0
+                    AND visibility = 'public'
                  LIMIT 1",
                 || libsql::params![ecosystem, package, version],
             )
@@ -150,8 +151,9 @@ impl ZenService {
             .query_with(
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
-                   AND visibility = 'public'
-                   AND lance_path LIKE '%symbols.lance%'
+                    AND visibility = 'public'
+                    AND instr(lance_path, '.lance') > 0
+                    AND instr(lance_path, '#') = 0
                  ORDER BY created_at DESC",
                 || libsql::params![ecosystem, package, version],
             )
@@ -189,6 +191,8 @@ impl ZenService {
                 .query_with(
                     "SELECT lance_path FROM dl_data_file
                      WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
+                       AND instr(lance_path, '.lance') > 0
+                       AND instr(lance_path, '#') = 0
                        AND visibility = 'public'
                      ORDER BY created_at DESC, id DESC",
                     || libsql::params![ecosystem, package, version],
@@ -199,6 +203,8 @@ impl ZenService {
                 .query_with(
                     "SELECT lance_path FROM dl_data_file
                      WHERE ecosystem = ?1 AND package = ?2
+                       AND instr(lance_path, '.lance') > 0
+                       AND instr(lance_path, '#') = 0
                        AND visibility = 'public'
                      ORDER BY created_at DESC, id DESC",
                     || libsql::params![ecosystem, package],
@@ -241,9 +247,11 @@ impl ZenService {
 
         let sql = format!(
             "SELECT lance_path FROM dl_data_file
-             WHERE ecosystem = ?1 AND package = ?2 {version_clause}
-             {vis_filter}
-             ORDER BY created_at DESC, id DESC"
+               WHERE ecosystem = ?1 AND package = ?2 {version_clause}
+                AND instr(lance_path, '.lance') > 0
+                AND instr(lance_path, '#') = 0
+               {vis_filter}
+               ORDER BY created_at DESC, id DESC"
         );
 
         let mut rows = self
@@ -292,32 +300,67 @@ mod tests {
     async fn catalog_paths_returns_latest_first() {
         let svc = test_service().await;
 
-        svc.register_catalog_data_file("rust", "serde", "1.0.0", "path/a", Visibility::Public, None, None)
-            .await
-            .unwrap();
-        svc.register_catalog_data_file("rust", "serde", "1.0.0", "path/b", Visibility::Public, None, None)
-            .await
-            .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "serde",
+            "1.0.0",
+            "path/a/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "serde",
+            "1.0.0",
+            "path/b/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let paths = svc
             .catalog_paths_for_package("rust", "serde", Some("1.0.0"))
             .await
             .unwrap();
 
-        assert_eq!(paths.first().map(String::as_str), Some("path/b"));
-        assert!(paths.contains(&"path/a".to_string()));
+        assert_eq!(
+            paths.first().map(String::as_str),
+            Some("path/b/symbols.lance")
+        );
+        assert!(paths.contains(&"path/a/symbols.lance".to_string()));
     }
 
     #[tokio::test]
     async fn register_catalog_data_file_is_idempotent() {
         let svc = test_service().await;
 
-        svc.register_catalog_data_file("rust", "serde", "1.0.0", "path/symbols.lance", Visibility::Public, None, None)
-            .await
-            .unwrap();
-        svc.register_catalog_data_file("rust", "serde", "1.0.0", "path/symbols.lance", Visibility::Public, None, None)
-            .await
-            .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "serde",
+            "1.0.0",
+            "path/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "serde",
+            "1.0.0",
+            "path/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let mut rows = svc
             .db()
@@ -345,21 +388,39 @@ mod tests {
 
         // Private entry should NOT be found by catalog_has_package
         svc.register_catalog_data_file(
-            "rust", "secret", "1.0.0", "path/symbols.lance",
-            Visibility::Private, None, Some("user_1"),
+            "rust",
+            "secret",
+            "1.0.0",
+            "path/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("user_1"),
         )
         .await
         .unwrap();
-        assert!(!svc.catalog_has_package("rust", "secret", "1.0.0").await.unwrap());
+        assert!(
+            !svc.catalog_has_package("rust", "secret", "1.0.0")
+                .await
+                .unwrap()
+        );
 
         // Public entry should be found
         svc.register_catalog_data_file(
-            "rust", "public_pkg", "1.0.0", "path/symbols.lance",
-            Visibility::Public, None, Some("user_1"),
+            "rust",
+            "public_pkg",
+            "1.0.0",
+            "path/symbols.lance",
+            Visibility::Public,
+            None,
+            Some("user_1"),
         )
         .await
         .unwrap();
-        assert!(svc.catalog_has_package("rust", "public_pkg", "1.0.0").await.unwrap());
+        assert!(
+            svc.catalog_has_package("rust", "public_pkg", "1.0.0")
+                .await
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -367,17 +428,30 @@ mod tests {
         let svc = test_service().await;
 
         // Not indexed yet
-        assert!(svc.catalog_check_before_index("rust", "tokio", "1.49.0").await.unwrap().is_none());
+        assert!(
+            svc.catalog_check_before_index("rust", "tokio", "1.49.0")
+                .await
+                .unwrap()
+                .is_none()
+        );
 
         // Index it
         svc.register_catalog_data_file(
-            "rust", "tokio", "1.49.0", "s3://bucket/public/rust/tokio/1.49.0/symbols.lance",
-            Visibility::Public, None, Some("user_1"),
+            "rust",
+            "tokio",
+            "1.49.0",
+            "s3://bucket/public/rust/tokio/1.49.0/symbols.lance",
+            Visibility::Public,
+            None,
+            Some("user_1"),
         )
         .await
         .unwrap();
 
-        let paths = svc.catalog_check_before_index("rust", "tokio", "1.49.0").await.unwrap();
+        let paths = svc
+            .catalog_check_before_index("rust", "tokio", "1.49.0")
+            .await
+            .unwrap();
         assert!(paths.is_some());
         assert_eq!(paths.unwrap().len(), 1);
     }
@@ -386,16 +460,46 @@ mod tests {
     async fn catalog_paths_for_package_defaults_to_public() {
         let svc = test_service().await;
 
-        svc.register_catalog_data_file("rust", "mix", "1.0.0", "path/pub", Visibility::Public, None, None)
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "mix", "1.0.0", "path/priv", Visibility::Private, None, Some("u1"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "mix", "1.0.0", "path/team", Visibility::Team, Some("org_a"), Some("u1"))
-            .await.unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "mix",
+            "1.0.0",
+            "path/pub/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "mix",
+            "1.0.0",
+            "path/priv/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("u1"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "mix",
+            "1.0.0",
+            "path/team/symbols.lance",
+            Visibility::Team,
+            Some("org_a"),
+            Some("u1"),
+        )
+        .await
+        .unwrap();
 
-        let paths = svc.catalog_paths_for_package("rust", "mix", Some("1.0.0")).await.unwrap();
+        let paths = svc
+            .catalog_paths_for_package("rust", "mix", Some("1.0.0"))
+            .await
+            .unwrap();
         assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0], "path/pub");
+        assert_eq!(paths[0], "path/pub/symbols.lance");
     }
 
     #[tokio::test]
@@ -408,25 +512,73 @@ mod tests {
         };
         let svc = test_service_with_identity(identity).await;
 
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/pub", Visibility::Public, None, None)
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/team_a", Visibility::Team, Some("org_a"), Some("user_1"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/team_b", Visibility::Team, Some("org_b"), Some("user_2"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/priv_me", Visibility::Private, None, Some("user_1"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/priv_other", Visibility::Private, None, Some("user_2"))
-            .await.unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/pub/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/team_a/symbols.lance",
+            Visibility::Team,
+            Some("org_a"),
+            Some("user_1"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/team_b/symbols.lance",
+            Visibility::Team,
+            Some("org_b"),
+            Some("user_2"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/priv_me/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("user_1"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/priv_other/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("user_2"),
+        )
+        .await
+        .unwrap();
 
-        let paths = svc.catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0")).await.unwrap();
+        let paths = svc
+            .catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0"))
+            .await
+            .unwrap();
         // Should see: public, team_a (same org), priv_me (same user)
         // Should NOT see: team_b (different org), priv_other (different user)
-        assert!(paths.contains(&"path/pub".to_string()));
-        assert!(paths.contains(&"path/team_a".to_string()));
-        assert!(paths.contains(&"path/priv_me".to_string()));
-        assert!(!paths.contains(&"path/team_b".to_string()));
-        assert!(!paths.contains(&"path/priv_other".to_string()));
+        assert!(paths.contains(&"path/pub/symbols.lance".to_string()));
+        assert!(paths.contains(&"path/team_a/symbols.lance".to_string()));
+        assert!(paths.contains(&"path/priv_me/symbols.lance".to_string()));
+        assert!(!paths.contains(&"path/team_b/symbols.lance".to_string()));
+        assert!(!paths.contains(&"path/priv_other/symbols.lance".to_string()));
         assert_eq!(paths.len(), 3);
     }
 
@@ -434,14 +586,35 @@ mod tests {
     async fn catalog_paths_scoped_no_identity_public_only() {
         let svc = test_service().await;
 
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/pub", Visibility::Public, None, None)
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/priv", Visibility::Private, None, Some("u1"))
-            .await.unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/pub/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/priv/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("u1"),
+        )
+        .await
+        .unwrap();
 
-        let paths = svc.catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0")).await.unwrap();
+        let paths = svc
+            .catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0"))
+            .await
+            .unwrap();
         assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0], "path/pub");
+        assert_eq!(paths[0], "path/pub/symbols.lance");
     }
 
     #[tokio::test]
@@ -454,21 +627,60 @@ mod tests {
         };
         let svc = test_service_with_identity(identity).await;
 
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/pub", Visibility::Public, None, None)
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/team_a", Visibility::Team, Some("org_a"), Some("user_solo"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/priv_me", Visibility::Private, None, Some("user_solo"))
-            .await.unwrap();
-        svc.register_catalog_data_file("rust", "pkg", "1.0.0", "path/priv_other", Visibility::Private, None, Some("user_other"))
-            .await.unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/pub/symbols.lance",
+            Visibility::Public,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/team_a/symbols.lance",
+            Visibility::Team,
+            Some("org_a"),
+            Some("user_solo"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/priv_me/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("user_solo"),
+        )
+        .await
+        .unwrap();
+        svc.register_catalog_data_file(
+            "rust",
+            "pkg",
+            "1.0.0",
+            "path/priv_other/symbols.lance",
+            Visibility::Private,
+            None,
+            Some("user_other"),
+        )
+        .await
+        .unwrap();
 
-        let paths = svc.catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0")).await.unwrap();
+        let paths = svc
+            .catalog_paths_for_package_scoped("rust", "pkg", Some("1.0.0"))
+            .await
+            .unwrap();
         // No org → team entries are invisible even if owner matches
-        assert!(paths.contains(&"path/pub".to_string()));
-        assert!(paths.contains(&"path/priv_me".to_string()));
-        assert!(!paths.contains(&"path/team_a".to_string()));
-        assert!(!paths.contains(&"path/priv_other".to_string()));
+        assert!(paths.contains(&"path/pub/symbols.lance".to_string()));
+        assert!(paths.contains(&"path/priv_me/symbols.lance".to_string()));
+        assert!(!paths.contains(&"path/team_a/symbols.lance".to_string()));
+        assert!(!paths.contains(&"path/priv_other/symbols.lance".to_string()));
         assert_eq!(paths.len(), 2);
     }
 
@@ -477,8 +689,13 @@ mod tests {
         let svc = test_service().await;
 
         svc.register_catalog_data_file(
-            "rust", "team_pkg", "1.0.0", "path/symbols.lance",
-            Visibility::Team, Some("org_x"), Some("user_y"),
+            "rust",
+            "team_pkg",
+            "1.0.0",
+            "path/symbols.lance",
+            Visibility::Team,
+            Some("org_x"),
+            Some("user_y"),
         )
         .await
         .unwrap();

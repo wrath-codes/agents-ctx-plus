@@ -139,7 +139,10 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM implementation_log WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(org_params.clone()))
+            .await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -155,7 +158,10 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![task_id.into()];
         params.extend(org_params);
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -171,7 +177,10 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![file_path.into()];
         params.extend(org_params);
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
 
         let mut logs = Vec::new();
         while let Some(row) = rows.next().await? {

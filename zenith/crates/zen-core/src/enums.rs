@@ -820,18 +820,8 @@ mod tests {
     );
     test_serde_roundtrip!(trail_op_untag, TrailOp, TrailOp::Untag, "untag");
 
-    test_serde_roundtrip!(
-        visibility_public,
-        Visibility,
-        Visibility::Public,
-        "public"
-    );
-    test_serde_roundtrip!(
-        visibility_team,
-        Visibility,
-        Visibility::Team,
-        "team"
-    );
+    test_serde_roundtrip!(visibility_public, Visibility, Visibility::Public, "public");
+    test_serde_roundtrip!(visibility_team, Visibility, Visibility::Team, "team");
     test_serde_roundtrip!(
         visibility_private,
         Visibility,

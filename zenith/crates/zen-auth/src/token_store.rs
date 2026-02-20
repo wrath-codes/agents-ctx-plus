@@ -12,8 +12,7 @@ const CREDENTIALS_FILE_NAME: &str = "credentials";
 /// Defaults to `"zenith-cli"`. Override via `ZENITH_KEYRING_SERVICE` env var
 /// for testing (e.g., `"zenith-cli-test"`) to avoid touching production credentials.
 fn keyring_service() -> String {
-    std::env::var("ZENITH_KEYRING_SERVICE")
-        .unwrap_or_else(|_| DEFAULT_KEYRING_SERVICE.to_string())
+    std::env::var("ZENITH_KEYRING_SERVICE").unwrap_or_else(|_| DEFAULT_KEYRING_SERVICE.to_string())
 }
 
 /// Store a JWT in the OS keychain. Falls back to file if keyring unavailable.
@@ -104,18 +103,15 @@ fn credentials_path() -> Result<PathBuf, AuthError> {
     dirs::home_dir()
         .map(|h| h.join(".zenith").join(CREDENTIALS_FILE_NAME))
         .ok_or_else(|| {
-            AuthError::TokenStoreError(
-                "home directory not found — cannot store credentials".into(),
-            )
+            AuthError::TokenStoreError("home directory not found — cannot store credentials".into())
         })
 }
 
 fn store_file(jwt: &str) -> Result<(), AuthError> {
     let path = credentials_path()?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            AuthError::TokenStoreError(format!("mkdir {}: {e}", parent.display()))
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|e| AuthError::TokenStoreError(format!("mkdir {}: {e}", parent.display())))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -130,9 +126,8 @@ fn store_file(jwt: &str) -> Result<(), AuthError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| {
-            AuthError::TokenStoreError(format!("chmod {}: {e}", path.display()))
-        })?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .map_err(|e| AuthError::TokenStoreError(format!("chmod {}: {e}", path.display())))?;
     }
 
     Ok(())

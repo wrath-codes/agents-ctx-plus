@@ -97,7 +97,7 @@ pub fn build_sync_status(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_sync_status, SyncStatus};
+    use super::{SyncStatus, build_sync_status};
 
     #[test]
     fn reports_deferred_auto_commit_note() {

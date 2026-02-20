@@ -74,7 +74,10 @@ pub(crate) mod spike_clerk_helpers {
             .await
             .ok()?;
         if !resp.status().is_success() {
-            eprintln!("  resolve_test_user_id: Clerk API returned {}", resp.status());
+            eprintln!(
+                "  resolve_test_user_id: Clerk API returned {}",
+                resp.status()
+            );
             return None;
         }
         let users: serde_json::Value = resp.json().await.ok()?;
@@ -172,5 +175,4 @@ pub(crate) mod spike_clerk_helpers {
         let token = fresh_clerk_token().await?;
         Some((url, token))
     }
-
 }

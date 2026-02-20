@@ -45,6 +45,7 @@ urlencoding = "2"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+indicatif = "0.17"
 
 # Config
 figment = { version = "0.10", features = ["toml", "env", "test"] }

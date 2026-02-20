@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::cli::OutputFormat;
+use crate::ui;
 
 pub mod table;
 
@@ -22,26 +23,40 @@ pub fn output<T: Serialize>(value: &T, format: OutputFormat) -> anyhow::Result<(
 }
 
 fn render_table<T: Serialize>(value: &T) -> anyhow::Result<String> {
+    let prefs = ui::prefs();
+    let options = table::TableOptions {
+        max_width: prefs.term_width,
+        color: prefs.table_color,
+    };
+
     let value = serde_json::to_value(value)?;
     match value {
         Value::Array(items) => render_array_table(&items),
         Value::Object(map) => {
             let headers = ["key", "value"];
-            let mut rows = Vec::with_capacity(map.len());
-            for (key, value) in map {
+            let mut entries = map.into_iter().collect::<Vec<_>>();
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut rows = Vec::with_capacity(entries.len());
+            for (key, value) in entries {
                 rows.push(vec![key, value_to_cell(&value)]);
             }
-            Ok(table::render_entity_table(&headers, &rows))
+            Ok(table::render_entity_table(&headers, &rows, options))
         }
         scalar => {
             let headers = ["value"];
             let rows = vec![vec![value_to_cell(&scalar)]];
-            Ok(table::render_entity_table(&headers, &rows))
+            Ok(table::render_entity_table(&headers, &rows, options))
         }
     }
 }
 
 fn render_array_table(items: &[Value]) -> anyhow::Result<String> {
+    let prefs = ui::prefs();
+    let options = table::TableOptions {
+        max_width: prefs.term_width,
+        color: prefs.table_color,
+    };
+
     if items.is_empty() {
         return Ok(String::from("(no rows)"));
     }
@@ -53,7 +68,7 @@ fn render_array_table(items: &[Value]) -> anyhow::Result<String> {
             .iter()
             .map(|item| vec![value_to_cell(item)])
             .collect::<Vec<_>>();
-        return Ok(table::render_entity_table(&headers, &rows));
+        return Ok(table::render_entity_table(&headers, &rows, options));
     }
 
     let mut headers = Vec::<String>::new();
@@ -71,6 +86,8 @@ fn render_array_table(items: &[Value]) -> anyhow::Result<String> {
         return Ok(String::from("(no columns)"));
     }
 
+    headers.sort();
+
     let header_refs = headers.iter().map(String::as_str).collect::<Vec<_>>();
     let rows = items
         .iter()
@@ -86,7 +103,7 @@ fn render_array_table(items: &[Value]) -> anyhow::Result<String> {
         })
         .collect::<Vec<_>>();
 
-    Ok(table::render_entity_table(&header_refs, &rows))
+    Ok(table::render_entity_table(&header_refs, &rows, options))
 }
 
 fn value_to_cell(value: &Value) -> String {
@@ -151,7 +168,14 @@ mod tests {
             ],
         ];
 
-        let table = render_entity_table(&headers, &rows);
+        let table = render_entity_table(
+            &headers,
+            &rows,
+            super::table::TableOptions {
+                max_width: None,
+                color: false,
+            },
+        );
         let lines: Vec<&str> = table.lines().collect();
 
         assert!(lines.len() >= 4);

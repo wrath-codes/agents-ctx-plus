@@ -60,7 +60,7 @@ impl R2Config {
         if self.endpoint.is_empty() {
             format!("https://{}.r2.cloudflarestorage.com", self.account_id)
         } else {
-            self.endpoint.clone()
+            normalize_endpoint_url(&self.endpoint, &self.bucket_name)
         }
     }
 
@@ -113,6 +113,17 @@ impl R2Config {
     fn r2_endpoint(&self) -> String {
         format!("{}.r2.cloudflarestorage.com", self.account_id)
     }
+}
+
+fn normalize_endpoint_url(endpoint: &str, bucket_name: &str) -> String {
+    let mut value = endpoint.trim().trim_end_matches('/').to_string();
+    if !bucket_name.is_empty() {
+        let bucket_suffix = format!("/{bucket_name}");
+        if value.ends_with(&bucket_suffix) {
+            value.truncate(value.len() - bucket_suffix.len());
+        }
+    }
+    value
 }
 
 #[cfg(test)]
@@ -169,6 +180,19 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(config.endpoint_url(), "http://localhost:9000");
+    }
+
+    #[test]
+    fn endpoint_url_strips_bucket_suffix() {
+        let config = R2Config {
+            endpoint: "https://acc.r2.cloudflarestorage.com/zenith/".into(),
+            bucket_name: "zenith".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            config.endpoint_url(),
+            "https://acc.r2.cloudflarestorage.com"
+        );
     }
 
     #[test]

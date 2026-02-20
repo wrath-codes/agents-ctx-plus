@@ -51,8 +51,7 @@ pub async fn login(
     // Wait for callback — tiny_http::recv() blocks, so run in spawn_blocking
     let callback = tokio::task::spawn_blocking(move || wait_for_callback(server, timeout, state))
         .await
-        .map_err(|e| AuthError::BrowserFlowFailed(format!("spawn_blocking join: {e}")))?
-        ?;
+        .map_err(|e| AuthError::BrowserFlowFailed(format!("spawn_blocking join: {e}")))??;
 
     let jwt = match callback {
         CallbackResult::Jwt(jwt) => jwt,
@@ -60,16 +59,14 @@ pub async fn login(
             crate::api_key::mint_token_for_session(secret_key, &session_id).await?
         }
         CallbackResult::ClientToken(client_token) => {
-            let session_id = crate::api_key::resolve_session_id_from_client_token(
-                secret_key,
-                &client_token,
-            )
-            .await?
-            .ok_or_else(|| {
-                AuthError::BrowserFlowFailed(
-                    "could not resolve session id from Clerk callback token".into(),
-                )
-            })?;
+            let session_id =
+                crate::api_key::resolve_session_id_from_client_token(secret_key, &client_token)
+                    .await?
+                    .ok_or_else(|| {
+                        AuthError::BrowserFlowFailed(
+                            "could not resolve session id from Clerk callback token".into(),
+                        )
+                    })?;
             crate::api_key::mint_token_for_session(secret_key, &session_id).await?
         }
     };
@@ -139,7 +136,9 @@ fn wait_for_callback(
             )
             .with_header(tiny_http::Header::from_bytes("Content-Type", "text/html").unwrap());
             let _ = request.respond(err_response);
-            return Err(AuthError::BrowserFlowFailed("no query string in callback".into()));
+            return Err(AuthError::BrowserFlowFailed(
+                "no query string in callback".into(),
+            ));
         };
 
         let token_param_names = ["token", "__clerk_db_jwt", "session_token"];
@@ -248,7 +247,8 @@ fn wait_for_callback(
 
 fn looks_like_jwt(token: &str) -> bool {
     let mut parts = token.split('.');
-    let (Some(a), Some(b), Some(c), None) = (parts.next(), parts.next(), parts.next(), parts.next())
+    let (Some(a), Some(b), Some(c), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
     else {
         return false;
     };

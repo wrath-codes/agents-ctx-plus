@@ -183,10 +183,16 @@ async fn jwks_validate_fresh_token() {
     assert!(!claims.raw_jwt.is_empty());
     assert!(claims.expires_at > chrono::Utc::now());
 
-    eprintln!("  PASS: JWKS validated fresh token — user={}", claims.user_id);
+    eprintln!(
+        "  PASS: JWKS validated fresh token — user={}",
+        claims.user_id
+    );
     eprintln!("  expires_at: {}", claims.expires_at);
     if let Some(ref org_id) = claims.org_id {
-        eprintln!("  org_id: {org_id}, slug: {:?}, role: {:?}", claims.org_slug, claims.org_role);
+        eprintln!(
+            "  org_id: {org_id}, slug: {:?}, role: {:?}",
+            claims.org_slug, claims.org_role
+        );
     }
 }
 
@@ -269,7 +275,10 @@ async fn claims_identity_and_expiry_from_fresh_token() {
     assert_eq!(identity.org_role, claims.org_role);
 
     // Freshly minted token should NOT be near-expiry
-    assert!(!claims.is_near_expiry(60), "fresh token should not be near-expiry");
+    assert!(
+        !claims.is_near_expiry(60),
+        "fresh token should not be near-expiry"
+    );
 
     eprintln!("  PASS: to_identity() + is_near_expiry() correct for fresh token");
 }
@@ -306,7 +315,10 @@ async fn decode_expiry_matches_jwks_validated() {
         "decode_expiry() should match JWKS-validated exp"
     );
 
-    eprintln!("  PASS: decode_expiry={decoded_exp} == jwks.exp={}", claims.expires_at);
+    eprintln!(
+        "  PASS: decode_expiry={decoded_exp} == jwks.exp={}",
+        claims.expires_at
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -14,14 +14,14 @@ struct ListResponse {
 }
 
 pub async fn handle(ctx: &AppContext, flags: &GlobalFlags) -> anyhow::Result<()> {
-    let identity = ctx
-        .identity
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("team list requires authentication — run `znt auth login`"))?;
-    let org_id = identity
-        .org_id
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("team list requires an active organization — run `znt auth switch-org <slug>`"))?;
+    let identity = ctx.identity.as_ref().ok_or_else(|| {
+        anyhow::anyhow!("team list requires authentication — run `znt auth login`")
+    })?;
+    let org_id = identity.org_id.as_deref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "team list requires an active organization — run `znt auth switch-org <slug>`"
+        )
+    })?;
 
     if ctx.config.clerk.secret_key.is_empty() {
         bail!("team list requires ZENITH_CLERK__SECRET_KEY to be configured");

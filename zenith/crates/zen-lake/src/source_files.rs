@@ -7,7 +7,7 @@
 //!
 //! Used by `znt grep` (Phase 4) to search source code content with Rust regex.
 
-use duckdb::{params, AccessMode, Config, Connection};
+use duckdb::{AccessMode, Config, Connection, params};
 
 use crate::{LakeError, OpenMode};
 

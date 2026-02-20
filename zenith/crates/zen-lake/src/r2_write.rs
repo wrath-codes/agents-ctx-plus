@@ -219,12 +219,29 @@ impl ZenLake {
 
         let schema = batch.schema();
         let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
-        db.create_table(table_name, Box::new(batches))
+        let table = db
+            .create_table(table_name, Box::new(batches))
             .execute()
             .await
             .map_err(|e| LakeError::Other(format!("lancedb write failed: {e}")))?;
 
-        Ok(format!("{dataset_root}/{table_name}.lance"))
+        let table_uri = table
+            .uri()
+            .await
+            .map_err(|e| LakeError::Other(format!("lancedb table uri lookup failed: {e}")))?;
+        let table_uri = table_uri
+            .split_once('#')
+            .map_or(table_uri.as_str(), |(prefix, _)| prefix)
+            .trim_end_matches('?')
+            .to_string();
+
+        db.open_table(table_name).execute().await.map_err(|e| {
+            LakeError::Other(format!(
+                "lancedb post-write open_table verification failed for '{table_name}': {e}"
+            ))
+        })?;
+
+        Ok(table_uri)
     }
 
     /// Export indexed package data to R2 as Lance datasets.
@@ -326,7 +343,8 @@ mod tests {
         let public_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Public);
         assert!(public_root.starts_with("s3://zenith-bucket/lance/public/"));
 
-        let private_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Private);
+        let private_root =
+            symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Private);
         assert!(private_root.starts_with("s3://zenith-bucket/lance/private/"));
 
         let team_root = symbols_dataset_root(&r2, "rust", "tokio", "1.49.0", Visibility::Team);

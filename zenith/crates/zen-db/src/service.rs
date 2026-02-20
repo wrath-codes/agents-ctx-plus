@@ -54,7 +54,12 @@ impl ZenService {
             None => TrailWriter::disabled(),
         };
         let schema = SchemaRegistry::new();
-        Ok(Self { db, trail, schema, identity })
+        Ok(Self {
+            db,
+            trail,
+            schema,
+            identity,
+        })
     }
 
     /// Create a service backed by a synced Turso embedded replica.
@@ -75,7 +80,12 @@ impl ZenService {
             None => TrailWriter::disabled(),
         };
         let schema = SchemaRegistry::new();
-        Ok(Self { db, trail, schema, identity })
+        Ok(Self {
+            db,
+            trail,
+            schema,
+            identity,
+        })
     }
 
     /// Create from an existing `ZenDb` (for testing).

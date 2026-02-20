@@ -212,7 +212,10 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM compatibility_checks WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(org_params.clone()))
+            .await?;
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
             results.push(row_to_compat(&row)?);
@@ -234,7 +237,10 @@ impl ZenService {
         );
         let mut params: Vec<libsql::Value> = vec![package_a.into(), package_b.into()];
         params.extend(org_params);
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
         match rows.next().await? {
             Some(row) => Ok(Some(row_to_compat(&row)?)),
             None => Ok(None),

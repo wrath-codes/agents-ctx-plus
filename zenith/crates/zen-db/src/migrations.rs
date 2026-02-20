@@ -10,6 +10,7 @@ use crate::error::DatabaseError;
 const MIGRATION_001: &str = include_str!("../migrations/001_initial.sql");
 const MIGRATION_002: &str = include_str!("../migrations/002_catalog.sql");
 const MIGRATION_003: &str = include_str!("../migrations/003_team.sql");
+const MIGRATION_004: &str = include_str!("../migrations/004_catalog_locator_format.sql");
 
 impl ZenDb {
     /// Run all embedded migrations in sequence.
@@ -48,6 +49,11 @@ impl ZenDb {
                 Err(e) => return Err(DatabaseError::Migration(format!("003_team: {e}"))),
             }
         }
+
+        self.conn
+            .execute_batch(MIGRATION_004)
+            .await
+            .map_err(|e| DatabaseError::Migration(format!("004_catalog_locator_format: {e}")))?;
 
         Ok(())
     }

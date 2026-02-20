@@ -23,6 +23,7 @@ lancedb.workspace = true
 arrow-array.workspace = true
 arrow-schema.workspace = true
 serde_arrow.workspace = true
+futures-util = "0.3"
 
 [dev-dependencies]
 pretty_assertions.workspace = true

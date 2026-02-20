@@ -1,9 +1,9 @@
 use std::sync::{Arc, OnceLock};
 
+use clerk_rs::ClerkConfiguration;
 use clerk_rs::clerk::Clerk;
 use clerk_rs::validators::authorizer::validate_jwt;
 use clerk_rs::validators::jwks::MemoryCacheJwksProvider;
-use clerk_rs::ClerkConfiguration;
 
 use crate::claims::ZenClaims;
 use crate::error::AuthError;

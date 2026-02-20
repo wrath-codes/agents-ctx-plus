@@ -42,6 +42,5 @@ impl Default for RetryConfig {
 /// SQL or constraint errors.
 pub fn is_transient_turso_error(e: &libsql::Error) -> bool {
     let msg = e.to_string();
-    msg.contains("unable to acquire shared lock")
-        || msg.contains("deletion must be in progress")
+    msg.contains("unable to acquire shared lock") || msg.contains("deletion must be in progress")
 }

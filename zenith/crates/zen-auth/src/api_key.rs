@@ -17,10 +17,7 @@ use clerk_rs::clerk::Clerk;
 /// # Errors
 ///
 /// Returns `AuthError::ApiKeyFailed` if session creation or JWT minting fails.
-pub async fn login_with_api_key(
-    secret_key: &str,
-    user_id: &str,
-) -> Result<ZenClaims, AuthError> {
+pub async fn login_with_api_key(secret_key: &str, user_id: &str) -> Result<ZenClaims, AuthError> {
     let client = reqwest::Client::new();
 
     // 1. Create session
@@ -55,7 +52,10 @@ pub async fn login_with_api_key(
 /// # Errors
 ///
 /// Returns `AuthError::ApiKeyFailed` when token minting or parsing fails.
-pub async fn mint_token_for_session(secret_key: &str, session_id: &str) -> Result<String, AuthError> {
+pub async fn mint_token_for_session(
+    secret_key: &str,
+    session_id: &str,
+) -> Result<String, AuthError> {
     let client = reqwest::Client::new();
     let token_resp = client
         .post(format!(

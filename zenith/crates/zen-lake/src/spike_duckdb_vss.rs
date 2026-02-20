@@ -39,7 +39,7 @@
 //!
 //! Cloud tests are skipped (not failed) when credentials are missing.
 
-use duckdb::{Connection, params};
+use duckdb::{params, Connection};
 use tempfile::TempDir;
 
 /// Load env vars from the workspace .env file.
@@ -399,6 +399,21 @@ fn motherduck_token() -> Option<String> {
         .filter(|t| !t.is_empty())
 }
 
+fn open_motherduck_connection(token: &str) -> Option<Connection> {
+    match Connection::open(format!("md:?motherduck_token={token}")) {
+        Ok(conn) => Some(conn),
+        Err(error) => {
+            let message = error.to_string();
+            if message.contains("trial has ended") || message.contains("Unauthorized") {
+                eprintln!("SKIP: MotherDuck unavailable: {message}");
+                None
+            } else {
+                panic!("failed to open MotherDuck connection: {message}");
+            }
+        }
+    }
+}
+
 /// Verify that we can connect to MotherDuck, create a test DB, and run queries.
 #[test]
 fn spike_motherduck_connect_and_query() {
@@ -408,7 +423,9 @@ fn spike_motherduck_connect_and_query() {
     };
 
     // Connect to MotherDuck using md: protocol
-    let conn = Connection::open(format!("md:?motherduck_token={token}")).unwrap();
+    let Some(conn) = open_motherduck_connection(&token) else {
+        return;
+    };
 
     // Create a test database (or use if exists)
     conn.execute_batch("CREATE DATABASE IF NOT EXISTS zenith_spike_test")
@@ -481,7 +498,9 @@ fn spike_motherduck_vss() {
         return;
     };
 
-    let conn = Connection::open(format!("md:?motherduck_token={token}")).unwrap();
+    let Some(conn) = open_motherduck_connection(&token) else {
+        return;
+    };
     conn.execute_batch("INSTALL vss; LOAD vss;").unwrap();
     conn.execute_batch("CREATE DATABASE IF NOT EXISTS zenith_spike_test; USE zenith_spike_test;")
         .unwrap();
@@ -1134,7 +1153,9 @@ fn spike_ducklake_managed() {
         return;
     };
 
-    let conn = Connection::open(format!("md:?motherduck_token={token}")).unwrap();
+    let Some(conn) = open_motherduck_connection(&token) else {
+        return;
+    };
     conn.execute_batch("INSTALL ducklake;").unwrap();
 
     // Create fully managed DuckLake (MotherDuck handles storage)
@@ -1224,7 +1245,9 @@ fn spike_ducklake_r2_with_data() {
         return;
     };
 
-    let conn = Connection::open(format!("md:?motherduck_token={token}")).unwrap();
+    let Some(conn) = open_motherduck_connection(&token) else {
+        return;
+    };
     conn.execute_batch("INSTALL ducklake; INSTALL httpfs; LOAD httpfs;")
         .unwrap();
 

@@ -95,10 +95,15 @@ impl ZenService {
 
         let now = Utc::now();
         let (org_filter, org_params) = self.org_id_filter(4);
-        let sql = format!("UPDATE sessions SET ended_at = ?1, status = 'wrapped_up', summary = ?2 WHERE id = ?3 {org_filter}");
-        let mut params: Vec<libsql::Value> = vec![now.to_rfc3339().into(), summary.into(), session_id.into()];
+        let sql = format!(
+            "UPDATE sessions SET ended_at = ?1, status = 'wrapped_up', summary = ?2 WHERE id = ?3 {org_filter}"
+        );
+        let mut params: Vec<libsql::Value> =
+            vec![now.to_rfc3339().into(), summary.into(), session_id.into()];
         params.extend(org_params);
-        self.db().execute_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        self.db()
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
 
         let updated = Session {
             ended_at: Some(now),
@@ -174,7 +179,9 @@ impl ZenService {
                 );
                 let mut params: Vec<libsql::Value> = vec![s.as_str().into(), (limit as i64).into()];
                 params.extend(org_params);
-                self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?
+                self.db()
+                    .query_with(&sql, || libsql::params_from_iter(params.clone()))
+                    .await?
             }
             None => {
                 let (org_filter, org_params) = self.org_id_filter(1);
@@ -182,7 +189,9 @@ impl ZenService {
                     "SELECT id, started_at, ended_at, status, summary FROM sessions
                      WHERE 1=1 {org_filter} ORDER BY started_at DESC LIMIT {limit}"
                 );
-                self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?
+                self.db()
+                    .query_with(&sql, || libsql::params_from_iter(org_params.clone()))
+                    .await?
             }
         };
 
@@ -223,17 +232,19 @@ impl ZenService {
              (session_id, open_tasks, in_progress_tasks, pending_hypotheses,
               unverified_hypotheses, recent_findings, open_research, summary, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                || libsql::params![
-                    session_id,
-                    open_tasks,
-                    in_progress_tasks,
-                    pending_hyps,
-                    unverified_hyps,
-                    recent_findings,
-                    open_research,
-                    summary,
-                    now.to_rfc3339()
-                ],
+                || {
+                    libsql::params![
+                        session_id,
+                        open_tasks,
+                        in_progress_tasks,
+                        pending_hyps,
+                        unverified_hyps,
+                        recent_findings,
+                        open_research,
+                        summary,
+                        now.to_rfc3339()
+                    ]
+                },
             )
             .await?;
 
@@ -259,10 +270,14 @@ impl ZenService {
     pub async fn abandon_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         let now = Utc::now();
         let (org_filter, org_params) = self.org_id_filter(3);
-        let sql = format!("UPDATE sessions SET status = 'abandoned', ended_at = ?1 WHERE id = ?2 {org_filter}");
+        let sql = format!(
+            "UPDATE sessions SET status = 'abandoned', ended_at = ?1 WHERE id = ?2 {org_filter}"
+        );
         let mut params: Vec<libsql::Value> = vec![now.to_rfc3339().into(), session_id.into()];
         params.extend(org_params);
-        self.db().execute_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        self.db()
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -306,10 +321,14 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
         let (org_filter, org_params) = self.org_id_filter(2);
-        let sql = format!("UPDATE sessions SET ended_at = NULL, status = 'active', summary = NULL WHERE id = ?1 AND status = 'wrapped_up' {org_filter}");
+        let sql = format!(
+            "UPDATE sessions SET ended_at = NULL, status = 'active', summary = NULL WHERE id = ?1 AND status = 'wrapped_up' {org_filter}"
+        );
         let mut params: Vec<libsql::Value> = vec![session_id.into()];
         params.extend(org_params);
-        self.db().execute_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        self.db()
+            .execute_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -355,7 +374,10 @@ impl ZenService {
         let sql = format!("SELECT COUNT(*) FROM {table} WHERE status = ?1 {org_filter}");
         let mut params: Vec<libsql::Value> = vec![status.into()];
         params.extend(org_params);
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(params.clone()))
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         Ok(row.get::<i64>(0)?)
     }
@@ -366,7 +388,10 @@ impl ZenService {
         let sql = format!(
             "SELECT COUNT(*) FROM {table} WHERE created_at >= datetime('now', '-{hours} hours') {org_filter}"
         );
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(org_params.clone()))
+            .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         Ok(row.get::<i64>(0)?)
     }

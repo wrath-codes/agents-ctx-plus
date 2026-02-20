@@ -16,8 +16,10 @@ use zen_core::enums::Visibility;
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::OnboardArgs;
 use crate::context::AppContext;
+use crate::context::CacheLookup;
 use crate::output::output;
 use crate::pipeline::IndexingPipeline;
+use crate::progress::Progress;
 
 const REGISTRY_SEARCH_LIMIT: usize = 100;
 
@@ -89,6 +91,10 @@ pub async fn handle(
         .unwrap_or_else(|| "project".to_string());
 
     let dependencies = detect_dependencies(&root, &ecosystem, args.workspace)?;
+    let dep_progress = Progress::bar(
+        u64::try_from(dependencies.len()).unwrap_or(0),
+        "onboard: indexing dependencies",
+    );
     for dep in &dependencies {
         ctx.service.upsert_dependency(dep).await?;
     }
@@ -105,14 +111,70 @@ pub async fn handle(
 
     if !args.skip_indexing {
         for dep in &dependencies {
+            dep_progress.set_message(&format!("{}:{}", dep.ecosystem, dep.name));
             let catalog_hit = if cloud_enabled {
                 if let Some(version) = dep.version.as_deref() {
+                    let mut stale_paths = Vec::new();
+
+                    if let Some(cache) = &ctx.catalog_cache {
+                        match cache
+                            .get_paths(&dep.ecosystem, &dep.name, Some(version), "public")
+                            .await
+                        {
+                            Ok(CacheLookup::Fresh(paths)) if !paths.is_empty() => {
+                                already_indexed += 1;
+                                already_indexed_cloud += 1;
+                                skipped_by_catalog += 1;
+                                catalog_hits.push(CatalogHit {
+                                    ecosystem: dep.ecosystem.clone(),
+                                    package: dep.name.clone(),
+                                    version: dep.version.clone().unwrap_or_default(),
+                                    source: "catalog_cache".to_string(),
+                                });
+                                dep_progress.inc(1);
+                                continue;
+                            }
+                            Ok(CacheLookup::Stale(paths)) => stale_paths = paths,
+                            Ok(CacheLookup::Miss) => {}
+                            Err(error) => {
+                                tracing::warn!(
+                                    package = %dep.name,
+                                    ecosystem = %dep.ecosystem,
+                                    %error,
+                                    "onboard: cache lookup failed; continuing with remote catalog"
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+
                     match ctx
                         .service
-                        .catalog_has_package(&dep.ecosystem, &dep.name, version)
+                        .catalog_check_before_index(&dep.ecosystem, &dep.name, version)
                         .await
                     {
-                        Ok(hit) => hit,
+                        Ok(Some(paths)) if !paths.is_empty() => {
+                            if let Some(cache) = &ctx.catalog_cache
+                                && let Err(error) = cache
+                                    .put_paths(
+                                        &dep.ecosystem,
+                                        &dep.name,
+                                        Some(version),
+                                        "public",
+                                        &paths,
+                                    )
+                                    .await
+                            {
+                                tracing::warn!(
+                                    package = %dep.name,
+                                    ecosystem = %dep.ecosystem,
+                                    %error,
+                                    "onboard: failed to write catalog cache"
+                                );
+                            }
+                            true
+                        }
+                        Ok(_) => false,
                         Err(error) => {
                             tracing::warn!(
                                 package = %dep.name,
@@ -120,7 +182,7 @@ pub async fn handle(
                                 %error,
                                 "onboard: catalog lookup failed; continuing with local indexing"
                             );
-                            false
+                            !stale_paths.is_empty()
                         }
                     }
                 } else {
@@ -140,6 +202,7 @@ pub async fn handle(
                     version: dep.version.clone().unwrap_or_default(),
                     source: "turso_catalog".to_string(),
                 });
+                dep_progress.inc(1);
                 continue;
             }
 
@@ -147,18 +210,23 @@ pub async fn handle(
                 Ok(IndexStatus::AlreadyIndexed) => {
                     already_indexed += 1;
                     already_indexed_local += 1;
+                    dep_progress.inc(1);
                 }
                 Ok(IndexStatus::IndexedNow) => {
                     newly_indexed += 1;
+                    dep_progress.inc(1);
                 }
                 Err(error) => {
                     tracing::warn!(package = %dep.name, %error, "onboard: dependency indexing failed");
                     failed += 1;
                     failed_packages.push(dep.name.clone());
+                    dep_progress.inc(1);
                 }
             }
         }
     }
+
+    dep_progress.finish_ok("onboard: dependency pass complete");
 
     let hooks = if args.install_hooks {
         let report = zen_hooks::install_hooks(&root, zen_hooks::HookInstallStrategy::Chain)?;
@@ -609,7 +677,13 @@ async fn index_dependency(
     if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
         match ctx
             .lake
-            .write_to_r2(&ctx.config.r2, &dep.ecosystem, &dep.name, &version, Visibility::Public)
+            .write_to_r2(
+                &ctx.config.r2,
+                &dep.ecosystem,
+                &dep.name,
+                &version,
+                Visibility::Public,
+            )
             .await
         {
             Ok(export) => {
@@ -651,9 +725,7 @@ async fn index_dependency(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        onboard_mode, parse_cargo_dependencies, parse_requirement_line, unique_deps,
-    };
+    use super::{onboard_mode, parse_cargo_dependencies, parse_requirement_line, unique_deps};
     use tempfile::TempDir;
 
     #[test]

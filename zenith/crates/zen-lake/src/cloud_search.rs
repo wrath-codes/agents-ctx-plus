@@ -1,3 +1,6 @@
+use arrow_array::{Array, RecordBatch};
+use futures_util::TryStreamExt;
+use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use libsql::{Builder, Connection};
 use zen_core::identity::AuthIdentity;
 
@@ -16,22 +19,91 @@ pub struct CloudVectorSearchResult {
     pub lance_path: String,
 }
 
-fn vec_to_sql(v: &[f32]) -> String {
-    use std::fmt::Write;
-    let mut out = String::with_capacity(v.len() * 10 + 2);
-    out.push('[');
-    for (idx, value) in v.iter().enumerate() {
-        if idx > 0 {
-            out.push_str(", ");
-        }
-        let _ = write!(out, "{value}");
+fn normalize_table_uri(path: &str) -> Option<String> {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return None;
     }
-    out.push(']');
-    out
+
+    if raw.contains(".lance") {
+        let uri = raw
+            .split_once('#')
+            .map_or(raw, |(prefix, _)| prefix)
+            .trim_end_matches('?')
+            .trim();
+        return (!uri.is_empty()).then(|| uri.to_string());
+    }
+
+    if let Some((db_uri, table_name)) = raw.rsplit_once('#') {
+        let db_uri = db_uri.trim().trim_end_matches('/').trim_end_matches('?');
+        let table_name = table_name.trim();
+        if !db_uri.is_empty() && !table_name.is_empty() {
+            return Some(format!("{db_uri}/{table_name}.lance"));
+        }
+    }
+
+    None
 }
 
-fn escape_sql_literal(value: &str) -> String {
-    value.replace('\'', "''")
+fn table_name_from_uri(table_uri: &str) -> Option<String> {
+    let file_name = table_uri.rsplit('/').next()?.trim();
+    file_name
+        .strip_suffix(".lance")
+        .map(|name| name.to_string())
+        .filter(|name| !name.is_empty())
+}
+
+fn database_uri_from_table_uri(table_uri: &str) -> Option<String> {
+    let (prefix, _) = table_uri.rsplit_once('/')?;
+    (!prefix.is_empty()).then(|| prefix.to_string())
+}
+
+fn resolve_storage_credentials(
+    r2_config: Option<&zen_config::R2Config>,
+) -> Option<(String, String, String)> {
+    if let Some(r2) = r2_config
+        && r2.is_configured()
+    {
+        return Some((
+            r2.access_key_id.clone(),
+            r2.secret_access_key.clone(),
+            r2.endpoint_url(),
+        ));
+    }
+
+    let access_key = std::env::var("AWS_ACCESS_KEY_ID").ok();
+    let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").ok();
+    let endpoint = std::env::var("AWS_ENDPOINT_URL").ok();
+
+    if let (Some(access_key), Some(secret_key), Some(endpoint)) = (access_key, secret_key, endpoint)
+        && !access_key.is_empty()
+        && !secret_key.is_empty()
+        && !endpoint.is_empty()
+    {
+        return Some((access_key, secret_key, endpoint));
+    }
+
+    let access_key = std::env::var("ZENITH_R2__ACCESS_KEY_ID").ok();
+    let secret_key = std::env::var("ZENITH_R2__SECRET_ACCESS_KEY").ok();
+    let endpoint = std::env::var("ZENITH_R2__ENDPOINT")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            std::env::var("ZENITH_R2__ACCOUNT_ID")
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(|account_id| format!("https://{account_id}.r2.cloudflarestorage.com"))
+        });
+
+    if let (Some(access_key), Some(secret_key), Some(endpoint)) = (access_key, secret_key, endpoint)
+        && !access_key.is_empty()
+        && !secret_key.is_empty()
+        && !endpoint.is_empty()
+    {
+        return Some((access_key, secret_key, endpoint));
+    }
+
+    None
 }
 
 impl ZenLake {
@@ -46,7 +118,8 @@ impl ZenLake {
             conn.query(
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
-                   AND lance_path LIKE '%symbols.lance%'
+                    AND instr(lance_path, '.lance') > 0
+                    AND instr(lance_path, '#') = 0
                    AND visibility = 'public'
                  ORDER BY created_at DESC, id DESC",
                 libsql::params![ecosystem, package, version],
@@ -56,7 +129,8 @@ impl ZenLake {
             conn.query(
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2
-                   AND lance_path LIKE '%symbols.lance%'
+                    AND instr(lance_path, '.lance') > 0
+                    AND instr(lance_path, '#') = 0
                    AND visibility = 'public'
                  ORDER BY created_at DESC, id DESC",
                 libsql::params![ecosystem, package],
@@ -91,65 +165,184 @@ impl ZenLake {
         Self::discover_catalog_paths_with_conn(&conn, ecosystem, package, version).await
     }
 
-    fn ensure_lance_loaded(&self) -> Result<(), LakeError> {
-        self.conn
-            .execute_batch("INSTALL lance FROM community; LOAD lance;")?;
-        Ok(())
-    }
-
-    /// Query Lance datasets using DuckDB `lance_vector_search` and merge results.
+    /// Query Lance datasets using native LanceDB and merge results.
     ///
     /// # Errors
     ///
-    /// Returns `LakeError` if extension loading or query execution fails.
-    pub fn search_lance_paths(
+    /// Returns `LakeError` if query execution fails.
+    pub async fn search_lance_paths(
         &self,
         lance_paths: &[String],
         query_embedding: &[f32],
         k: u32,
     ) -> Result<Vec<CloudVectorSearchResult>, LakeError> {
+        self.search_lance_paths_with_r2(lance_paths, query_embedding, k, None)
+            .await
+    }
+
+    /// Query Lance datasets using native LanceDB and merge results, using
+    /// optional R2 config for storage credentials.
+    ///
+    /// # Errors
+    ///
+    /// Returns `LakeError` if query execution fails.
+    pub async fn search_lance_paths_with_r2(
+        &self,
+        lance_paths: &[String],
+        query_embedding: &[f32],
+        k: u32,
+        r2_config: Option<&zen_config::R2Config>,
+    ) -> Result<Vec<CloudVectorSearchResult>, LakeError> {
         if lance_paths.is_empty() {
             return Ok(Vec::new());
         }
-
-        self.ensure_lance_loaded()?;
-
-        let embedding_sql = vec_to_sql(query_embedding);
         let mut results = Vec::new();
 
+        let creds = resolve_storage_credentials(r2_config);
+
         for path in lance_paths {
-            let escaped = escape_sql_literal(path);
-            let sql = format!(
-                "SELECT
-                    id,
-                    version,
-                    name,
-                    kind,
-                    signature,
-                    doc_comment,
-                    file_path,
-                    _distance
-                 FROM lance_vector_search('{escaped}', 'embedding', {embedding_sql}::FLOAT[384], k={k})
-                 ORDER BY _distance ASC"
-            );
+            let Some(table_uri) = normalize_table_uri(path) else {
+                tracing::warn!(lance_path = %path, "search: skipping invalid lance path");
+                continue;
+            };
 
-            let mut stmt = self.conn.prepare(&sql)?;
-            let rows = stmt.query_map([], |row| {
-                Ok(CloudVectorSearchResult {
-                    id: row.get(0)?,
-                    version: row.get(1)?,
-                    name: row.get(2)?,
-                    kind: row.get(3)?,
-                    signature: row.get(4)?,
-                    doc_comment: row.get(5)?,
-                    file_path: row.get(6)?,
-                    distance: row.get(7)?,
-                    lance_path: path.clone(),
-                })
-            })?;
+            let Some(table_name) = table_name_from_uri(&table_uri) else {
+                tracing::warn!(lance_path = %path, table_uri = %table_uri, "search: unable to derive table name from uri");
+                continue;
+            };
 
-            for row in rows {
-                results.push(row?);
+            let Some(database_uri) = database_uri_from_table_uri(&table_uri) else {
+                tracing::warn!(lance_path = %path, table_uri = %table_uri, "search: unable to derive database uri from table uri");
+                continue;
+            };
+
+            let mut conn_builder = lancedb::connect(&database_uri);
+            if let Some((access_key, secret_key, endpoint)) = creds.as_ref() {
+                conn_builder = conn_builder.storage_options([
+                    ("aws_access_key_id", access_key.as_str()),
+                    ("aws_secret_access_key", secret_key.as_str()),
+                    ("aws_endpoint", endpoint.as_str()),
+                    ("aws_region", "auto"),
+                    ("aws_virtual_hosted_style_request", "false"),
+                ]);
+            }
+
+            let db = match conn_builder.execute().await {
+                Ok(db) => db,
+                Err(error) => {
+                    tracing::warn!(
+                        lance_path = %path,
+                        database_uri = %database_uri,
+                        table_uri = %table_uri,
+                        %error,
+                        "search: skipping lance path due to lancedb connect failure"
+                    );
+                    continue;
+                }
+            };
+
+            let mut open_builder = db.open_table(&table_name);
+            if let Some((access_key, secret_key, endpoint)) = creds.as_ref() {
+                open_builder = open_builder.storage_options([
+                    ("aws_access_key_id", access_key.as_str()),
+                    ("aws_secret_access_key", secret_key.as_str()),
+                    ("aws_endpoint", endpoint.as_str()),
+                    ("aws_region", "auto"),
+                    ("aws_virtual_hosted_style_request", "false"),
+                ]);
+            }
+
+            let table = match open_builder.execute().await {
+                Ok(table) => table,
+                Err(_) => {
+                    let mut open_builder = db.open_table(&table_name).location(&table_uri);
+                    if let Some((access_key, secret_key, endpoint)) = creds.as_ref() {
+                        open_builder = open_builder.storage_options([
+                            ("aws_access_key_id", access_key.as_str()),
+                            ("aws_secret_access_key", secret_key.as_str()),
+                            ("aws_endpoint", endpoint.as_str()),
+                            ("aws_region", "auto"),
+                            ("aws_virtual_hosted_style_request", "false"),
+                        ]);
+                    }
+                    match open_builder.execute().await {
+                        Ok(table) => table,
+                        Err(_) => {
+                            let mut open_builder =
+                                db.open_table(&table_name).location(format!("{table_uri}/"));
+                            if let Some((access_key, secret_key, endpoint)) = creds.as_ref() {
+                                open_builder = open_builder.storage_options([
+                                    ("aws_access_key_id", access_key.as_str()),
+                                    ("aws_secret_access_key", secret_key.as_str()),
+                                    ("aws_endpoint", endpoint.as_str()),
+                                    ("aws_region", "auto"),
+                                    ("aws_virtual_hosted_style_request", "false"),
+                                ]);
+                            }
+                            match open_builder.execute().await {
+                                Ok(table) => table,
+                                Err(error) => {
+                                    let discovered_tables =
+                                        db.table_names().execute().await.unwrap_or_default();
+                                    tracing::warn!(
+                                        lance_path = %path,
+                                        table_name = %table_name,
+                                        table_uri = %table_uri,
+                                        discovered_tables = ?discovered_tables,
+                                        %error,
+                                        "search: skipping lance path due to open_table failure"
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            let stream = table
+                .query()
+                .nearest_to(query_embedding)
+                .map_err(|e| LakeError::Other(format!("lancedb nearest_to failed: {e}")))?
+                .select(Select::columns(&[
+                    "id",
+                    "version",
+                    "name",
+                    "kind",
+                    "signature",
+                    "doc_comment",
+                    "file_path",
+                    "_distance",
+                ]))
+                .limit(usize::try_from(k).unwrap_or(10))
+                .execute()
+                .await;
+
+            let mut stream = match stream {
+                Ok(stream) => stream,
+                Err(error) => {
+                    tracing::warn!(
+                        lance_path = %path,
+                        %error,
+                        "search: skipping lance path due to query execution failure"
+                    );
+                    continue;
+                }
+            };
+
+            loop {
+                match stream.try_next().await {
+                    Ok(Some(batch)) => append_batch_results(&batch, path, &mut results)?,
+                    Ok(None) => break,
+                    Err(error) => {
+                        tracing::warn!(
+                            lance_path = %path,
+                            %error,
+                            "search: stopping stream read for lance path after error"
+                        );
+                        break;
+                    }
+                }
             }
         }
 
@@ -183,7 +376,8 @@ impl ZenLake {
         let paths = self
             .discover_catalog_paths(turso_url, turso_auth_token, ecosystem, package, version)
             .await?;
-        self.search_lance_paths(&paths, query_embedding, k)
+        self.search_lance_paths_with_r2(&paths, query_embedding, k, None)
+            .await
     }
 
     /// Alias for Phase 8 search task naming.
@@ -275,15 +469,14 @@ impl ZenLake {
         let sql = format!(
             "SELECT lance_path FROM dl_data_file
              WHERE ecosystem = ?1 AND package = ?2 {version_clause}
-               AND lance_path LIKE '%symbols.lance%'
+               AND instr(lance_path, '.lance') > 0
+               AND instr(lance_path, '#') = 0
              {vis_clause}
              ORDER BY created_at DESC, id DESC"
         );
 
         let mut paths = Vec::new();
-        let mut rows = conn
-            .query(&sql, libsql::params_from_iter(params))
-            .await?;
+        let mut rows = conn.query(&sql, libsql::params_from_iter(params)).await?;
         while let Some(row) = rows.next().await? {
             paths.push(row.get::<String>(0)?);
         }
@@ -316,8 +509,101 @@ impl ZenLake {
                 identity,
             )
             .await?;
-        self.search_lance_paths(&paths, query_embedding, k)
+        self.search_lance_paths_with_r2(&paths, query_embedding, k, None)
+            .await
     }
+}
+
+fn append_batch_results(
+    batch: &RecordBatch,
+    lance_path: &str,
+    out: &mut Vec<CloudVectorSearchResult>,
+) -> Result<(), LakeError> {
+    for row in 0..batch.num_rows() {
+        let id = get_required_string(batch, "id", row)?;
+        let version = get_required_string(batch, "version", row)?;
+        let name = get_required_string(batch, "name", row)?;
+        let kind = get_required_string(batch, "kind", row)?;
+        let signature = get_optional_string(batch, "signature", row)?;
+        let doc_comment = get_optional_string(batch, "doc_comment", row)?;
+        let file_path = get_optional_string(batch, "file_path", row)?;
+        let distance = get_distance(batch, row).unwrap_or(f64::MAX);
+
+        out.push(CloudVectorSearchResult {
+            id,
+            version,
+            name,
+            kind,
+            signature,
+            doc_comment,
+            file_path,
+            distance,
+            lance_path: lance_path.to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+fn get_required_string(batch: &RecordBatch, column: &str, row: usize) -> Result<String, LakeError> {
+    get_optional_string(batch, column, row)?.ok_or_else(|| {
+        LakeError::Other(format!(
+            "missing required column '{column}' in lance query result"
+        ))
+    })
+}
+
+fn get_optional_string(
+    batch: &RecordBatch,
+    column: &str,
+    row: usize,
+) -> Result<Option<String>, LakeError> {
+    let index = batch.schema().index_of(column).map_err(|e| {
+        LakeError::Other(format!(
+            "missing column '{column}' in lance query result: {e}"
+        ))
+    })?;
+    let array = batch.column(index);
+
+    if let Some(values) = array.as_any().downcast_ref::<arrow_array::StringArray>() {
+        if values.is_null(row) {
+            return Ok(None);
+        }
+        return Ok(Some(values.value(row).to_string()));
+    }
+    if let Some(values) = array
+        .as_any()
+        .downcast_ref::<arrow_array::LargeStringArray>()
+    {
+        if values.is_null(row) {
+            return Ok(None);
+        }
+        return Ok(Some(values.value(row).to_string()));
+    }
+
+    Err(LakeError::Other(format!(
+        "unsupported string column type for '{column}'"
+    )))
+}
+
+fn get_distance(batch: &RecordBatch, row: usize) -> Option<f64> {
+    let index = batch.schema().index_of("_distance").ok()?;
+    let array = batch.column(index);
+
+    if let Some(values) = array.as_any().downcast_ref::<arrow_array::Float64Array>() {
+        if values.is_null(row) {
+            return None;
+        }
+        return Some(values.value(row));
+    }
+    if let Some(values) = array.as_any().downcast_ref::<arrow_array::Float32Array>() {
+        if values.is_null(row) {
+            return None;
+        }
+        return Some(f64::from(values.value(row)));
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -438,11 +724,12 @@ mod tests {
         assert_eq!(paths[0], "s3://idx/tokio/1.40/symbols.lance");
     }
 
-    #[test]
-    fn search_lance_paths_empty_returns_empty() {
+    #[tokio::test]
+    async fn search_lance_paths_empty_returns_empty() {
         let lake = ZenLake::open_in_memory().unwrap();
         let results = lake
             .search_lance_paths(&[], &[0.1_f32; 384], 10)
+            .await
             .expect("empty path search should succeed");
         assert!(results.is_empty());
     }
@@ -499,7 +786,16 @@ mod tests {
         }])
         .unwrap();
 
-        let export = match lake.write_to_r2(&r2, &ecosystem, &package, version, zen_core::enums::Visibility::Public).await {
+        let export = match lake
+            .write_to_r2(
+                &r2,
+                &ecosystem,
+                &package,
+                version,
+                zen_core::enums::Visibility::Public,
+            )
+            .await
+        {
             Ok(export) => export,
             Err(error) => {
                 eprintln!("SKIP: R2 export failed: {error}");

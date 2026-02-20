@@ -171,9 +171,7 @@ where
     for attempt in 1..=cfg.max_attempts {
         match op().await {
             Ok(value) => return Ok(value),
-            Err(error)
-                if is_spike_transient_turso_error(&error) && attempt < cfg.max_attempts =>
-            {
+            Err(error) if is_spike_transient_turso_error(&error) && attempt < cfg.max_attempts => {
                 tokio::time::sleep(delay).await;
                 delay = std::cmp::min(delay * 2, cfg.max_delay);
             }
@@ -290,9 +288,13 @@ async fn spike_sync_write_and_read() {
 
     // Clean up: drop the test table
     drop(rows);
-    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
-        .await
-        .expect("cleanup table drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup table drop failed");
     retry_turso(|| async { db.sync().await })
         .await
         .expect("cleanup sync failed");
@@ -661,9 +663,13 @@ async fn spike_sync_deferred_batch() {
 
     // Clean up
     drop(rows);
-    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
-        .await
-        .expect("cleanup table drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup table drop failed");
     retry_turso(|| async { db.sync().await })
         .await
         .expect("cleanup sync failed");
@@ -741,9 +747,13 @@ async fn spike_sync_transactions() {
 
     // Clean up
     drop(rows);
-    retry_turso(|| async { conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ()).await.map(|_| ()) })
-        .await
-        .expect("cleanup table drop failed");
+    retry_turso(|| async {
+        conn.execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map(|_| ())
+    })
+    .await
+    .expect("cleanup table drop failed");
     retry_turso(|| async { db.sync().await })
         .await
         .expect("cleanup sync failed");

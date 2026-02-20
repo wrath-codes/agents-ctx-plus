@@ -47,7 +47,9 @@ impl ZenService {
         );
         let mut task_rows = self
             .db()
-            .query_with(&task_sql, || libsql::params_from_iter(task_org_params.clone()))
+            .query_with(&task_sql, || {
+                libsql::params_from_iter(task_org_params.clone())
+            })
             .await?;
 
         let mut open_tasks = Vec::new();
@@ -63,7 +65,9 @@ impl ZenService {
         );
         let mut hyp_rows = self
             .db()
-            .query_with(&hyp_sql, || libsql::params_from_iter(hyp_org_params.clone()))
+            .query_with(&hyp_sql, || {
+                libsql::params_from_iter(hyp_org_params.clone())
+            })
             .await?;
 
         let mut pending_hypotheses = Vec::new();

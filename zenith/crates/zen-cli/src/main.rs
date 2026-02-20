@@ -8,15 +8,17 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Parser;
 
-mod cli;
 mod bootstrap;
+mod cli;
 mod commands;
 mod context;
 mod output;
 #[allow(clippy::all)]
 mod pipeline;
-mod write_lock;
+mod progress;
+mod ui;
 mod workspace;
+mod write_lock;
 
 #[cfg(test)]
 mod spike_agentfs;
@@ -36,6 +38,7 @@ async fn run() -> anyhow::Result<()> {
     init_tracing(cli.quiet, cli.verbose)?;
 
     let flags = cli.global_flags();
+    ui::init(&flags);
 
     match &cli.command {
         cli::Commands::Init(args) => return commands::init::handle(args, &flags).await,
@@ -114,7 +117,10 @@ fn resolve_project_root(project_override: Option<&str>) -> anyhow::Result<PathBu
             return Ok(explicit);
         }
 
-        anyhow::bail!("invalid --project '{}': directory does not exist", explicit.display());
+        anyhow::bail!(
+            "invalid --project '{}': directory does not exist",
+            explicit.display()
+        );
     }
 
     let start = std::env::current_dir().context("failed to read current directory")?;
@@ -125,8 +131,8 @@ fn resolve_project_root(project_override: Option<&str>) -> anyhow::Result<PathBu
 fn command_requires_write_lock(command: &cli::Commands) -> bool {
     use crate::cli::subcommands::{
         CacheCommands, CompatCommands, FindingCommands, HypothesisCommands, InsightCommands,
-        IssueCommands, PrdCommands, ResearchCommands, SessionCommands, StudyCommands,
-        TaskCommands, TeamCommands,
+        IssueCommands, PrdCommands, ResearchCommands, SessionCommands, StudyCommands, TaskCommands,
+        TeamCommands,
     };
 
     match command {
@@ -136,33 +142,42 @@ fn command_requires_write_lock(command: &cli::Commands) -> bool {
         | cli::Commands::WhatsNext => false,
         cli::Commands::Session { action } => !matches!(action, SessionCommands::List { .. }),
         cli::Commands::Cache { action } => matches!(action, CacheCommands::Clean { .. }),
-        cli::Commands::Research { action } => {
-            !matches!(action, ResearchCommands::List { .. } | ResearchCommands::Get { .. } | ResearchCommands::Registry { .. })
-        }
-        cli::Commands::Finding { action } => {
-            !matches!(action, FindingCommands::List { .. } | FindingCommands::Get { .. })
-        }
-        cli::Commands::Hypothesis { action } => {
-            !matches!(action, HypothesisCommands::List { .. } | HypothesisCommands::Get { .. })
-        }
-        cli::Commands::Insight { action } => {
-            !matches!(action, InsightCommands::List { .. } | InsightCommands::Get { .. })
-        }
-        cli::Commands::Issue { action } => {
-            !matches!(action, IssueCommands::List { .. } | IssueCommands::Get { .. })
-        }
+        cli::Commands::Research { action } => !matches!(
+            action,
+            ResearchCommands::List { .. }
+                | ResearchCommands::Get { .. }
+                | ResearchCommands::Registry { .. }
+        ),
+        cli::Commands::Finding { action } => !matches!(
+            action,
+            FindingCommands::List { .. } | FindingCommands::Get { .. }
+        ),
+        cli::Commands::Hypothesis { action } => !matches!(
+            action,
+            HypothesisCommands::List { .. } | HypothesisCommands::Get { .. }
+        ),
+        cli::Commands::Insight { action } => !matches!(
+            action,
+            InsightCommands::List { .. } | InsightCommands::Get { .. }
+        ),
+        cli::Commands::Issue { action } => !matches!(
+            action,
+            IssueCommands::List { .. } | IssueCommands::Get { .. }
+        ),
         cli::Commands::Prd { action } => {
             !matches!(action, PrdCommands::Get { .. } | PrdCommands::List { .. })
         }
         cli::Commands::Task { action } => {
             !matches!(action, TaskCommands::List { .. } | TaskCommands::Get { .. })
         }
-        cli::Commands::Compat { action } => {
-            !matches!(action, CompatCommands::List { .. } | CompatCommands::Get { .. })
-        }
-        cli::Commands::Study { action } => {
-            !matches!(action, StudyCommands::Get { .. } | StudyCommands::List { .. })
-        }
+        cli::Commands::Compat { action } => !matches!(
+            action,
+            CompatCommands::List { .. } | CompatCommands::Get { .. }
+        ),
+        cli::Commands::Study { action } => !matches!(
+            action,
+            StudyCommands::Get { .. } | StudyCommands::List { .. }
+        ),
         cli::Commands::Team { action } => !matches!(action, TeamCommands::List),
         cli::Commands::Log(_)
         | cli::Commands::Link(_)

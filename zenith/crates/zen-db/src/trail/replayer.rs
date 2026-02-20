@@ -358,12 +358,10 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
                 }
                 _ => {
                     db.execute_with(
-                            &format!(
-                                "UPDATE {table} SET status = ?1, updated_at = ?2 WHERE id = ?3"
-                            ),
-                            || libsql::params![new_status, op.ts.as_str(), op.id.as_str()],
-                        )
-                        .await?;
+                        &format!("UPDATE {table} SET status = ?1, updated_at = ?2 WHERE id = ?3"),
+                        || libsql::params![new_status, op.ts.as_str(), op.id.as_str()],
+                    )
+                    .await?;
                 }
             }
         }
@@ -371,28 +369,28 @@ async fn replay_operation(db: &ZenDb, op: &TrailOperation) -> Result<(), Databas
         (TrailOp::Delete, entity) => {
             let table = entity_type_to_table(entity);
             db.execute(
-                    &format!("DELETE FROM {table} WHERE id = ?1"),
-                    [op.id.as_str()],
-                )
-                .await?;
+                &format!("DELETE FROM {table} WHERE id = ?1"),
+                [op.id.as_str()],
+            )
+            .await?;
         }
 
         (TrailOp::Tag, EntityType::Finding) => {
             let tag = op.data["tag"].as_str().unwrap_or("");
             db.execute_with(
-                    "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
-                    || libsql::params![op.id.as_str(), tag],
-                )
-                .await?;
+                "INSERT OR IGNORE INTO finding_tags (finding_id, tag) VALUES (?1, ?2)",
+                || libsql::params![op.id.as_str(), tag],
+            )
+            .await?;
         }
 
         (TrailOp::Untag, EntityType::Finding) => {
             let tag = op.data["tag"].as_str().unwrap_or("");
             db.execute_with(
-                    "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
-                    || libsql::params![op.id.as_str(), tag],
-                )
-                .await?;
+                "DELETE FROM finding_tags WHERE finding_id = ?1 AND tag = ?2",
+                || libsql::params![op.id.as_str(), tag],
+            )
+            .await?;
         }
 
         (TrailOp::Link, EntityType::EntityLink) => {

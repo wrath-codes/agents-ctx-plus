@@ -244,7 +244,10 @@ impl ZenService {
         let sql = format!(
             "SELECT {SELECT_COLS} FROM hypotheses WHERE 1=1 {org_filter} ORDER BY created_at DESC LIMIT {limit}"
         );
-        let mut rows = self.db().query_with(&sql, || libsql::params_from_iter(org_params.clone())).await?;
+        let mut rows = self
+            .db()
+            .query_with(&sql, || libsql::params_from_iter(org_params.clone()))
+            .await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -314,16 +317,29 @@ impl ZenService {
 
         if reason.is_some() {
             let (org_filter, org_params) = self.org_id_filter(5);
-            let sql = format!("UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4 {org_filter}");
-            let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), reason.into(), now.to_rfc3339().into(), hyp_id.into()];
+            let sql = format!(
+                "UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4 {org_filter}"
+            );
+            let mut params: Vec<libsql::Value> = vec![
+                new_status.as_str().into(),
+                reason.into(),
+                now.to_rfc3339().into(),
+                hyp_id.into(),
+            ];
             params.extend(org_params);
             self.db()
                 .execute_with(&sql, || libsql::params_from_iter(params.clone()))
                 .await?;
         } else {
             let (org_filter, org_params) = self.org_id_filter(4);
-            let sql = format!("UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3 {org_filter}");
-            let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), hyp_id.into()];
+            let sql = format!(
+                "UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3 {org_filter}"
+            );
+            let mut params: Vec<libsql::Value> = vec![
+                new_status.as_str().into(),
+                now.to_rfc3339().into(),
+                hyp_id.into(),
+            ];
             params.extend(org_params);
             self.db()
                 .execute_with(&sql, || libsql::params_from_iter(params.clone()))

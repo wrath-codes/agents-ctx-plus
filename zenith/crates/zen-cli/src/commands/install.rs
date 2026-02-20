@@ -9,8 +9,10 @@ use zen_core::enums::{SessionStatus, Visibility};
 use crate::cli::GlobalFlags;
 use crate::cli::root_commands::InstallArgs;
 use crate::context::AppContext;
+use crate::context::CacheLookup;
 use crate::output::output;
 use crate::pipeline::IndexingPipeline;
+use crate::progress::Progress;
 
 const REGISTRY_SEARCH_LIMIT: usize = 100;
 
@@ -43,6 +45,8 @@ pub async fn handle(
     ctx: &mut AppContext,
     flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
+    let progress = Progress::spinner("install: resolving package metadata");
+
     let ecosystem = if let Some(eco) = &args.ecosystem {
         eco.clone()
     } else {
@@ -53,6 +57,7 @@ pub async fn handle(
     };
 
     let resolved = resolve_registry_package(ctx, &ecosystem, &args.package).await?;
+    progress.set_message("install: preparing repository checkout");
     let version = args
         .version
         .clone()
@@ -63,6 +68,7 @@ pub async fn handle(
         .is_package_indexed(&ecosystem, &args.package, &version)?
         && !args.force
     {
+        progress.finish_ok("install: already indexed (local)");
         return output(
             &InstallResponse {
                 package: InstallPackage {
@@ -95,17 +101,77 @@ pub async fn handle(
 
     // Crowdsource dedup: skip clone + indexing if this public package already exists in the catalog.
     if ctx.service.is_synced_replica() && !args.force {
-        if let Ok(Some(existing_paths)) = ctx
+        let mut stale_paths = Vec::new();
+        if let Some(cache) = &ctx.catalog_cache {
+            match cache
+                .get_paths(&ecosystem, &args.package, Some(&version), "public")
+                .await
+            {
+                Ok(CacheLookup::Fresh(paths)) if !paths.is_empty() => {
+                    progress.finish_ok("install: already indexed (catalog cache)");
+                    return output(
+                        &InstallResponse {
+                            package: InstallPackage {
+                                ecosystem,
+                                package: args.package.clone(),
+                                version,
+                                repo_url,
+                            },
+                            indexing: InstallIndexing {
+                                files_parsed: 0,
+                                symbols_extracted: 0,
+                                doc_chunks_created: 0,
+                                source_files_cached: 0,
+                                skipped: true,
+                            },
+                        },
+                        flags.format,
+                    );
+                }
+                Ok(CacheLookup::Stale(paths)) => stale_paths = paths,
+                Ok(CacheLookup::Miss) => {}
+                Err(error) => tracing::warn!(%error, "install: cache lookup failed"),
+                _ => {}
+            }
+        }
+
+        let remote_paths = match ctx
             .service
             .catalog_check_before_index(&ecosystem, &args.package, &version)
             .await
         {
+            Ok(paths) => paths,
+            Err(error) => {
+                tracing::warn!(%error, "install: catalog lookup failed");
+                if stale_paths.is_empty() {
+                    None
+                } else {
+                    Some(stale_paths)
+                }
+            }
+        };
+
+        if let Some(existing_paths) = remote_paths {
             tracing::info!(
                 package = %args.package,
                 version = %version,
                 paths = ?existing_paths,
                 "install: package already indexed in cloud catalog; skipping re-index"
             );
+
+            if let Some(cache) = &ctx.catalog_cache
+                && let Err(error) = cache
+                    .put_paths(
+                        &ecosystem,
+                        &args.package,
+                        Some(&version),
+                        "public",
+                        &existing_paths,
+                    )
+                    .await
+            {
+                tracing::warn!(%error, "install: failed to update local catalog cache");
+            }
 
             let dep = ProjectDependency {
                 ecosystem: ecosystem.clone(),
@@ -117,6 +183,7 @@ pub async fn handle(
             };
             ctx.service.upsert_dependency(&dep).await?;
 
+            progress.finish_ok("install: already indexed (catalog)");
             return output(
                 &InstallResponse {
                     package: InstallPackage {
@@ -166,6 +233,7 @@ pub async fn handle(
     let clone_path = temp.path().join("repo");
 
     run_git_clone(&repo_url, &clone_path, false)?;
+    progress.set_message("install: indexing repository sources");
     let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
     let checked_out = try_git_checkout_for_version(&clone_path, &checkout_ref)?;
     if !checked_out {
@@ -199,9 +267,16 @@ pub async fn handle(
     ctx.service.upsert_dependency(&dep).await?;
 
     if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
+        progress.set_message("install: exporting indexed package to catalog");
         match ctx
             .lake
-            .write_to_r2(&ctx.config.r2, &ecosystem, &args.package, &version, Visibility::Public)
+            .write_to_r2(
+                &ctx.config.r2,
+                &ecosystem,
+                &args.package,
+                &version,
+                Visibility::Public,
+            )
             .await
         {
             Ok(export) => {
@@ -262,6 +337,8 @@ pub async fn handle(
             "install: failed to write workspace audit event"
         );
     }
+
+    progress.finish_ok("install: completed");
 
     output(
         &InstallResponse {

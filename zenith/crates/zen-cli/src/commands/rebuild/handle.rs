@@ -50,9 +50,10 @@ pub async fn run(
     remove_if_exists(&PathBuf::from(format!("{}-wal", db_path.to_string_lossy())))?;
     remove_if_exists(&PathBuf::from(format!("{}-shm", db_path.to_string_lossy())))?;
 
-    let mut service = ZenService::new_local(&db_path.to_string_lossy(), Some(trail_dir.clone()), None)
-        .await
-        .context("rebuild: failed to initialize zen service")?;
+    let mut service =
+        ZenService::new_local(&db_path.to_string_lossy(), Some(trail_dir.clone()), None)
+            .await
+            .context("rebuild: failed to initialize zen service")?;
 
     let response = TrailReplayer::rebuild(&mut service, &trail_dir, args.strict)
         .await

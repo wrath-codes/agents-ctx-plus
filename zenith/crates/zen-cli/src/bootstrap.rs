@@ -64,8 +64,9 @@ fn load_project_dotenv(flags: &GlobalFlags) -> anyhow::Result<()> {
     {
         let child_env = child_root.join(".env");
         if child_env.exists() {
-            dotenvy::from_path(&child_env)
-                .with_context(|| format!("failed to load dotenv file at {}", child_env.display()))?;
+            dotenvy::from_path(&child_env).with_context(|| {
+                format!("failed to load dotenv file at {}", child_env.display())
+            })?;
             return Ok(());
         }
     }
