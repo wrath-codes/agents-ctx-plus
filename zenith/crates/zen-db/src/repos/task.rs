@@ -45,10 +45,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                &format!(
-                    "INSERT INTO tasks ({SELECT_COLS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
-                ),
+                "INSERT INTO tasks (id, research_id, issue_id, session_id, title, description, status, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 libsql::params![
                     id.as_str(),
                     research_id,
@@ -58,7 +56,8 @@ impl ZenService {
                     description,
                     TaskStatus::Open.as_str(),
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;

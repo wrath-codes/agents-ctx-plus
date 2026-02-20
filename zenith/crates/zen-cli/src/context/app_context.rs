@@ -10,15 +10,15 @@ use zen_registry::RegistryClient;
 
 /// Shared application resources initialized once at startup.
 pub struct AppContext {
-pub service: ZenService,
-pub config: ZenConfig,
-pub lake: ZenLake,
-pub source_store: SourceFileStore,
-pub embedder: EmbeddingEngine,
-pub registry: RegistryClient,
-pub project_root: PathBuf,
-pub identity: Option<AuthIdentity>,
-pub auth_token: Option<String>,
+    pub service: ZenService,
+    pub config: ZenConfig,
+    pub lake: ZenLake,
+    pub source_store: SourceFileStore,
+    pub embedder: EmbeddingEngine,
+    pub registry: RegistryClient,
+    pub project_root: PathBuf,
+    pub identity: Option<AuthIdentity>,
+    pub auth_token: Option<String>,
 }
 
 impl AppContext {

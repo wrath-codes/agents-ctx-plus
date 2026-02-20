@@ -43,10 +43,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                &format!(
-                    "INSERT INTO implementation_log ({SELECT_COLS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
-                ),
+                "INSERT INTO implementation_log (id, task_id, session_id, file_path, start_line, end_line, description, created_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 libsql::params![
                     id.as_str(),
                     task_id,
@@ -55,7 +53,8 @@ impl ZenService {
                     start_line,
                     end_line,
                     description,
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;

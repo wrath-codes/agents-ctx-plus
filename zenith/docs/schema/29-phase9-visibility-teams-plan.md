@@ -65,7 +65,23 @@
 
 ## 2. Implementation Outcome
 
-*To be filled after implementation. Follows the same table format as Phase 8 §2.*
+| Task | Description | Status | Notes |
+|------|-------------|--------|-------|
+| 9.8 | org_id columns + `003_team.sql` migration | ✅ Done | 10 entity tables, 5 indexes, idempotent migration runner |
+| 9.9 | Identity in `ZenService` | ✅ Done | `identity`, `org_id()`, `user_id()`, `org_id_filter()` helpers |
+| 9.10 | Visibility-scoped repo queries | ✅ Done | All 10 entity repos write org_id on create, filter on list/search. `whats_next` scoped. |
+| 9.11 | Visibility-scoped catalog queries | ✅ Done | `catalog_paths_for_package_scoped()`, unscoped defaults to public-only, `visibility_filter_sql()` |
+| 9.12 | Crowdsource dedup | ✅ Done | `catalog_check_before_index()` + wired into install.rs before clone. `ON CONFLICT DO NOTHING` on register. |
+| 9.15 | R2 Lance uploads with visibility | ✅ Done | `write_to_r2()` accepts `Visibility`, R2 paths include visibility prefix |
+| 9.16 | Federated search | ✅ Done | `discover_catalog_paths_scoped()`, `search_cloud_vector_scoped()` in zen-lake |
+| 9.21 | Team mode startup wiring | ✅ Done | `AppContext` passes identity + auth_token to `ZenService`, search uses resolved token |
+| 9.22 | `znt team invite/list` | ✅ Done | `zen-auth/org.rs` + `zen-cli/commands/team/` with auth guards |
+| 9.23 | `znt index .` | ✅ Done | Private visibility, requires auth, uses `local` ecosystem |
+
+**Plan deviations**:
+- §4 lists `audit.rs` as MODIFIED, but §3.3 explicitly excludes `audit_trail` from org_id ("append-only log"). §3.3 takes precedence — audit.rs unchanged.
+- `Visibility` enum uses `Copy` + `Hash` derives (not in plan but idiomatic for small enums).
+- Crowdsource dedup check placed before git clone (not just before indexing) to also skip the expensive clone step.
 
 ---
 
@@ -109,7 +125,7 @@ WHERE visibility = 'public'
 **Decision**: Add `org_id TEXT` column to all entity tables via `003_team.sql`. The column is:
 - **Nullable**: `NULL` means local-only / pre-auth entity. Existing data migrates naturally.
 - **Write-once on create**: Set from `identity.org_id` when creating entities. Never modified after creation.
-- **Read-scoped**: Entity queries add `AND (org_id = ? OR org_id IS NULL)` when identity has an org_id, or `AND org_id IS NULL` when no identity. This ensures team members see their team's entities plus any pre-auth local entities.
+- **Read-scoped on list/search**: Entity list and search queries add `AND (org_id = ? OR org_id IS NULL)` when identity has an org_id, or `AND org_id IS NULL` when no identity. This ensures team members see their team's entities plus any pre-auth local entities. **Get-by-ID methods are intentionally unscoped** — entity IDs are random UUIDs (not enumerable), the database is project-scoped, and entity-link traversal (e.g., `get_parent_issue`) needs to work across org boundaries.
 
 **Rationale**: Adding `org_id` to entities enables team-scoped research workflows where multiple agents/users in the same Clerk org share findings, hypotheses, and tasks via Turso sync. The nullable default preserves backward compatibility — all existing entities (created without auth) continue to be visible.
 

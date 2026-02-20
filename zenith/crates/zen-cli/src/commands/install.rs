@@ -93,6 +93,51 @@ pub async fn handle(
         )
     })?;
 
+    // Crowdsource dedup: skip clone + indexing if this public package already exists in the catalog.
+    if ctx.service.is_synced_replica() && !args.force {
+        if let Ok(Some(existing_paths)) = ctx
+            .service
+            .catalog_check_before_index(&ecosystem, &args.package, &version)
+            .await
+        {
+            tracing::info!(
+                package = %args.package,
+                version = %version,
+                paths = ?existing_paths,
+                "install: package already indexed in cloud catalog; skipping re-index"
+            );
+
+            let dep = ProjectDependency {
+                ecosystem: ecosystem.clone(),
+                name: args.package.clone(),
+                version: Some(version.clone()),
+                source: "registry".to_string(),
+                indexed: true,
+                indexed_at: Some(Utc::now()),
+            };
+            ctx.service.upsert_dependency(&dep).await?;
+
+            return output(
+                &InstallResponse {
+                    package: InstallPackage {
+                        ecosystem,
+                        package: args.package.clone(),
+                        version,
+                        repo_url: repo_url.clone(),
+                    },
+                    indexing: InstallIndexing {
+                        files_parsed: 0,
+                        symbols_extracted: 0,
+                        doc_chunks_created: 0,
+                        source_files_cached: 0,
+                        skipped: true,
+                    },
+                },
+                flags.format,
+            );
+        }
+    }
+
     if args.force {
         if let Err(error) = ctx.lake.delete_package(&ecosystem, &args.package, &version) {
             tracing::warn!(

@@ -362,6 +362,12 @@ async fn spike_sync_two_replicas() {
     assert_eq!(row.get::<String>(1).unwrap(), "replica_b");
     assert_eq!(row.get::<String>(2).unwrap(), "hello from B");
 
+    // Drop all open cursors and the second replica before cleanup to release
+    // WAL locks — otherwise the checkpoint during sync fails with SQLITE_BUSY.
+    drop(rows);
+    drop(conn_b);
+    drop(db_b);
+
     // Clean up
     conn_a
         .execute(&format!("DROP TABLE IF EXISTS {table}"), ())

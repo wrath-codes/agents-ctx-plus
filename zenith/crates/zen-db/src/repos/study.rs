@@ -89,8 +89,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO studies (id, session_id, research_id, topic, library, methodology, status, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?8)",
+                "INSERT INTO studies (id, session_id, research_id, topic, library, methodology, status, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?8, ?9)",
                 libsql::params![
                     id.as_str(),
                     session_id,
@@ -99,7 +99,8 @@ impl ZenService {
                     library,
                     methodology.as_str(),
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;

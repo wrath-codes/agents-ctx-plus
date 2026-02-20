@@ -47,6 +47,7 @@ impl ZenLake {
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2 AND version = ?3
                    AND lance_path LIKE '%symbols.lance%'
+                   AND visibility = 'public'
                  ORDER BY created_at DESC, id DESC",
                 libsql::params![ecosystem, package, version],
             )
@@ -56,6 +57,7 @@ impl ZenLake {
                 "SELECT lance_path FROM dl_data_file
                  WHERE ecosystem = ?1 AND package = ?2
                    AND lance_path LIKE '%symbols.lance%'
+                   AND visibility = 'public'
                  ORDER BY created_at DESC, id DESC",
                 libsql::params![ecosystem, package],
             )
@@ -253,7 +255,8 @@ impl ZenLake {
             ""
         };
 
-        // Build visibility filter
+        // Build visibility filter — mirrors visibility_filter_sql() in zen-db/repos/catalog.rs.
+        // Duplicated because zen-lake cannot depend on zen-db. Keep both in sync.
         let vis_clause = match identity {
             Some(id) => {
                 let mut clauses = vec!["visibility = 'public'".to_string()];
@@ -393,14 +396,15 @@ mod tests {
                 package TEXT NOT NULL,
                 version TEXT NOT NULL,
                 lance_path TEXT NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'public',
                 created_at TEXT NOT NULL
             )",
         )
         .await
         .unwrap();
         conn.execute(
-            "INSERT INTO dl_data_file (id, ecosystem, package, version, lance_path, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            "INSERT INTO dl_data_file (id, ecosystem, package, version, lance_path, visibility, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'public', datetime('now'))",
             libsql::params![
                 "dlf-1",
                 "rust",
@@ -412,8 +416,8 @@ mod tests {
         .await
         .unwrap();
         conn.execute(
-            "INSERT INTO dl_data_file (id, ecosystem, package, version, lance_path, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            "INSERT INTO dl_data_file (id, ecosystem, package, version, lance_path, visibility, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'public', datetime('now'))",
             libsql::params![
                 "dlf-2",
                 "rust",

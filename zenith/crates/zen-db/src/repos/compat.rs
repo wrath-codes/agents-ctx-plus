@@ -45,8 +45,8 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO compatibility_checks (id, package_a, package_b, status, conditions, finding_id, session_id, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO compatibility_checks (id, package_a, package_b, status, conditions, finding_id, session_id, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 libsql::params![
                     id.as_str(),
                     package_a,
@@ -56,7 +56,8 @@ impl ZenService {
                     finding_id,
                     session_id,
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;

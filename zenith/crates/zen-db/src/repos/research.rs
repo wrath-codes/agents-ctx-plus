@@ -256,14 +256,17 @@ impl ZenService {
         query: &str,
         limit: u32,
     ) -> Result<Vec<ResearchItem>, DatabaseError> {
-        let mut rows = self.db().conn().query(
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!(
             "SELECT r.id, r.session_id, r.title, r.description, r.status, r.created_at, r.updated_at
              FROM research_fts fts
              JOIN research_items r ON r.rowid = fts.rowid
-             WHERE research_fts MATCH ?1
-             ORDER BY rank LIMIT ?2",
-            libsql::params![query, limit],
-        ).await?;
+             WHERE research_fts MATCH ?1 {org_filter}
+             ORDER BY rank LIMIT ?2"
+        );
+        let mut params: Vec<libsql::Value> = vec![query.into(), (limit as i64).into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
 
         let mut items = Vec::new();
         while let Some(row) = rows.next().await? {

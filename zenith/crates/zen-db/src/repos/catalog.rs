@@ -233,17 +233,16 @@ impl ZenService {
         let identity = self.identity();
         let mut paths = Vec::new();
 
-        let (vis_filter, vis_params) = visibility_filter_sql(identity, 4);
-
         let mut all_params: Vec<libsql::Value> = vec![ecosystem.into(), package.into()];
 
-        let version_clause = if let Some(v) = version {
+        let (version_clause, next_param) = if let Some(v) = version {
             all_params.push(v.into());
-            "AND version = ?3"
+            ("AND version = ?3", 4u32)
         } else {
-            ""
+            ("", 3u32)
         };
 
+        let (vis_filter, vis_params) = visibility_filter_sql(identity, next_param);
         all_params.extend(vis_params);
 
         let sql = format!(

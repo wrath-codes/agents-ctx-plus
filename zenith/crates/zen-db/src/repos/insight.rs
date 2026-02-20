@@ -36,8 +36,8 @@ impl ZenService {
         let id = self.db().generate_id(PREFIX_INSIGHT).await?;
 
         self.db().conn().execute(
-            "INSERT INTO insights (id, research_id, session_id, content, confidence, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO insights (id, research_id, session_id, content, confidence, created_at, updated_at, org_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             libsql::params![
                 id.as_str(),
                 research_id,
@@ -45,7 +45,8 @@ impl ZenService {
                 content,
                 confidence.as_str(),
                 now.to_rfc3339(),
-                now.to_rfc3339()
+                now.to_rfc3339(),
+                self.org_id()
             ],
         ).await?;
 

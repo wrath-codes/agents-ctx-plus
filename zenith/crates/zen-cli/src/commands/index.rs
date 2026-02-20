@@ -122,7 +122,7 @@ pub async fn handle(
             ecosystem,
             package,
             version,
-            visibility: "private".to_string(),
+            visibility: Visibility::Private.to_string(),
             files_parsed: index.file_count,
             symbols_extracted: index.symbol_count,
             doc_chunks_created: index.doc_chunk_count,
