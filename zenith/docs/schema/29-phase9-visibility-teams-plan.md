@@ -69,19 +69,28 @@
 |------|-------------|--------|-------|
 | 9.8 | org_id columns + `003_team.sql` migration | ✅ Done | 10 entity tables, 5 indexes, idempotent migration runner |
 | 9.9 | Identity in `ZenService` | ✅ Done | `identity`, `org_id()`, `user_id()`, `org_id_filter()` helpers |
-| 9.10 | Visibility-scoped repo queries | ✅ Done | All 10 entity repos write org_id on create, filter on list/search. `whats_next` scoped. |
+| 9.10 | Visibility-scoped repo queries | ✅ Done | All 10 entity repos write org_id on create, filter on list/search/update/delete. `whats_next` scoped. Snapshot counts (`count_by_status`, `count_recent`) scoped. |
 | 9.11 | Visibility-scoped catalog queries | ✅ Done | `catalog_paths_for_package_scoped()`, unscoped defaults to public-only, `visibility_filter_sql()` |
 | 9.12 | Crowdsource dedup | ✅ Done | `catalog_check_before_index()` + wired into install.rs before clone. `ON CONFLICT DO NOTHING` on register. |
 | 9.15 | R2 Lance uploads with visibility | ✅ Done | `write_to_r2()` accepts `Visibility`, R2 paths include visibility prefix |
 | 9.16 | Federated search | ✅ Done | `discover_catalog_paths_scoped()`, `search_cloud_vector_scoped()` in zen-lake |
 | 9.21 | Team mode startup wiring | ✅ Done | `AppContext` passes identity + auth_token to `ZenService`, search uses resolved token |
-| 9.22 | `znt team invite/list` | ✅ Done | `zen-auth/org.rs` + `zen-cli/commands/team/` with auth guards |
+| 9.22 | `znt team invite/list` | ✅ Done | `zen-auth/org.rs` + `zen-cli/commands/team/` with auth guards. `invite` requires `org:admin` role. |
 | 9.23 | `znt index .` | ✅ Done | Private visibility, requires auth, uses `local` ecosystem |
 
 **Plan deviations**:
 - §4 lists `audit.rs` as MODIFIED, but §3.3 explicitly excludes `audit_trail` from org_id ("append-only log"). §3.3 takes precedence — audit.rs unchanged.
 - `Visibility` enum uses `Copy` + `Hash` derives (not in plan but idiomatic for small enums).
 - Crowdsource dedup check placed before git clone (not just before indexing) to also skip the expensive clone step.
+- All update/delete/transition mutations across 10 entity repos now include `org_id_filter` (not in original plan — added after Oracle security review).
+- `study.rs` helper methods (`add_assumption`, `record_test_result`, `conclude_study`) that create entities via direct INSERT now include `org_id` (bypassed the org-aware create methods).
+- `znt team invite` requires `org:admin` role (Clerk backend secret is god-mode; enforced client-side).
+- Snapshot aggregate helpers (`count_by_status`, `count_recent`) now org-scoped.
+
+**Known limitations (accepted for MVP)**:
+- **`org_id IS NULL` on synced replicas**: When authenticated with org, filter includes `OR org_id IS NULL` for backward compatibility. This means all org members see pre-auth legacy entities. Future: introduce `org_id_filter_strict` for synced-only contexts after legacy data migration.
+- **Crowdsource dedup race**: Two concurrent `znt install` for the same package can both pass `catalog_check_before_index` and register different timestamped Lance paths. Both entries are valid; the only waste is R2 storage. Future: use deterministic (non-timestamped) paths for public datasets.
+- **R2 path namespace**: R2 paths include `{visibility}` prefix but not `{org_id}` or `{owner_sub}`. A leaked R2 path could be read directly if R2 credentials are shared. Catalog-level visibility filtering is the primary access control. Future: add org/user segments to R2 paths for defense-in-depth.
 
 ---
 

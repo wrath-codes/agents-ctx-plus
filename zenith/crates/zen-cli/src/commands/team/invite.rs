@@ -28,6 +28,14 @@ pub async fn handle(
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("team invite requires an active organization — run `znt auth switch-org <slug>`"))?;
 
+    // Only org admins may invite new members. The Clerk Backend API uses the
+    // secret key (god-mode), so we must enforce role checks ourselves.
+    match identity.org_role.as_deref() {
+        Some("org:admin") | Some("admin") => {}
+        _ => bail!("team invite requires org admin role — your current role is {:?}",
+                    identity.org_role.as_deref().unwrap_or("none")),
+    }
+
     if ctx.config.clerk.secret_key.is_empty() {
         bail!("team invite requires ZENITH_CLERK__SECRET_KEY to be configured");
     }

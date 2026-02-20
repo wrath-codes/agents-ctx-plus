@@ -172,4 +172,7 @@ pub(crate) mod spike_clerk_helpers {
         let token = fresh_clerk_token().await?;
         Some((url, token))
     }
+
+    // Re-export from the production retry module for spike test convenience.
+    pub use crate::retry::is_transient_turso_error;
 }

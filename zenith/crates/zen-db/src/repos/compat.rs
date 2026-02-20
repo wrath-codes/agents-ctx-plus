@@ -141,11 +141,12 @@ impl ZenService {
 
         params.push(libsql::Value::Text(compat_id.to_string()));
         let id_pos = params.len();
+        let (org_filter, org_params) = self.org_id_filter((params.len() + 1) as u32);
+        params.extend(org_params);
 
         let sql = format!(
-            "UPDATE compatibility_checks SET {} WHERE id = ?{}",
+            "UPDATE compatibility_checks SET {} WHERE id = ?{id_pos} {org_filter}",
             sets.join(", "),
-            id_pos
         );
 
         self.db()
@@ -187,12 +188,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM compatibility_checks WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![compat_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute(
-                "DELETE FROM compatibility_checks WHERE id = ?1",
-                [compat_id],
-            )
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         self.trail().append(&TrailOperation {

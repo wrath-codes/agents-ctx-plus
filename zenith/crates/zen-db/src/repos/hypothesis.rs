@@ -149,8 +149,12 @@ impl ZenService {
         idx += 1;
 
         params.push(libsql::Value::Text(hyp_id.to_string()));
+        let id_idx = idx;
+        idx += 1;
+        let (org_filter, org_params) = self.org_id_filter(idx as u32);
+        params.extend(org_params);
         let sql = format!(
-            "UPDATE hypotheses SET {} WHERE id = ?{idx}",
+            "UPDATE hypotheses SET {} WHERE id = ?{id_idx} {org_filter}",
             sets.join(", ")
         );
 
@@ -198,9 +202,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM hypotheses WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![hyp_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute("DELETE FROM hypotheses WHERE id = ?1", [hyp_id])
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
@@ -308,20 +316,22 @@ impl ZenService {
         let now = Utc::now();
 
         if reason.is_some() {
+            let (org_filter, org_params) = self.org_id_filter(5);
+            let sql = format!("UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4 {org_filter}");
+            let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), reason.into(), now.to_rfc3339().into(), hyp_id.into()];
+            params.extend(org_params);
             self.db()
                 .conn()
-                .execute(
-                    "UPDATE hypotheses SET status = ?1, reason = ?2, updated_at = ?3 WHERE id = ?4",
-                    libsql::params![new_status.as_str(), reason, now.to_rfc3339(), hyp_id],
-                )
+                .execute(&sql, libsql::params_from_iter(params))
                 .await?;
         } else {
+            let (org_filter, org_params) = self.org_id_filter(4);
+            let sql = format!("UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3 {org_filter}");
+            let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), hyp_id.into()];
+            params.extend(org_params);
             self.db()
                 .conn()
-                .execute(
-                    "UPDATE hypotheses SET status = ?1, updated_at = ?2 WHERE id = ?3",
-                    libsql::params![new_status.as_str(), now.to_rfc3339(), hyp_id],
-                )
+                .execute(&sql, libsql::params_from_iter(params))
                 .await?;
         }
 

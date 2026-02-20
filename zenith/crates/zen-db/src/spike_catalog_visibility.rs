@@ -35,11 +35,43 @@
 use libsql::Builder;
 use tempfile::TempDir;
 
+use crate::retry::{self, RetryConfig};
 use crate::test_support::spike_clerk_helpers::{load_env, turso_jwks_credentials};
 
 // ============================================================================
 // Helpers (spike 0.20-specific)
 // ============================================================================
+
+/// Execute a Turso operation using the production retry module.
+/// Skips the test if all retries are exhausted on transient infra errors.
+/// Non-transient errors panic immediately.
+macro_rules! turso_op {
+    ($expr:expr) => {{
+        let __cfg = RetryConfig::default();
+        let mut __delay = __cfg.base_delay;
+        let mut __result = $expr;
+        for __attempt in 1..=__cfg.max_attempts {
+            match __result {
+                Ok(ref _v) => break,
+                Err(ref e) if retry::is_transient_turso_error(e) && __attempt < __cfg.max_attempts => {
+                    eprintln!(
+                        "  Turso transient (attempt {__attempt}/{}), retrying in {__delay:?}: {e}",
+                        __cfg.max_attempts
+                    );
+                    tokio::time::sleep(__delay).await;
+                    __delay = std::cmp::min(__delay * 2, __cfg.max_delay);
+                    __result = $expr;
+                }
+                Err(ref e) if retry::is_transient_turso_error(e) => {
+                    eprintln!("SKIP: Turso transient infra error after {} attempts: {e}", __cfg.max_attempts);
+                    return;
+                }
+                Err(_) => break,
+            }
+        }
+        __result.unwrap()
+    }};
+}
 
 /// Validate Clerk JWT and extract typed claims (aether pattern).
 /// Uses `clerk-rs` JWKS validation — not raw JWT decoding.
@@ -477,10 +509,8 @@ async fn spike_turso_catalog_embedded_replica() {
         }
     };
     let conn = db.connect().unwrap();
-    conn.execute(&indexed_packages_ddl(&table), ())
-        .await
-        .unwrap();
-    conn.execute(
+    turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
+    turso_op!(conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility,
              r2_lance_path, symbol_count, indexed_by, indexed_at) VALUES
@@ -489,8 +519,7 @@ async fn spike_turso_catalog_embedded_replica() {
         ),
         (),
     )
-    .await
-    .unwrap();
+    .await);
     drop(conn);
     drop(db);
     eprintln!("  Wrote catalog row via remote connection");
@@ -514,18 +543,17 @@ async fn spike_turso_catalog_embedded_replica() {
             return;
         }
     };
-    replica_db.sync().await.unwrap();
+    turso_op!(replica_db.sync().await);
 
     let conn = replica_db.connect().unwrap();
     let (pkg, count) = {
-        let mut rows = conn
+        let mut rows = turso_op!(conn
             .query(
                 &format!("SELECT package, symbol_count FROM {table} WHERE package = 'serde'"),
                 (),
             )
-            .await
-            .unwrap();
-        let row = rows.next().await.unwrap().expect("Should find serde row");
+            .await);
+        let row = turso_op!(rows.next().await).expect("Should find serde row");
         let pkg: String = row.get(0).unwrap();
         let count: i64 = row.get(1).unwrap();
         (pkg, count)
@@ -534,10 +562,8 @@ async fn spike_turso_catalog_embedded_replica() {
     assert_eq!(count, 800);
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ())
-        .await
-        .unwrap();
-    replica_db.sync().await.unwrap();
+    turso_op!(conn.execute(&format!("DROP TABLE {table}"), ()).await);
+    turso_op!(replica_db.sync().await);
     eprintln!("  PASS: embedded replica syncs catalog — found serde with {count} symbols");
 }
 
@@ -758,10 +784,8 @@ async fn spike_catalog_to_lance_search_e2e() {
     let conn = turso_db.connect().unwrap();
 
     let table = unique_table("idx_e2e");
-    conn.execute(&indexed_packages_ddl(&table), ())
-        .await
-        .unwrap();
-    conn.execute(
+    turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
+    turso_op!(conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility,
              r2_lance_path, symbol_count, indexed_by, indexed_at) VALUES
@@ -769,18 +793,16 @@ async fn spike_catalog_to_lance_search_e2e() {
         ),
         [dataset_path.as_str()],
     )
-    .await
-    .unwrap();
+    .await);
 
     // 3. Query Turso to get lance path
-    let mut rows = conn
+    let mut rows = turso_op!(conn
         .query(
             &format!("SELECT r2_lance_path FROM {table} WHERE package = 'tokio'"),
             (),
         )
-        .await
-        .unwrap();
-    let row = rows.next().await.unwrap().expect("Should find tokio");
+        .await);
+    let row = turso_op!(rows.next().await).expect("Should find tokio");
     let lance_path: String = row.get(0).unwrap();
 
     eprintln!("  Turso catalog → lance path: {lance_path}");
@@ -825,9 +847,7 @@ async fn spike_catalog_to_lance_search_e2e() {
     );
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ())
-        .await
-        .unwrap();
+    turso_op!(conn.execute(&format!("DROP TABLE {table}"), ()).await);
     eprintln!("  PASS: Turso catalog → Lance path → DuckDB search — full E2E works");
 }
 
@@ -907,10 +927,8 @@ async fn spike_three_tier_search() {
     let conn = turso_db.connect().unwrap();
 
     let table = unique_table("idx_3tier");
-    conn.execute(&indexed_packages_ddl(&table), ())
-        .await
-        .unwrap();
-    conn.execute(
+    turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
+    turso_op!(conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility, team_id, owner_id,
              r2_lance_path, indexed_by, indexed_at) VALUES
@@ -919,10 +937,10 @@ async fn spike_three_tier_search() {
             ('rust', 'priv-lib', '1.0.0', 'private', NULL, 'user_owner', ?3, 'test', '2026-02-08T00:00:00Z')"
         ),
         libsql::params![lance_paths[0].as_str(), lance_paths[1].as_str(), lance_paths[2].as_str()],
-    ).await.unwrap();
+    ).await);
 
     // Query as team member of org_acme → should see public + team (NOT private)
-    let mut rows = conn
+    let mut rows = turso_op!(conn
         .query(
             &format!(
                 "SELECT package, r2_lance_path FROM {table} WHERE
@@ -932,11 +950,10 @@ async fn spike_three_tier_search() {
             ),
             (),
         )
-        .await
-        .unwrap();
+        .await);
 
     let mut team_paths = vec![];
-    while let Some(row) = rows.next().await.unwrap() {
+    while let Some(row) = turso_op!(rows.next().await) {
         let pkg: String = row.get(0).unwrap();
         let path: String = row.get(1).unwrap();
         eprintln!("  Team member sees: {pkg}");
@@ -992,9 +1009,7 @@ async fn spike_three_tier_search() {
     );
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ())
-        .await
-        .unwrap();
+    turso_op!(conn.execute(&format!("DROP TABLE {table}"), ()).await);
     eprintln!("  PASS: three-tier search — team member sees public + team, results merged");
 }
 
@@ -1025,12 +1040,10 @@ async fn spike_private_code_indexing() {
     let conn = db.connect().unwrap();
 
     let table = unique_table("idx_priv");
-    conn.execute(&indexed_packages_ddl(&table), ())
-        .await
-        .unwrap();
+    turso_op!(conn.execute(&indexed_packages_ddl(&table), ()).await);
 
     // Insert private package owned by the JWT user
-    conn.execute(
+    turso_op!(conn.execute(
         &format!(
             "INSERT INTO {table} (ecosystem, package, version, visibility, owner_id,
              r2_lance_path, indexed_by, indexed_at) VALUES
@@ -1039,11 +1052,10 @@ async fn spike_private_code_indexing() {
         ),
         (),
     )
-    .await
-    .unwrap();
+    .await);
 
     // Owner query: should find it
-    let mut rows = conn
+    let mut rows = turso_op!(conn
         .query(
             &format!(
                 "SELECT package FROM {table} WHERE
@@ -1052,19 +1064,15 @@ async fn spike_private_code_indexing() {
             ),
             [user_id.as_str()],
         )
-        .await
-        .unwrap();
-    let row = rows
-        .next()
-        .await
-        .unwrap()
+        .await);
+    let row = turso_op!(rows.next().await)
         .expect("Owner should see private package");
     let pkg: String = row.get(0).unwrap();
     assert_eq!(pkg, "my-secret-app");
     eprintln!("  Owner ({user_id}) sees: {pkg}");
 
     // Non-owner query: should NOT find it
-    let mut rows = conn
+    let mut rows = turso_op!(conn
         .query(
             &format!(
                 "SELECT package FROM {table} WHERE
@@ -1073,16 +1081,13 @@ async fn spike_private_code_indexing() {
             ),
             (),
         )
-        .await
-        .unwrap();
-    let none = rows.next().await.unwrap();
+        .await);
+    let none = turso_op!(rows.next().await);
     assert!(none.is_none(), "Non-owner should NOT see private package");
     eprintln!("  Non-owner (user_impostor) sees: nothing");
 
     // Cleanup
-    conn.execute(&format!("DROP TABLE {table}"), ())
-        .await
-        .unwrap();
+    turso_op!(conn.execute(&format!("DROP TABLE {table}"), ()).await);
     eprintln!("  PASS: private code indexing — only owner can discover");
 }
 

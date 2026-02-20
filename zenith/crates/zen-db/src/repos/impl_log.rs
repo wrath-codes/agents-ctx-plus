@@ -115,12 +115,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM implementation_log WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![impl_log_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute(
-                "DELETE FROM implementation_log WHERE id = ?1",
-                [impl_log_id],
-            )
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         self.trail().append(&TrailOperation {

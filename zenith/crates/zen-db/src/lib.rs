@@ -13,12 +13,15 @@ pub mod error;
 pub mod helpers;
 mod migrations;
 pub mod repos;
+pub mod retry;
 pub mod service;
 pub mod trail;
 pub mod updates;
 
 use error::DatabaseError;
 use libsql::Builder;
+use libsql::params::IntoParams;
+use retry::RetryConfig;
 
 /// Central database handle for all Zenith state operations.
 ///
@@ -29,6 +32,7 @@ pub struct ZenDb {
     db: libsql::Database,
     conn: libsql::Connection,
     is_synced_replica: bool,
+    retry: RetryConfig,
 }
 
 impl ZenDb {
@@ -53,6 +57,7 @@ impl ZenDb {
             db,
             conn,
             is_synced_replica: false,
+            retry: RetryConfig::default(),
         };
         zen_db.run_migrations().await?;
         Ok(zen_db)
@@ -87,6 +92,7 @@ impl ZenDb {
             db,
             conn,
             is_synced_replica: true,
+            retry: RetryConfig::default(),
         };
         zen_db.run_migrations().await?;
         Ok(zen_db)
@@ -95,25 +101,97 @@ impl ZenDb {
     /// Sync embedded replica state with Turso Cloud.
     ///
     /// For databases opened with [`Self::open_local`], this is a no-op and
-    /// returns `Ok(())`.
+    /// returns `Ok(())`. Automatically retries on transient Turso infra errors.
     ///
     /// # Errors
     ///
-    /// Returns `DatabaseError` if sync fails.
+    /// Returns `DatabaseError` if sync fails after retries.
     pub async fn sync(&self) -> Result<(), DatabaseError> {
         if !self.is_synced_replica {
             return Ok(());
         }
-        self.db
-            .sync()
+        self.retry_op(|| async { self.db.sync().await.map(|_| ()) })
             .await
-            .map(|_| ())
-            .map_err(DatabaseError::from)
+    }
+
+    /// Execute SQL with automatic retry on transient Turso errors.
+    ///
+    /// For synced replicas, retries with exponential backoff when Turso
+    /// node recycling errors are detected. Local databases execute
+    /// without retry overhead.
+    ///
+    /// Prefer this over `conn().execute()` for all production code.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if execution fails after retries.
+    pub async fn execute<P: IntoParams + Clone>(
+        &self,
+        sql: &str,
+        params: P,
+    ) -> Result<u64, DatabaseError> {
+        self.retry_op(|| self.conn.execute(sql, params.clone()))
+            .await
+    }
+
+    /// Execute SQL with a params factory (for non-Clone params like
+    /// `params_from_iter`).
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if execution fails after retries.
+    pub async fn execute_with<P, F>(
+        &self,
+        sql: &str,
+        mut make_params: F,
+    ) -> Result<u64, DatabaseError>
+    where
+        F: FnMut() -> P,
+        P: IntoParams,
+    {
+        self.retry_op(|| self.conn.execute(sql, make_params()))
+            .await
+    }
+
+    /// Query with automatic retry on transient Turso errors.
+    ///
+    /// Prefer this over `conn().query()` for all production code.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if query fails after retries.
+    pub async fn query<P: IntoParams + Clone>(
+        &self,
+        sql: &str,
+        params: P,
+    ) -> Result<libsql::Rows, DatabaseError> {
+        self.retry_op(|| self.conn.query(sql, params.clone()))
+            .await
+    }
+
+    /// Query with a params factory (for non-Clone params like
+    /// `params_from_iter`).
+    ///
+    /// # Errors
+    ///
+    /// Returns `DatabaseError` if query fails after retries.
+    pub async fn query_with<P, F>(
+        &self,
+        sql: &str,
+        mut make_params: F,
+    ) -> Result<libsql::Rows, DatabaseError>
+    where
+        F: FnMut() -> P,
+        P: IntoParams,
+    {
+        self.retry_op(|| self.conn.query(sql, make_params()))
+            .await
     }
 
     /// Access the underlying libSQL connection for direct queries.
     ///
-    /// Repo methods (Phase 2) will use this internally.
+    /// Prefer `execute()` / `query()` for production code — they
+    /// automatically retry on transient Turso errors.
     #[must_use]
     pub const fn conn(&self) -> &libsql::Connection {
         &self.conn
@@ -125,45 +203,6 @@ impl ZenDb {
         self.is_synced_replica
     }
 
-    /// Rebuild the synced connection with a fresh auth token.
-    ///
-    /// Drops the current `Database` and `Connection` and creates a new embedded
-    /// replica with the provided token. Required because libsql does not support
-    /// hot-swapping auth tokens on an existing connection.
-    ///
-    /// The trail writer is unaffected (filesystem-based). Migrations are NOT
-    /// re-run — the local replica already has the schema from the initial open.
-    ///
-    /// # Errors
-    ///
-    /// Returns `DatabaseError` if the new replica cannot be opened or synced.
-    pub async fn rebuild_synced(
-        &mut self,
-        local_replica_path: &str,
-        remote_url: &str,
-        new_auth_token: &str,
-    ) -> Result<(), DatabaseError> {
-        let db = Builder::new_remote_replica(
-            local_replica_path.to_string(),
-            remote_url.to_string(),
-            new_auth_token.to_string(),
-        )
-        .read_your_writes(true)
-        .build()
-        .await?;
-        db.sync().await?;
-
-        let conn = db.connect()?;
-        conn.execute("PRAGMA foreign_keys = ON", ())
-            .await
-            .map_err(|e| DatabaseError::Migration(format!("PRAGMA foreign_keys: {e}")))?;
-
-        self.db = db;
-        self.conn = conn;
-        self.is_synced_replica = true;
-        Ok(())
-    }
-
     /// Generate a prefixed ID via libSQL. Returns e.g., `"fnd-a3f8b2c1"`.
     ///
     /// Uses `randomblob(4)` in SQL to produce 8-char hex, then prepends the prefix.
@@ -173,7 +212,6 @@ impl ZenDb {
     /// Returns `DatabaseError` if the query fails or returns no rows.
     pub async fn generate_id(&self, prefix: &str) -> Result<String, DatabaseError> {
         let mut rows = self
-            .conn
             .query(
                 &format!("SELECT '{prefix}-' || lower(hex(randomblob(4)))"),
                 (),
@@ -181,6 +219,39 @@ impl ZenDb {
             .await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         Ok(row.get::<String>(0)?)
+    }
+
+    /// Internal: retry an async operation with exponential backoff on
+    /// transient Turso infrastructure errors. Skipped for local DBs.
+    async fn retry_op<T, F, Fut>(&self, mut f: F) -> Result<T, DatabaseError>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<T, libsql::Error>>,
+    {
+        if !self.is_synced_replica {
+            return Ok(f().await?);
+        }
+
+        let mut delay = self.retry.base_delay;
+        for attempt in 1..=self.retry.max_attempts {
+            match f().await {
+                Ok(v) => return Ok(v),
+                Err(e) if retry::is_transient_turso_error(&e)
+                    && attempt < self.retry.max_attempts =>
+                {
+                    tracing::warn!(
+                        attempt,
+                        max = self.retry.max_attempts,
+                        delay_ms = delay.as_millis() as u64,
+                        "Turso transient infra error, retrying: {e}"
+                    );
+                    tokio::time::sleep(delay).await;
+                    delay = std::cmp::min(delay * 2, self.retry.max_delay);
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        unreachable!()
     }
 }
 

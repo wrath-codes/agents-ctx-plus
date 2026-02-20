@@ -158,7 +158,11 @@ impl ZenService {
         idx += 1;
 
         params.push(task_id.into());
-        let sql = format!("UPDATE tasks SET {} WHERE id = ?{idx}", sets.join(", "));
+        let id_idx = idx;
+        idx += 1;
+        let (org_filter, org_params) = self.org_id_filter(idx as u32);
+        params.extend(org_params);
+        let sql = format!("UPDATE tasks SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
         self.db()
             .conn()
             .execute(&sql, libsql::params_from_iter(params))
@@ -196,9 +200,13 @@ impl ZenService {
     pub async fn delete_task(&self, session_id: &str, task_id: &str) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM tasks WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![task_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute("DELETE FROM tasks WHERE id = ?1", [task_id])
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         self.trail().append(&TrailOperation {
@@ -265,12 +273,13 @@ impl ZenService {
         }
 
         let now = Utc::now();
+        let (org_filter, org_params) = self.org_id_filter(4);
+        let sql = format!("UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3 {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), task_id.into()];
+        params.extend(org_params);
         self.db()
             .conn()
-            .execute(
-                "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
-                libsql::params![new_status.as_str(), now.to_rfc3339(), task_id],
-            )
+            .execute(&sql, libsql::params_from_iter(params))
             .await?;
 
         let updated = Task {

@@ -95,10 +95,11 @@ impl ZenService {
         }
 
         let now = Utc::now();
-        self.db().conn().execute(
-            "UPDATE sessions SET ended_at = ?1, status = 'wrapped_up', summary = ?2 WHERE id = ?3",
-            libsql::params![now.to_rfc3339(), summary, session_id],
-        ).await?;
+        let (org_filter, org_params) = self.org_id_filter(4);
+        let sql = format!("UPDATE sessions SET ended_at = ?1, status = 'wrapped_up', summary = ?2 WHERE id = ?3 {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![now.to_rfc3339().into(), summary.into(), session_id.into()];
+        params.extend(org_params);
+        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
 
         let updated = Session {
             ended_at: Some(now),
@@ -260,13 +261,11 @@ impl ZenService {
     /// Mark a session as abandoned.
     pub async fn abandon_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         let now = Utc::now();
-        self.db()
-            .conn()
-            .execute(
-                "UPDATE sessions SET status = 'abandoned', ended_at = ?1 WHERE id = ?2",
-                libsql::params![now.to_rfc3339(), session_id],
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(3);
+        let sql = format!("UPDATE sessions SET status = 'abandoned', ended_at = ?1 WHERE id = ?2 {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![now.to_rfc3339().into(), session_id.into()];
+        params.extend(org_params);
+        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -309,15 +308,11 @@ impl ZenService {
         session_id: &str,
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
-        self.db()
-            .conn()
-            .execute(
-                "UPDATE sessions
-                 SET ended_at = NULL, status = 'active', summary = NULL
-                 WHERE id = ?1 AND status = 'wrapped_up'",
-                [session_id],
-            )
-            .await?;
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("UPDATE sessions SET ended_at = NULL, status = 'active', summary = NULL WHERE id = ?1 AND status = 'wrapped_up' {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![session_id.into()];
+        params.extend(org_params);
+        self.db().conn().execute(&sql, libsql::params_from_iter(params)).await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
         self.append_audit(&AuditEntry {
@@ -359,18 +354,22 @@ impl ZenService {
         status: &str,
     ) -> Result<i64, DatabaseError> {
         let table = entity_type_to_table(&entity);
-        let sql = format!("SELECT COUNT(*) FROM {table} WHERE status = ?1");
-        let mut rows = self.db().conn().query(&sql, [status]).await?;
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("SELECT COUNT(*) FROM {table} WHERE status = ?1 {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![status.into()];
+        params.extend(org_params);
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(params)).await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         Ok(row.get::<i64>(0)?)
     }
 
     /// Count rows created in the last N hours.
     pub(crate) async fn count_recent(&self, table: &str, hours: u32) -> Result<i64, DatabaseError> {
+        let (org_filter, org_params) = self.org_id_filter(1);
         let sql = format!(
-            "SELECT COUNT(*) FROM {table} WHERE created_at >= datetime('now', '-{hours} hours')"
+            "SELECT COUNT(*) FROM {table} WHERE created_at >= datetime('now', '-{hours} hours') {org_filter}"
         );
-        let mut rows = self.db().conn().query(&sql, ()).await?;
+        let mut rows = self.db().conn().query(&sql, libsql::params_from_iter(org_params)).await?;
         let row = rows.next().await?.ok_or(DatabaseError::NoResult)?;
         Ok(row.get::<i64>(0)?)
     }

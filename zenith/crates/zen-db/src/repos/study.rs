@@ -200,8 +200,12 @@ impl ZenService {
         params.push(Utc::now().to_rfc3339().into());
         idx += 1;
 
-        let sql = format!("UPDATE studies SET {} WHERE id = ?{idx}", sets.join(", "));
         params.push(study_id.into());
+        let id_idx = idx;
+        idx += 1;
+        let (org_filter, org_params) = self.org_id_filter(idx as u32);
+        params.extend(org_params);
+        let sql = format!("UPDATE studies SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
 
         self.db()
             .conn()
@@ -241,9 +245,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM studies WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![study_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute("DELETE FROM studies WHERE id = ?1", [study_id])
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
@@ -325,12 +333,13 @@ impl ZenService {
         }
 
         let now = Utc::now();
+        let (org_filter, org_params) = self.org_id_filter(4);
+        let sql = format!("UPDATE studies SET status = ?1, updated_at = ?2 WHERE id = ?3 {org_filter}");
+        let mut params: Vec<libsql::Value> = vec![new_status.as_str().into(), now.to_rfc3339().into(), study_id.into()];
+        params.extend(org_params);
         self.db()
             .conn()
-            .execute(
-                "UPDATE studies SET status = ?1, updated_at = ?2 WHERE id = ?3",
-                libsql::params![new_status.as_str(), now.to_rfc3339(), study_id],
-            )
+            .execute(&sql, libsql::params_from_iter(params))
             .await?;
 
         let detail = StatusChangedDetail {
@@ -382,14 +391,15 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO hypotheses (id, session_id, content, status, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 'unverified', ?4, ?5)",
+                "INSERT INTO hypotheses (id, session_id, content, status, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, 'unverified', ?4, ?5, ?6)",
                 libsql::params![
                     hyp_id.as_str(),
                     session_id,
                     content,
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;
@@ -452,15 +462,16 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO findings (id, session_id, content, confidence, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO findings (id, session_id, content, confidence, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 libsql::params![
                     fnd_id.as_str(),
                     session_id,
                     content,
                     confidence.as_str(),
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;
@@ -544,14 +555,15 @@ impl ZenService {
         self.db()
             .conn()
             .execute(
-                "INSERT INTO insights (id, session_id, content, confidence, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 'high', ?4, ?5)",
+                "INSERT INTO insights (id, session_id, content, confidence, created_at, updated_at, org_id)
+                 VALUES (?1, ?2, ?3, 'high', ?4, ?5, ?6)",
                 libsql::params![
                     ins_id.as_str(),
                     session_id,
                     summary,
                     now.to_rfc3339(),
-                    now.to_rfc3339()
+                    now.to_rfc3339(),
+                    self.org_id()
                 ],
             )
             .await?;

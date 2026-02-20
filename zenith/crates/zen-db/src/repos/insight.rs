@@ -129,8 +129,12 @@ impl ZenService {
         params.push(now.to_rfc3339().into());
         idx += 1;
 
-        let sql = format!("UPDATE insights SET {} WHERE id = ?{idx}", sets.join(", "));
         params.push(insight_id.into());
+        let id_idx = idx;
+        idx += 1;
+        let (org_filter, org_params) = self.org_id_filter(idx as u32);
+        params.extend(org_params);
+        let sql = format!("UPDATE insights SET {} WHERE id = ?{id_idx} {org_filter}", sets.join(", "));
 
         self.db()
             .conn()
@@ -173,9 +177,13 @@ impl ZenService {
     ) -> Result<(), DatabaseError> {
         let now = Utc::now();
 
+        let (org_filter, org_params) = self.org_id_filter(2);
+        let sql = format!("DELETE FROM insights WHERE id = ?1 {org_filter}");
+        let mut del_params: Vec<libsql::Value> = vec![insight_id.into()];
+        del_params.extend(org_params);
         self.db()
             .conn()
-            .execute("DELETE FROM insights WHERE id = ?1", [insight_id])
+            .execute(&sql, libsql::params_from_iter(del_params))
             .await?;
 
         let audit_id = self.db().generate_id(PREFIX_AUDIT).await?;
