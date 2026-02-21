@@ -191,8 +191,14 @@ fn slice_lines<'a>(
     start_line: usize,
     end_line: usize,
 ) -> &'a str {
-    let byte_start = line_offsets.get(start_line).copied().unwrap_or(0);
+    let byte_start = line_offsets
+        .get(start_line)
+        .copied()
+        .unwrap_or(content.len());
     let byte_end = line_offsets.get(end_line).copied().unwrap_or(content.len());
+    if byte_start >= byte_end {
+        return "";
+    }
     &content[byte_start..byte_end]
 }
 

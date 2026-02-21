@@ -138,6 +138,10 @@ pub struct InitArgs {
 /// Arguments for `znt onboard`.
 #[derive(Clone, Debug, Args)]
 pub struct OnboardArgs {
+    #[arg(long, default_value_t = 2)]
+    pub jobs: usize,
+    #[arg(long, default_value_t = 1)]
+    pub jobs_index: usize,
     #[arg(long)]
     pub workspace: bool,
     #[arg(long)]

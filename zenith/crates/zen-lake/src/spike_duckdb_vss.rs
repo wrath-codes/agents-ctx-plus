@@ -39,7 +39,7 @@
 //!
 //! Cloud tests are skipped (not failed) when credentials are missing.
 
-use duckdb::{params, Connection};
+use duckdb::{Connection, params};
 use tempfile::TempDir;
 
 /// Load env vars from the workspace .env file.

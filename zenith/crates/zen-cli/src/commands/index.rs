@@ -68,6 +68,7 @@ pub async fn handle(
         &version,
         &mut ctx.embedder,
         true,
+        false,
     )
     .context("indexing pipeline failed")?;
 

@@ -1,8 +1,13 @@
+use std::fs;
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, bail};
 use chrono::Utc;
 use serde::Serialize;
+use tokio::task;
 use zen_core::entities::ProjectDependency;
 use zen_core::enums::{SessionStatus, Visibility};
 
@@ -45,7 +50,7 @@ pub async fn handle(
     ctx: &mut AppContext,
     flags: &GlobalFlags,
 ) -> anyhow::Result<()> {
-    let progress = Progress::spinner("install: resolving package metadata");
+    let progress = Progress::bar(5, "install: resolving package metadata");
 
     let ecosystem = if let Some(eco) = &args.ecosystem {
         eco.clone()
@@ -57,6 +62,7 @@ pub async fn handle(
     };
 
     let resolved = resolve_registry_package(ctx, &ecosystem, &args.package).await?;
+    progress.inc(1);
     progress.set_message("install: preparing repository checkout");
     let version = args
         .version
@@ -92,12 +98,10 @@ pub async fn handle(
         );
     }
 
-    let repo_url = resolved.repository.clone().ok_or_else(|| {
-        anyhow::anyhow!(
-            "install: registry package '{}' has no repository URL",
-            args.package
-        )
-    })?;
+    let repo_url = resolved
+        .repository
+        .clone()
+        .unwrap_or_else(|| format!("https://crates.io/crates/{}", args.package));
 
     // Crowdsource dedup: skip clone + indexing if this public package already exists in the catalog.
     if ctx.service.is_synced_replica() && !args.force {
@@ -231,30 +235,74 @@ pub async fn handle(
 
     let temp = tempfile::TempDir::new().context("failed to create temp directory")?;
     let clone_path = temp.path().join("repo");
-
-    run_git_clone(&repo_url, &clone_path, false)?;
     progress.set_message("install: indexing repository sources");
-    let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
-    let checked_out = try_git_checkout_for_version(&clone_path, &checkout_ref)?;
-    if !checked_out {
-        tracing::warn!(
-            package = %args.package,
-            version = %checkout_ref,
-            "install: unable to checkout resolved version ref; proceeding with repository default branch"
-        );
-    }
 
+    let source_path = if ecosystem == "rust" {
+        let unpack_path = temp.path().join("crate");
+        match fetch_crates_io_source(&args.package, &version, &unpack_path).await {
+            Ok(path) => path,
+            Err(error) => {
+                tracing::warn!(
+                    package = %args.package,
+                    version = %version,
+                    %error,
+                    "install: crates.io source download failed; falling back to git clone"
+                );
+                let repository = resolved.repository.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "install: package '{}' has no repository URL and crates.io source fetch failed",
+                        args.package
+                    )
+                })?;
+                run_git_clone(repository, &clone_path, false)?;
+                let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
+                let checked_out = try_git_checkout_for_version(&clone_path, &checkout_ref)?;
+                if !checked_out {
+                    tracing::warn!(
+                        package = %args.package,
+                        version = %checkout_ref,
+                        "install: unable to checkout resolved version ref; proceeding with repository default branch"
+                    );
+                }
+                clone_path.clone()
+            }
+        }
+    } else {
+        let repository = resolved.repository.as_deref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "install: registry package '{}' has no repository URL",
+                args.package
+            )
+        })?;
+        run_git_clone(repository, &clone_path, false)?;
+        let checkout_ref = args.version.clone().unwrap_or_else(|| version.clone());
+        let checked_out = try_git_checkout_for_version(&clone_path, &checkout_ref)?;
+        if !checked_out {
+            tracing::warn!(
+                package = %args.package,
+                version = %checkout_ref,
+                "install: unable to checkout resolved version ref; proceeding with repository default branch"
+            );
+        }
+        clone_path.clone()
+    };
+    progress.inc(1);
+
+    progress.set_message("install: indexing package sources");
     let index = IndexingPipeline::index_directory_with(
         &ctx.lake,
         &ctx.source_store,
-        &clone_path,
+        &source_path,
         &ecosystem,
         &args.package,
         &version,
         &mut ctx.embedder,
         !args.include_tests,
+        ecosystem == "rust",
     )
     .context("indexing pipeline failed")?;
+    progress.inc(1);
+    progress.set_message("install: updating dependency metadata");
 
     let dep = ProjectDependency {
         ecosystem: ecosystem.clone(),
@@ -265,7 +313,9 @@ pub async fn handle(
         indexed_at: Some(Utc::now()),
     };
     ctx.service.upsert_dependency(&dep).await?;
+    progress.inc(1);
 
+    progress.set_message("install: syncing cloud catalog");
     if ctx.config.turso.is_configured() && ctx.config.r2.is_configured() {
         progress.set_message("install: exporting indexed package to catalog");
         match ctx
@@ -338,6 +388,8 @@ pub async fn handle(
         );
     }
 
+    progress.inc(1);
+
     progress.finish_ok("install: completed");
 
     output(
@@ -358,6 +410,111 @@ pub async fn handle(
         },
         flags.format,
     )
+}
+
+async fn fetch_crates_io_source(
+    crate_name: &str,
+    version: &str,
+    unpack_dir: &Path,
+) -> anyhow::Result<PathBuf> {
+    if let Some(local_archive) = find_local_cargo_crate_archive(crate_name, version) {
+        return unpack_crate_archive(local_archive, unpack_dir.to_path_buf()).await;
+    }
+
+    let url = format!(
+        "https://crates.io/api/v1/crates/{}/{}/download",
+        crate_name, version
+    );
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(120),
+        reqwest::Client::new()
+            .get(&url)
+            .header(reqwest::header::USER_AGENT, "zenith-cli/0.1")
+            .send(),
+    )
+    .await
+    .context("install: crates.io source download timed out")?
+    .context("install: crates.io source request failed")?
+    .error_for_status()
+    .context("install: crates.io source download returned error status")?;
+
+    let bytes = response
+        .bytes()
+        .await
+        .context("install: failed to read crates.io source body")?
+        .to_vec();
+
+    unpack_crate_bytes(bytes, unpack_dir.to_path_buf()).await
+}
+
+fn find_local_cargo_crate_archive(crate_name: &str, version: &str) -> Option<PathBuf> {
+    let cargo_home = std::env::var("CARGO_HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".cargo")))?;
+    let cache_root = cargo_home.join("registry").join("cache");
+    let file_name = format!("{crate_name}-{version}.crate");
+
+    let dirs = fs::read_dir(cache_root).ok()?;
+    for entry in dirs.flatten() {
+        let path = entry.path().join(&file_name);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+async fn unpack_crate_archive(
+    archive_path: PathBuf,
+    unpack_root: PathBuf,
+) -> anyhow::Result<PathBuf> {
+    task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
+        let bytes = fs::read(&archive_path).with_context(|| {
+            format!(
+                "install: failed to read crate archive {}",
+                archive_path.display()
+            )
+        })?;
+        unpack_crate_bytes_sync(bytes, unpack_root)
+    })
+    .await
+    .context("install: join error while unpacking local crate archive")?
+}
+
+async fn unpack_crate_bytes(bytes: Vec<u8>, unpack_root: PathBuf) -> anyhow::Result<PathBuf> {
+    task::spawn_blocking(move || unpack_crate_bytes_sync(bytes, unpack_root))
+        .await
+        .context("install: join error while unpacking crates.io source")?
+}
+
+fn unpack_crate_bytes_sync(bytes: Vec<u8>, unpack_root: PathBuf) -> anyhow::Result<PathBuf> {
+    fs::create_dir_all(&unpack_root).context("install: failed to create unpack dir")?;
+    let decoder = flate2::read::GzDecoder::new(Cursor::new(bytes));
+    let mut archive = tar::Archive::new(decoder);
+    archive
+        .unpack(&unpack_root)
+        .context("install: failed to unpack crates.io source archive")?;
+
+    let mut child_dirs = Vec::new();
+    for entry in fs::read_dir(&unpack_root).context("install: failed to inspect unpack dir")? {
+        let entry = entry.context("install: failed to read unpack dir entry")?;
+        if entry
+            .file_type()
+            .context("install: failed to read unpack dir entry type")?
+            .is_dir()
+        {
+            child_dirs.push(entry.path());
+        }
+    }
+
+    if child_dirs.len() == 1 {
+        Ok(child_dirs.remove(0))
+    } else {
+        Ok(unpack_root)
+    }
 }
 
 async fn resolve_registry_package(

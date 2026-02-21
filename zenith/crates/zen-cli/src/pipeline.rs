@@ -15,13 +15,17 @@
 
 use std::path::Path;
 
+use crate::progress::Progress;
+use rayon::prelude::*;
 use zen_embeddings::EmbeddingEngine;
 use zen_lake::{
     ApiSymbolRow, DocChunkRow, LakeError, ZenLake,
     source_files::{SourceFile, SourceFileStore},
 };
 use zen_parser::doc_chunker::chunk_document;
-use zen_parser::{DetectedLanguage, ParsedItem, detect_language_ext, extract_api};
+use zen_parser::{
+    DetectedLanguage, ParsedItem, SymbolKind, Visibility, detect_language_ext, extract_api,
+};
 
 /// Indexing pipeline for a single package.
 pub struct IndexingPipeline {
@@ -38,6 +42,14 @@ pub struct IndexResult {
     pub symbol_count: i32,
     pub doc_chunk_count: i32,
     pub source_file_count: i32,
+}
+
+struct ParsedFileOutput {
+    file_path: String,
+    symbols: Vec<ApiSymbolRow>,
+    doc_chunks: Vec<(zen_parser::doc_chunker::DocChunk, String, String, String)>,
+    source_file: SourceFile,
+    parsed_file_count: i32,
 }
 
 impl IndexingPipeline {
@@ -66,6 +78,7 @@ impl IndexingPipeline {
         version: &str,
         embedder: &mut EmbeddingEngine,
         skip_tests: bool,
+        public_symbols_only: bool,
     ) -> Result<IndexResult, LakeError> {
         Self::index_directory_with(
             &self.lake,
@@ -76,6 +89,7 @@ impl IndexingPipeline {
             version,
             embedder,
             skip_tests,
+            public_symbols_only,
         )
     }
 
@@ -93,13 +107,16 @@ impl IndexingPipeline {
         version: &str,
         embedder: &mut EmbeddingEngine,
         skip_tests: bool,
+        public_symbols_only: bool,
     ) -> Result<IndexResult, LakeError> {
+        let stage_progress = Progress::bar(5, "index: scanning files");
         let mut symbols = Vec::new();
         let mut doc_chunks = Vec::new();
         let mut source_files = Vec::new();
         let mut file_count = 0i32;
 
         // Step 1+2: Walk and parse
+        let mut file_paths = Vec::new();
         let walker = zen_search::walk::build_walker(
             dir,
             zen_search::walk::WalkMode::Raw,
@@ -112,76 +129,107 @@ impl IndexingPipeline {
             if !entry.file_type().map_or(false, |ft| ft.is_file()) {
                 continue;
             }
-
-            let path = entry.path();
-            let rel_path = path.strip_prefix(dir).unwrap_or(path);
-            let rel_path_str = rel_path.to_string_lossy().to_string();
-
-            let content = match std::fs::read_to_string(path) {
-                Ok(c) => c,
-                Err(_) => continue, // Skip binary/unreadable files
-            };
-
-            // Detect language for SourceFile.language
-            let lang = detect_language_ext(&rel_path_str);
-            let lang_str = lang.as_ref().map(|l| match l {
-                DetectedLanguage::Builtin(builtin) => format!("{builtin:?}").to_lowercase(),
-                DetectedLanguage::Markdown => "markdown".to_string(),
-                DetectedLanguage::Rst => "rst".to_string(),
-                DetectedLanguage::Svelte => "svelte".to_string(),
-                DetectedLanguage::Toml => "toml".to_string(),
-                DetectedLanguage::Text => "text".to_string(),
-            });
-
-            // Compute size and line count before moving content
-            let size_bytes = content.len() as i32;
-            let line_count = content.lines().count() as i32;
-
-            // Extract API symbols for source files with a recognized language
-            // (must happen BEFORE content is moved into SourceFile)
-            if let Some(_lang) = lang {
-                // extract_api returns symbols for all supported languages
-                let items = extract_api(&content, &rel_path_str).unwrap_or_default();
-
-                for item in &items {
-                    symbols.push(parsed_item_to_row(
-                        item,
-                        ecosystem,
-                        package,
-                        version,
-                        &rel_path_str,
-                    ));
-                }
-                file_count += 1;
-            }
-
-            // Check if documentation file (must happen BEFORE content is moved)
-            if is_doc_file(&rel_path_str) {
-                let chunks = chunk_document(&content, &rel_path_str);
-                for chunk in chunks {
-                    doc_chunks.push((
-                        chunk,
-                        ecosystem.to_string(),
-                        package.to_string(),
-                        version.to_string(),
-                    ));
-                }
-            }
-
-            // Move content into SourceFile (after all borrows are done)
-            source_files.push(SourceFile {
-                ecosystem: ecosystem.to_string(),
-                package: package.to_string(),
-                version: version.to_string(),
-                file_path: rel_path_str.clone(),
-                content,
-                language: lang_str,
-                size_bytes,
-                line_count,
-            });
+            file_paths.push(entry.into_path());
         }
 
+        stage_progress.inc(1);
+        stage_progress.set_message("index: parsing source and docs");
+
+        let parse_progress = Progress::bar(
+            u64::try_from(file_paths.len()).unwrap_or(0),
+            "index: parsing files",
+        );
+
+        let mut parsed_outputs: Vec<ParsedFileOutput> = file_paths
+            .par_iter()
+            .filter_map(|path| {
+                let parsed = (|| {
+                    let rel_path = path.strip_prefix(dir).unwrap_or(path.as_path());
+                    let rel_path_str = rel_path.to_string_lossy().to_string();
+
+                    let content = std::fs::read_to_string(path).ok()?;
+
+                    let lang = detect_language_ext(&rel_path_str);
+                    let lang_str = lang.as_ref().map(|l| match l {
+                        DetectedLanguage::Builtin(builtin) => format!("{builtin:?}").to_lowercase(),
+                        DetectedLanguage::Markdown => "markdown".to_string(),
+                        DetectedLanguage::Rst => "rst".to_string(),
+                        DetectedLanguage::Svelte => "svelte".to_string(),
+                        DetectedLanguage::Toml => "toml".to_string(),
+                        DetectedLanguage::Text => "text".to_string(),
+                    });
+
+                    let size_bytes = content.len() as i32;
+                    let line_count = content.lines().count() as i32;
+
+                    let mut file_symbols = Vec::new();
+                    let mut parsed_file_count = 0;
+                    if lang.is_some() {
+                        let items = extract_api(&content, &rel_path_str).unwrap_or_default();
+                        for item in &items {
+                            if public_symbols_only && !is_public_api_symbol(item) {
+                                continue;
+                            }
+                            file_symbols.push(parsed_item_to_row(
+                                item,
+                                ecosystem,
+                                package,
+                                version,
+                                &rel_path_str,
+                            ));
+                        }
+                        parsed_file_count = 1;
+                    }
+
+                    let mut file_doc_chunks = Vec::new();
+                    if is_doc_file(&rel_path_str) {
+                        let chunks = chunk_document(&content, &rel_path_str);
+                        for chunk in chunks {
+                            file_doc_chunks.push((
+                                chunk,
+                                ecosystem.to_string(),
+                                package.to_string(),
+                                version.to_string(),
+                            ));
+                        }
+                    }
+
+                    Some(ParsedFileOutput {
+                        file_path: rel_path_str.clone(),
+                        symbols: file_symbols,
+                        doc_chunks: file_doc_chunks,
+                        source_file: SourceFile {
+                            ecosystem: ecosystem.to_string(),
+                            package: package.to_string(),
+                            version: version.to_string(),
+                            file_path: rel_path_str,
+                            content,
+                            language: lang_str,
+                            size_bytes,
+                            line_count,
+                        },
+                        parsed_file_count,
+                    })
+                })();
+
+                parse_progress.inc(1);
+                parsed
+            })
+            .collect();
+
+        parsed_outputs.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+        for output in parsed_outputs {
+            file_count += output.parsed_file_count;
+            symbols.extend(output.symbols);
+            doc_chunks.extend(output.doc_chunks);
+            source_files.push(output.source_file);
+        }
+
+        parse_progress.finish_clear();
+        stage_progress.inc(1);
+
         // Step 4: Generate embeddings (batch)
+        stage_progress.set_message("index: embedding symbols");
         let embed_texts: Vec<String> = symbols
             .iter()
             .map(|s| {
@@ -214,7 +262,9 @@ impl IndexingPipeline {
         for (sym, emb) in symbols.iter_mut().zip(symbol_embeddings.into_iter()) {
             sym.embedding = emb;
         }
+        stage_progress.inc(1);
 
+        stage_progress.set_message("index: embedding doc chunks");
         let doc_embed_texts: Vec<String> = doc_chunks
             .iter()
             .map(|(c, _, _, _)| c.content.clone())
@@ -253,12 +303,14 @@ impl IndexingPipeline {
                 embedding: emb,
             })
             .collect();
+        stage_progress.inc(1);
 
         let symbol_count = symbols.len() as i32;
         let doc_chunk_count = doc_chunk_rows.len() as i32;
         let source_file_count = source_files.len() as i32;
 
         // Step 5: Store in local DuckDB cache (temporary for Phase 3)
+        stage_progress.set_message("index: storing and registering package");
         lake.store_symbols(&symbols)?;
         lake.store_doc_chunks(&doc_chunk_rows)?;
         source_store.store_source_files(&source_files)?;
@@ -277,6 +329,7 @@ impl IndexingPipeline {
             doc_chunk_count,
         )?;
         lake.set_source_cached(ecosystem, package, version)?;
+        stage_progress.finish_clear();
 
         Ok(IndexResult {
             ecosystem: ecosystem.to_string(),
@@ -288,6 +341,25 @@ impl IndexingPipeline {
             source_file_count,
         })
     }
+}
+
+fn is_public_api_symbol(item: &ParsedItem) -> bool {
+    matches!(
+        item.visibility,
+        Visibility::Public | Visibility::Export | Visibility::Protected
+    ) && matches!(
+        item.kind,
+        SymbolKind::Function
+            | SymbolKind::Struct
+            | SymbolKind::Enum
+            | SymbolKind::Trait
+            | SymbolKind::TypeAlias
+            | SymbolKind::Const
+            | SymbolKind::Static
+            | SymbolKind::Module
+            | SymbolKind::Union
+            | SymbolKind::Macro
+    )
 }
 
 /// Convert a `ParsedItem` into an `ApiSymbolRow`.
@@ -451,6 +523,7 @@ mod tests {
                 "test_crate",
                 "0.1.0",
                 &mut embedder,
+                false,
                 false,
             )
             .expect("indexing should succeed");
